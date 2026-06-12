@@ -36,6 +36,7 @@ const STORAGE_KEY = "arcanaForge.characters.v1";
 const PROFILE_KEY = "arcanaForge.profile.v1";
 const ROLL_KEY = "arcanaForge.rolls.v1";
 const CLOUD_OWNER_KEY = "arcanaForge.cloudOwner.v1";
+const DELETED_KEY = "arcanaForge.deletedCharacters.v1";
 
 let edition = "2014";
 let currentStep = 1;
@@ -58,6 +59,7 @@ let cloudClient = null;
 let cloudUser = null;
 let cloudSyncTimer = null;
 let characters = readJson(STORAGE_KEY, []);
+let deletedCharacters = readJson(DELETED_KEY, {});
 let rollHistory = readJson(ROLL_KEY, []);
 localStorage.removeItem("arcanaForge.ownedContent.v1");
 
@@ -71,6 +73,24 @@ function readJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
 function saveJson(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+function characterTimestamp(character) { return Number(character?.updatedAt || 0); }
+function deletionTimestamp(id) { return Number(deletedCharacters[id] || 0); }
+function persistDeletedCharacters() {
+  saveJson(DELETED_KEY, deletedCharacters);
+  if (cloudUser) saveJson(`${DELETED_KEY}.${cloudUser.id}`, deletedCharacters);
+}
+function rememberCharacterDeletion(id, timestamp = Date.now()) {
+  deletedCharacters = { ...deletedCharacters, [id]: timestamp };
+  persistDeletedCharacters();
+}
+function clearCharacterDeletion(id) {
+  if (!deletedCharacters[id]) return;
+  delete deletedCharacters[id];
+  persistDeletedCharacters();
+}
+function isDemoCharacter(character) {
+  return Boolean(character?.demo || character?.id === "demo-lyra");
+}
 function cloudConfigured() {
   const config = window.ARCANA_CLOUD_CONFIG || {};
   return Boolean(config.supabaseUrl && config.supabasePublishableKey && window.supabase?.createClient);
@@ -84,39 +104,57 @@ function persistCharacters() {
 }
 async function syncCharactersToCloud() {
   if (!cloudUser || !cloudClient) return;
-  const rows = characters.map(character => ({
+  const activeRows = characters
+    .filter(character => !isDemoCharacter(character) && characterTimestamp(character) > deletionTimestamp(character.id))
+    .map(character => ({
     id: character.id,
     user_id: cloudUser.id,
     data: character,
+    is_deleted: false,
     updated_at: new Date(character.updatedAt || Date.now()).toISOString()
   }));
+  const activeIds = new Set(activeRows.map(row => row.id));
+  const deletedRows = Object.entries(deletedCharacters).filter(([id]) => !activeIds.has(id)).map(([id, timestamp]) => ({
+    id,
+    user_id: cloudUser.id,
+    data: { id },
+    is_deleted: true,
+    updated_at: new Date(timestamp).toISOString()
+  }));
+  const rows = [...activeRows, ...deletedRows];
   if (rows.length) {
     const { error } = await cloudClient.from("characters").upsert(rows, { onConflict: "user_id,id" });
-    if (error) { setCloudStatus(`Cloud sync failed: ${error.message}`, true); return; }
-  }
-  const { data: remoteRows, error: readError } = await cloudClient.from("characters").select("id").eq("user_id", cloudUser.id);
-  if (readError) { setCloudStatus(`Cloud sync failed: ${readError.message}`, true); return; }
-  const localIds = new Set(characters.map(character => character.id));
-  const removedIds = (remoteRows || []).map(row => row.id).filter(id => !localIds.has(id));
-  if (removedIds.length) {
-    const { error } = await cloudClient.from("characters").delete().eq("user_id", cloudUser.id).in("id", removedIds);
     if (error) { setCloudStatus(`Cloud sync failed: ${error.message}`, true); return; }
   }
   setCloudStatus(`Cloud vault synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
 }
 async function loadCloudCharacters() {
   if (!cloudUser || !cloudClient) return;
-  const { data, error } = await cloudClient.from("characters").select("data, updated_at").eq("user_id", cloudUser.id);
+  const { data, error } = await cloudClient.from("characters").select("id, data, updated_at, is_deleted").eq("user_id", cloudUser.id);
   if (error) { setCloudStatus(`Could not load cloud vault: ${error.message}`, true); return; }
-  const merged = new Map(characters.map(character => [character.id, character]));
+  const merged = new Map(characters.filter(character => !isDemoCharacter(character)).map(character => [character.id, character]));
   (data || []).forEach(row => {
+    const remoteTimestamp = Date.parse(row.updated_at) || Number(row.data?.updatedAt || 0);
+    if (row.is_deleted) {
+      const localTimestamp = characterTimestamp(merged.get(row.id));
+      if (remoteTimestamp >= localTimestamp) {
+        merged.delete(row.id);
+        if (remoteTimestamp > deletionTimestamp(row.id)) deletedCharacters[row.id] = remoteTimestamp;
+      } else {
+        delete deletedCharacters[row.id];
+      }
+      return;
+    }
     const remote = row.data;
     const local = merged.get(remote.id);
-    if (!local || Number(remote.updatedAt || 0) >= Number(local.updatedAt || 0)) merged.set(remote.id, remote);
+    if (deletionTimestamp(remote.id) >= remoteTimestamp) return;
+    if (!local || remoteTimestamp >= characterTimestamp(local)) merged.set(remote.id, remote);
+    if (remoteTimestamp > deletionTimestamp(remote.id)) delete deletedCharacters[remote.id];
   });
   characters = [...merged.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
   saveJson(STORAGE_KEY, characters);
   saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters);
+  persistDeletedCharacters();
   renderCards();
   renderSheet();
   await syncCharactersToCloud();
@@ -138,10 +176,13 @@ function prepareUserVault(user) {
   if (!user) return;
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
   const cached = readJson(`${STORAGE_KEY}.${user.id}`, null);
+  const cachedDeletions = readJson(`${DELETED_KEY}.${user.id}`, null);
   if (cached !== null) characters = cached;
   else if (priorOwner && priorOwner !== user.id) characters = [];
+  deletedCharacters = cachedDeletions || {};
   localStorage.setItem(CLOUD_OWNER_KEY, user.id);
   saveJson(STORAGE_KEY, characters);
+  persistDeletedCharacters();
 }
 function modifier(score) { return Math.floor((Number(score || 10) - 10) / 2); }
 function signed(value) { return value >= 0 ? `+${value}` : String(value); }
@@ -154,9 +195,17 @@ function toast(message) {
   clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+function cleanRuleDescription(description) {
+  return String(description || "")
+    .replace(/\s*System Reference Document 5\.(?:1|2(?:\.1)?)\s*/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function ruleDetails(description) {
-  if (!description) return "";
-  return `<details class="rule-detail"><summary>Read description</summary><p>${escapeHtml(description)}</p></details>`;
+  const cleanedDescription = cleanRuleDescription(description);
+  if (!cleanedDescription) return "";
+  return `<details class="rule-detail"><summary>Read description</summary><p>${escapeHtml(cleanedDescription)}</p></details>`;
 }
 
 const OPEN_FEATURE_SUMMARIES = {
@@ -208,6 +257,11 @@ function descriptionMatch(records, name) {
   return key ? records[key] : "";
 }
 
+function contentSummary(group, name) {
+  const summaries = typeof CONTENT_SUMMARIES === "undefined" ? null : CONTENT_SUMMARIES[group];
+  return descriptionMatch(summaries, name);
+}
+
 function featureDescriptionInEdition(rulesEdition, source, name, className) {
   const features = RULE_DESCRIPTIONS.features[rulesEdition] || {};
   return descriptionMatch(features[source], name)
@@ -220,9 +274,10 @@ function featureDescription(rulesEdition, source, name, className = selectedClas
   const description = featureDescriptionInEdition(rulesEdition, source, name, className)
     || (rulesEdition === "2024" ? featureDescriptionInEdition("2014", source, name, className) : "")
     || openFeatureSummary(name)
+    || contentSummary("features", name)
     || "";
   if (description) return description;
-  return `${name} is gained from ${source || className} at the listed character level. It is included automatically in this character's progression once that level is reached.`;
+  return `${name} is gained automatically at the listed level and applies the class or subclass benefit represented by this feature.`;
 }
 
 function featEligible(feat, level, className, rulesEdition) {
@@ -237,8 +292,7 @@ function featEligible(feat, level, className, rulesEdition) {
 
 function catalogRulesSummary(kind, name, source = "", category = "") {
   const categoryText = category ? `${category} ` : "";
-  const sourceText = source ? ` from ${source}` : "";
-  return `${name} is a ${categoryText}${kind}${sourceText}. It is available to every player in this builder when its listed character-level and feature prerequisites are met.`;
+  return `${name} is a ${categoryText}${kind}. Its prerequisites and level restrictions are enforced by the character builder.`;
 }
 
 const OPEN_FIGHTING_STYLE_SUMMARIES = {
@@ -253,9 +307,25 @@ const OPEN_FIGHTING_STYLE_SUMMARIES = {
   "Unarmed Fighting": "Your unarmed strikes deal improved bludgeoning damage, and you can deal extra damage to a creature you are grappling."
 };
 
+const OPEN_CLASS_CHOICE_SUMMARIES = {
+  "Thaumaturge": "Learn one additional Cleric cantrip and add your Wisdom modifier to Arcana and Religion checks.",
+  "Protector": "Gain proficiency with martial weapons and training with heavy armor.",
+  "Magician": "Learn one additional Druid cantrip and add your Wisdom modifier to Arcana and Nature checks.",
+  "Warden": "Gain proficiency with martial weapons and training with medium armor.",
+  "Divine Strike": "Once on each of your turns, add extra radiant or weapon-type damage to a weapon hit.",
+  "Potent Spellcasting": "Add your spellcasting ability modifier to the damage dealt by eligible cantrips.",
+  "Primal Strike": "Once on each of your turns, add extra elemental damage to a weapon or Wild Shape attack."
+};
+
+function classChoiceDescription(name) {
+  return OPEN_CLASS_CHOICE_SUMMARIES[name] || contentSummary("features", name);
+}
+
 function featDescription(feat, rulesEdition) {
   return descriptionMatch(RULE_DESCRIPTIONS.feats[rulesEdition], feat.name)
     || (rulesEdition === "2024" && feat.expanded ? descriptionMatch(RULE_DESCRIPTIONS.feats[2014], feat.name) : "")
+    || (feat.category === "Fighting Style" ? fightingStyleDescription(feat.name, rulesEdition) : "")
+    || contentSummary("feats", feat.name)
     || catalogRulesSummary("feat", feat.name, feat.source, feat.category);
 }
 
@@ -280,7 +350,21 @@ function featAbilityBonuses(featNames = selectedFeatNames) {
 function spellDescription(name, rulesEdition, source = "") {
   return descriptionMatch(RULE_DESCRIPTIONS.spells[rulesEdition], name)
     || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.spells[2014], name) : "")
+    || contentSummary("spells", name)
+    || inferredSpellSummary(name)
     || catalogRulesSummary("spell", name, source, "expanded");
+}
+
+function inferredSpellSummary(name) {
+  const lower = String(name).toLowerCase();
+  if (lower.startsWith("summon ")) return `Summon a ${name.slice(7).toLowerCase()} spirit that follows your commands and improves when cast with a higher-level slot.`;
+  if (lower.startsWith("conjure ")) return `Conjure the creatures, objects, or magical force named by the spell to influence an area or fight for you.`;
+  if (lower.endsWith(" smite")) return "Empower a weapon hit with additional magical damage and the spell's associated secondary effect.";
+  if (lower.startsWith("wall of ")) return `Create a wall of ${name.slice(8).toLowerCase()} that blocks, damages, or hinders creatures near it.`;
+  if (lower.startsWith("aura of ")) return `Create a protective magical aura centered on you that grants the benefit associated with ${name.slice(8)}.`;
+  if (lower.startsWith("investiture of ")) return `Assume an elemental form tied to ${name.slice(15)}, gaining defenses, movement, and a repeatable magical attack.`;
+  if (lower.startsWith("power word ")) return `Speak a word of power that imposes the spell's major effect on a creature that meets its Hit Point restriction.`;
+  return `${name} creates its named magical effect using the casting time, range, duration, and spell level shown for the option.`;
 }
 
 function fightingStyleDescription(name, rulesEdition) {
@@ -294,6 +378,7 @@ function progressionDescription(group, name, rulesEdition) {
   if (!name) return "";
   return descriptionMatch(RULE_DESCRIPTIONS.progression?.[group]?.[rulesEdition], name)
     || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.progression?.[group]?.[2014], name) : "")
+    || contentSummary(group, name)
     || catalogRulesSummary(group === "pactBoons" ? "pact boon" : group === "metamagic" ? "Metamagic option" : "Eldritch Invocation", name);
 }
 
@@ -308,9 +393,9 @@ function resetPortrait() {
 
 function populateRules(savedCharacter = null) {
   $("#species-select").innerHTML = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014])
-    .map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} · ${escapeHtml(item.source)}</option>`).join("");
+    .map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
   $("#background-select").innerHTML = customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014])
-    .map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} · ${escapeHtml(item.source)}</option>`).join("");
+    .map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
   $("#class-grid").innerHTML = Object.entries(RULES.classes).map(([name, data]) =>
     `<button type="button" class="class-option ${name === selectedClass ? "selected" : ""}" data-class="${name}"><span>${data.icon}</span><strong>${name}</strong>${data.origin ? `<small>${data.origin}</small>` : ""}</button>`
   ).join("");
@@ -598,12 +683,12 @@ function updateSubclassMeta() {
   if (!meta) {
     $("#subclass-meta").textContent = level < unlock
       ? `Optional plan. ${selectedClass} subclass features activate at level ${unlock}.`
-      : "Custom subclass selected.";
+      : "Homebrew subclass selected.";
     return;
   }
   const rulesLabel = meta.rules === "2024" ? "native 5.5e" : edition === "2024" ? "5e expanded rules" : "5e";
   const levelStatus = level < unlock ? ` · planned for level ${unlock}` : " · active";
-  $("#subclass-meta").textContent = `${meta.source} · ${rulesLabel}${levelStatus} · included for all players`;
+  $("#subclass-meta").textContent = `${meta.source} · ${rulesLabel}${levelStatus}`;
 }
 
 function renderClassFeaturePreview() {
@@ -621,7 +706,7 @@ function renderClassFeaturePreview() {
     : [];
   const features = [...classRows, ...subclassRows];
   container.innerHTML = `<h3>Features at level ${level}</h3>
-    <p>Class and subclass features are granted automatically at their listed levels. Every catalog option is available without an ownership gate.</p>
+    <p>Class and subclass features are granted automatically at their listed levels.</p>
     <div class="selection-feature-grid">${features.map(feature =>
       `<article class="feature-card"><small>LEVEL ${feature.level} · ${escapeHtml(feature.source)}</small><strong>${escapeHtml(feature.name)}</strong>${ruleDetails(featureDescription(edition, feature.source, feature.name, selectedClass))}</article>`
     ).join("") || "<p>No class features are available at this level.</p>"}</div>`;
@@ -635,7 +720,7 @@ function populateSubclasses() {
   const options = [];
   if (native.length) options.push(`<optgroup label="${edition === "2024" ? "Native 5.5e subclasses" : "5e subclasses"}">${native.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} · ${escapeHtml(item.source)}</option>`).join("")}</optgroup>`);
   if (expanded.length) options.push(`<optgroup label="5e expanded rules">${expanded.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} · ${escapeHtml(item.source)}</option>`).join("")}</optgroup>`);
-  options.push(`<option value="">Custom / none</option>`);
+  options.push(`<option value="">Homebrew / none</option>`);
   $("#subclass-select").innerHTML = options.join("");
   $("#subclass-select").disabled = false;
   const belowUnlock = Number(form.elements.level?.value || 1) < subclassLevel(selectedClass, edition);
@@ -682,8 +767,8 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
     feats.unshift({ name: currentOriginFeat, category: "Origin", source: edition === "2024" ? "Background" : "Species" });
   }
   $("#feat-guidance").textContent = edition === "2014"
-    ? `${FEATS[edition].length} 5e feat options · all included and filtered by level prerequisites.`
-    : `${FEATS[edition].length} 5.5e and expanded feat options · all included and grouped by level category.`;
+    ? `${FEATS[edition].length} 5e feat options filtered by level prerequisites.`
+    : `${FEATS[edition].length} 5.5e and expanded feat options grouped by level category.`;
   $("#feat-list").innerHTML = feats.map(feat => {
     const isOriginFeat = feat.name === currentOriginFeat;
     const eligible = isOriginFeat || featEligible(feat, level, selectedClass, edition);
@@ -703,7 +788,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   $("#non-caster-note").classList.toggle("hidden", Boolean(lists));
   if (!lists) return;
   const allowed = maxSpellLevel(selectedClass, level, edition);
-  $("#spell-guidance").textContent = `${selectedClass} SRD list · spell levels through ${allowed} are available at character level ${level}.`;
+  $("#spell-guidance").textContent = `${selectedClass} spell list · spell levels through ${allowed} are available at character level ${level}.`;
   $("#spell-level-tabs").innerHTML = Object.keys(lists).filter(key => lists[key].length).map(key =>
     `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? "Cantrip" : key}</button>`
   ).join("");
@@ -1196,10 +1281,10 @@ function renderSheet() {
   (c.invocations || []).forEach(name => addChoice(name, "Eldritch Invocation", progressionDescription("invocations", name, c.edition)));
   (c.expertise || []).forEach(name => addChoice(name, "Expertise", `Your proficiency bonus is doubled for checks you make with ${name}.`));
   (c.weaponMastery || []).forEach(name => addChoice(name, "Weapon Mastery", `${WEAPON_MASTERY_PROPERTIES[name] || "Mastery"} property · usable when the weapon's requirements are met.`));
-  addChoice(c.divineOrder, "Divine Order");
-  addChoice(c.primalOrder, "Primal Order");
-  addChoice(c.blessedStrikes, "Blessed Strikes");
-  addChoice(c.elementalFury, "Elemental Fury");
+  addChoice(c.divineOrder, "Divine Order", classChoiceDescription(c.divineOrder));
+  addChoice(c.primalOrder, "Primal Order", classChoiceDescription(c.primalOrder));
+  addChoice(c.blessedStrikes, "Blessed Strikes", classChoiceDescription(c.blessedStrikes));
+  addChoice(c.elementalFury, "Elemental Fury", classChoiceDescription(c.elementalFury));
   const resources = resourceDefinitions(c);
   const hasSpellcasting = Boolean(SPELL_LISTS[c.edition]?.[c.className]);
   if (activeSheetSection === "spells" && !hasSpellcasting) activeSheetSection = "overview";
@@ -1934,8 +2019,13 @@ function initEvents() {
     const levelUp = event.target.closest("[data-level-up]"); if (levelUp && !levelUp.disabled) openLevelUp(levelUp.dataset.levelUp);
     const delevel = event.target.closest("[data-delevel]"); if (delevel && !delevel.disabled) delevelCharacter(delevel.dataset.delevel);
     const del = event.target.closest("[data-delete]");
-    if (del && confirm("Delete this character from the local vault?")) {
-      characters = characters.filter(c => c.id !== del.dataset.delete); persistCharacters(); renderCards($("#vault-search").value); toast("Character deleted");
+    if (del && confirm("Delete this character from your vault on every synchronized device?")) {
+      rememberCharacterDeletion(del.dataset.delete);
+      characters = characters.filter(c => c.id !== del.dataset.delete);
+      persistCharacters();
+      renderCards($("#vault-search").value);
+      renderSheet();
+      toast("Character deleted");
     }
     const sheetRoll = event.target.closest("[data-sheet-roll]");
     if (sheetRoll) { const total = roll(Number(sheetRoll.dataset.die || 20), 1, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.sheetRoll); navigate("dice"); toast(`Rolled ${total}`); }
@@ -2033,7 +2123,8 @@ function initEvents() {
     if (!validateOriginChoices()) { setStep(2); toast("Choose different eligible abilities and complete the origin feat selection"); return; }
     const masteryRequired = weaponMasteryCount(data.className, data.level, data.edition);
     if (data.weaponMastery.length !== masteryRequired) { setStep(3); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
-    data.id = activeCharacterId || crypto.randomUUID();
+    data.id = activeCharacterId && activeCharacterId !== "demo-lyra" ? activeCharacterId : crypto.randomUUID();
+    clearCharacterDeletion(data.id);
     data.updatedAt = Date.now();
     const index = characters.findIndex(c => c.id === data.id);
     if (index >= 0) characters[index] = { ...characters[index], ...data }; else characters.unshift(data);
@@ -2043,7 +2134,16 @@ function initEvents() {
     const file = event.target.files[0]; if (!file) return;
     if (file.size > 4 * 1024 * 1024) { toast("Please choose an image under 4 MB"); return; }
     const reader = new FileReader();
-    reader.onload = () => { portraitData = reader.result; resetCanvasFromPortrait(); };
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        portraitData = canvas.toDataURL("image/jpeg", .82);
+        updatePreview();
+      };
+      image.src = reader.result;
+    };
     reader.readAsDataURL(file);
   });
   $("#draw-portrait").addEventListener("click", () => { drawEnabled = !drawEnabled; $("#draw-portrait").textContent = drawEnabled ? "Drawing on" : "Draw"; $("#draw-hint").textContent = drawEnabled ? "Drag on the portrait to sketch." : "Upload an image, or draw directly on the portrait."; });
@@ -2072,7 +2172,18 @@ function initEvents() {
     const file = event.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try { const data = JSON.parse(reader.result); if (!Array.isArray(data.characters)) throw new Error(); characters = data.characters; persistCharacters(); renderCards(); toast("Vault imported"); }
+      try {
+        const data = JSON.parse(reader.result);
+        if (!Array.isArray(data.characters)) throw new Error();
+        const importedIds = new Set(data.characters.map(character => character.id));
+        characters.filter(character => !importedIds.has(character.id)).forEach(character => rememberCharacterDeletion(character.id));
+        characters = data.characters.map(character => ({ ...character, updatedAt: Number(character.updatedAt || Date.now()) }));
+        characters.forEach(character => clearCharacterDeletion(character.id));
+        persistCharacters();
+        renderCards();
+        renderSheet();
+        toast("Vault imported");
+      }
       catch { toast("That vault file could not be read"); }
     }; reader.readAsText(file);
   });
@@ -2087,12 +2198,19 @@ function initEvents() {
     if (button) setAccountMode(button.dataset.accountMode);
   });
   $("#account-form").addEventListener("submit", handleAccountSubmit);
+  $("#sync-now").addEventListener("click", async () => {
+    $("#sync-now").disabled = true;
+    await loadCloudCharacters();
+    $("#sync-now").disabled = false;
+  });
   $("#sign-out").addEventListener("click", async () => {
     if (cloudClient) await cloudClient.auth.signOut();
     cloudUser = null;
     characters = [];
+    deletedCharacters = {};
     activeCharacterId = null;
     saveJson(STORAGE_KEY, characters);
+    saveJson(DELETED_KEY, deletedCharacters);
     renderCards();
     renderSheet();
     updateAccount();
@@ -2189,6 +2307,7 @@ function updateAccount() {
   const signedIn = Boolean(cloudUser);
   $("#account-form").classList.toggle("hidden", signedIn);
   $("#account-modes").classList.toggle("hidden", signedIn);
+  $("#sync-now").classList.toggle("hidden", !signedIn);
   $("#sign-out").classList.toggle("hidden", !signedIn);
   $("#account-description").textContent = signedIn
     ? `Signed in as ${cloudUser.email}. Character changes synchronize to this account.`
@@ -2221,12 +2340,19 @@ async function initCloud() {
     updateAccount();
     if (changed && cloudUser) setTimeout(loadCloudCharacters, 0);
   });
+  window.addEventListener("online", () => {
+    if (cloudUser) loadCloudCharacters();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && cloudUser) loadCloudCharacters();
+  });
 }
 
 function seedDemo() {
   if (characters.length) return;
   characters = [{
     id: "demo-lyra", name: "Lyra Moonfall", player: "", pronouns: "she / her", level: 5, edition: "2024",
+    demo: true,
     species: "Elf", background: "Sage", alignment: "Neutral Good", campaign: "The Shattered Crown",
     className: "Wizard", subclass: "Evoker", customSubclass: "", STR: 8, DEX: 14, CON: 13, INT: 17, WIS: 12, CHA: 10,
     baseAbilities: { STR: 8, DEX: 14, CON: 12, INT: 15, WIS: 12, CHA: 10 },

@@ -27,6 +27,19 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Configure account sync
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const config = {
+            supabaseUrl: process.env.SUPABASE_URL || "",
+            supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || ""
+          };
+          fs.writeFileSync("cloud-config.js", `window.ARCANA_CLOUD_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
+          NODE
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:

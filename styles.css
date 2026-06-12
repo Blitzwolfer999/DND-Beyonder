@@ -293,7 +293,8 @@ textarea { resize: vertical; }
 .account-modes button.active { color: white; background: var(--green); }
 .account-status { min-height: 1.5em; margin: 14px 0 0; font-size: 12px; }
 .account-status.error { color: var(--red); }
-#sign-out { width: 100%; margin-top: 18px; }
+.account-actions { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.account-actions .button { width: 100%; }
 .level-up-modal { width: min(840px, 100%); max-height: calc(100vh - 36px); padding: 0; overflow: auto; }
 .level-up-head { padding: 32px 38px 24px; color: white; background: #1c2420; }
 .level-up-head h2 { margin: 7px 0 4px; font-size: 32px; }

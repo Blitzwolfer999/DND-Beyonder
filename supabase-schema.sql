@@ -2,9 +2,13 @@ create table if not exists public.characters (
   id text not null,
   user_id uuid not null references auth.users(id) on delete cascade,
   data jsonb not null,
+  is_deleted boolean not null default false,
   updated_at timestamptz not null default now(),
   primary key (user_id, id)
 );
+
+alter table public.characters
+add column if not exists is_deleted boolean not null default false;
 
 alter table public.characters enable row level security;
 
@@ -31,3 +35,6 @@ using ((select auth.uid()) = user_id);
 
 create index if not exists characters_user_id_idx
 on public.characters (user_id);
+
+create index if not exists characters_user_updated_idx
+on public.characters (user_id, updated_at desc);

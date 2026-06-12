@@ -16,6 +16,8 @@ A dependency-free fantasy character builder for 2014 5e and revised 2024 5e rule
 - Built-in rolls, roll history, portraits, import, and export
 - Email/password cloud accounts with local fallback
 - Per-account character synchronization through Supabase Row Level Security
+- Conflict-aware cloud deletion and automatic refresh when returning online
+- Built-in catalogs for all players, with separate Homebrew fields for custom options
 - Responsive desktop and mobile interface
 
 ## Run Locally
@@ -43,9 +45,11 @@ GitHub will publish it at `https://YOUR-NAME.github.io/REPOSITORY/`.
 2. Open its SQL editor and run `supabase-schema.sql`.
 3. Enable email/password sign-in in Authentication settings.
 4. Add the public site URL to the Authentication URL configuration.
-5. Copy the project URL and publishable key into `cloud-config.js`.
+5. In the GitHub repository, open **Settings > Secrets and variables > Actions > Variables**.
+6. Add `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
+7. Redeploy the Pages workflow. The workflow writes the public values into `cloud-config.js` during deployment.
 
-The publishable key is intended for browser use. Never place a Supabase secret or service-role key in `cloud-config.js`. Arcana Forge retains a local copy, merges newer cloud rows after sign-in, and relies on Row Level Security so users can access only their own characters.
+For local development, the same public values can be placed directly in `cloud-config.js`. The publishable key is intended for browser use. Never use a Supabase secret or service-role key. Arcana Forge retains a local copy, merges newer cloud rows after sign-in, keeps deletion tombstones so stale devices cannot restore removed characters, and relies on Row Level Security so users can access only their own characters.
 
 Cloudflare Pages, Netlify, and Vercel can also host this static folder.
 

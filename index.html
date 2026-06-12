@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#11100e">
-  <meta name="description" content="Arcana Forge is an open-rules fantasy character builder with automatic math, dice, portraits, and local character storage.">
+  <meta name="description" content="Arcana Forge is an open-rules fantasy character builder with automatic math, dice, portraits, and cross-device character storage.">
   <title>Arcana Forge | Fantasy Character Builder</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -58,7 +58,7 @@
             <div class="hero-proof" aria-label="Builder highlights">
               <span><strong>2014 + 2024</strong> rules support</span>
               <span><strong>Guided</strong> level progression</span>
-              <span><strong>Cloud-ready</strong> character vault</span>
+              <span><strong>Cross-device</strong> character vault</span>
             </div>
           </div>
           <div class="hero-sigil" aria-hidden="true">
@@ -140,7 +140,7 @@
               <div class="class-grid" id="class-grid"></div>
               <div class="field-grid compact">
                 <label>Subclass<select name="subclass" id="subclass-select"></select><small class="subclass-meta" id="subclass-meta"></small></label>
-                <label>Custom subclass<input name="customSubclass" placeholder="Optional homebrew subclass"></label>
+                <label>Homebrew subclass<input name="customSubclass" placeholder="Optional homebrew subclass"></label>
                 <label id="fighting-style-field" class="hidden">Fighting style<select name="fightingStyle" id="fighting-style-select"></select><small class="subclass-meta" id="fighting-style-meta"></small></label>
               </div>
               <div class="class-choice-fields" id="class-choice-fields"></div>
@@ -163,7 +163,7 @@
                 <div class="choice-heading"><div><h3>Feats</h3><p id="feat-guidance">Choose any feats your table has granted.</p></div></div>
                 <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
                 <div class="option-list" id="feat-list"></div>
-                <label>Custom feats<input name="customFeats" placeholder="Comma-separated homebrew feats"></label>
+                <label>Homebrew feats<input name="customFeats" placeholder="Comma-separated homebrew feats"></label>
               </section>
               <section class="choice-section" id="spell-choice-section">
                 <div class="choice-heading">
@@ -172,9 +172,9 @@
                 </div>
                 <div class="spell-level-tabs" id="spell-level-tabs"></div>
                 <div class="option-list spell-list" id="spell-list"></div>
-                <label>Custom spells<input name="customSpells" placeholder="Comma-separated homebrew spells"></label>
+                <label>Homebrew spells<input name="customSpells" placeholder="Comma-separated homebrew spells"></label>
               </section>
-              <div class="non-caster-note hidden" id="non-caster-note">This class has no core spell list. Feats and custom talents are still available.</div>
+              <div class="non-caster-note hidden" id="non-caster-note">This class has no core spell list. Feats and homebrew talents are still available.</div>
             </div>
 
             <div class="form-footer">
@@ -260,7 +260,10 @@
         <label>Password<input name="password" type="password" minlength="8" required autocomplete="current-password"></label>
         <button class="button primary" id="account-submit" type="submit">Sign in and sync</button>
       </form>
-      <button class="button ghost hidden" id="sign-out" type="button">Sign out</button>
+      <div class="account-actions">
+        <button class="button ghost hidden" id="sync-now" type="button">Sync now</button>
+        <button class="button ghost hidden" id="sign-out" type="button">Sign out</button>
+      </div>
       <p class="account-status" id="account-status"></p>
     </section>
   </div>
@@ -324,6 +327,7 @@
   <script src="expanded-content.js"></script>
   <script src="catalog-content.js"></script>
   <script src="rules-descriptions.js"></script>
+  <script src="content-summaries.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js"></script>
   <script src="app.js"></script>
