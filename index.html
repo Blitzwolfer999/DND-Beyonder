@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11100e">
+  <meta name="description" content="Arcana Forge is an open-rules fantasy character builder with automatic math, dice, portraits, and local character storage.">
+  <title>Arcana Forge | Fantasy Character Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#" data-view-link="dashboard" aria-label="Arcana Forge home">
+        <span class="brand-mark">AF</span>
+        <span><strong>Arcana</strong><small>Forge</small></span>
+      </a>
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="dashboard"><span>⌂</span> Hall</button>
+        <button class="nav-item" data-view="builder"><span>✦</span> Create</button>
+        <button class="nav-item" data-view="sheet"><span>▤</span> Character Sheet</button>
+        <button class="nav-item" data-view="dice"><span>◇</span> Dice Tray</button>
+        <button class="nav-item" data-view="vault"><span>⌑</span> Character Vault</button>
+      </nav>
+      <div class="sidebar-foot">
+        <p>OPEN RULES</p>
+        <span>5e SRD 5.1</span>
+        <span>Revised SRD 5.2</span>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button>
+        <div class="breadcrumbs"><span>Arcana Forge</span><b>/</b><strong id="page-title">Hall</strong></div>
+        <div class="top-actions">
+          <button class="icon-button" id="quick-roll" title="Quick roll a d20">d20</button>
+          <button class="profile-button" id="account-button">
+            <span class="avatar-mini">W</span>
+            <span><small>Wanderer</small><strong id="account-label">Sign in</strong></span>
+          </button>
+        </div>
+      </header>
+
+      <section class="view active" id="dashboard-view">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">YOUR STORY AWAITS</span>
+            <h1>Forge a hero.<br><em>Shape a legend.</em></h1>
+            <p>Build characters with guided choices, automatic math, a living character sheet, and dice ready for every adventure.</p>
+            <div class="hero-actions">
+              <button class="button primary" data-go="builder">Create a character</button>
+              <button class="button ghost" data-go="vault">Open your vault</button>
+            </div>
+          </div>
+          <div class="hero-sigil" aria-hidden="true">
+            <div class="sigil-ring"><span>20</span></div>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div><span class="eyebrow">CONTINUE THE JOURNEY</span><h2>Your adventurers</h2></div>
+          <button class="text-button" data-go="vault">View all →</button>
+        </div>
+        <div class="character-grid" id="recent-characters"></div>
+
+        <div class="feature-strip">
+          <article><span class="feature-icon">✦</span><div><h3>Guided creation</h3><p>Edition-aware choices with live validation.</p></div></article>
+          <article><span class="feature-icon">＋</span><div><h3>Automatic math</h3><p>Modifiers, proficiency, saves, AC, and attacks.</p></div></article>
+          <article><span class="feature-icon">◇</span><div><h3>Built-in rolls</h3><p>Tap any stat or skill to roll it instantly.</p></div></article>
+        </div>
+      </section>
+
+      <section class="view" id="builder-view">
+        <div class="page-head">
+          <div><span class="eyebrow" id="builder-eyebrow">CHARACTER CREATOR</span><h1 id="builder-title">Build your adventurer</h1><p id="builder-description">Every choice updates your sheet as you go.</p></div>
+          <div class="edition-toggle" aria-label="Rules edition">
+            <button class="active" data-edition="2014">5e · 2014</button>
+            <button data-edition="2024">5.5e · 2024</button>
+          </div>
+        </div>
+
+        <div class="builder-layout">
+          <form class="builder-card" id="character-form">
+            <div class="step-tabs">
+              <button type="button" class="active" data-step="1"><span>1</span> Identity</button>
+              <button type="button" data-step="2"><span>2</span> Origins</button>
+              <button type="button" data-step="3"><span>3</span> Class</button>
+              <button type="button" data-step="4"><span>4</span> Abilities</button>
+              <button type="button" data-step="5"><span>5</span> Talents</button>
+            </div>
+
+            <div class="form-step active" data-step-panel="1">
+              <div class="step-intro"><span>01</span><div><h2>Who are they?</h2><p>Give your character a face and a name.</p></div></div>
+              <div class="identity-grid">
+                <div class="portrait-editor">
+                  <canvas id="portrait-canvas" width="420" height="420" aria-label="Character portrait"></canvas>
+                  <div class="portrait-actions">
+                    <label class="button small ghost">Upload<input id="portrait-upload" type="file" accept="image/*" hidden></label>
+                    <button type="button" class="button small ghost" id="draw-portrait">Draw</button>
+                    <button type="button" class="button small ghost" id="clear-portrait">Clear</button>
+                  </div>
+                  <p id="draw-hint">Upload an image, or draw directly on the portrait.</p>
+                </div>
+                <div class="field-stack">
+                  <label>Character name<input name="name" required maxlength="40" placeholder="e.g. Lyra Moonfall"></label>
+                  <label>Player name<input name="player" maxlength="40" placeholder="Your name"></label>
+                  <label>Pronouns<input name="pronouns" maxlength="30" placeholder="e.g. she / her"></label>
+                  <label>Level<input name="level" type="number" min="1" max="20" value="1"></label>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-step" data-step-panel="2">
+              <div class="step-intro"><span>02</span><div><h2>Choose an origin</h2><p>Your lineage and background shape the beginning.</p></div></div>
+              <div class="field-grid">
+                <label>Species<select name="species" id="species-select"></select></label>
+                <label>Background<select name="background" id="background-select"></select></label>
+                <label>Alignment<select name="alignment">
+                  <option>Unaligned</option><option>Lawful Good</option><option>Neutral Good</option><option>Chaotic Good</option>
+                  <option>Lawful Neutral</option><option>True Neutral</option><option>Chaotic Neutral</option>
+                  <option>Lawful Evil</option><option>Neutral Evil</option><option>Chaotic Evil</option>
+                </select></label>
+                <label>Campaign<input name="campaign" placeholder="Optional campaign name"></label>
+              </div>
+              <section class="origin-rules" id="origin-rules" aria-live="polite"></section>
+              <label>Backstory<textarea name="backstory" rows="6" placeholder="A few lines about where your hero came from..."></textarea></label>
+            </div>
+
+            <div class="form-step" data-step-panel="3">
+              <div class="step-intro"><span>03</span><div><h2>Choose a calling</h2><p>Core, Artificer, and Blood Hunter class paths are ready to build.</p></div></div>
+              <div class="class-grid" id="class-grid"></div>
+              <div class="field-grid compact">
+                <label>Subclass<select name="subclass" id="subclass-select"></select><small class="subclass-meta" id="subclass-meta"></small></label>
+                <label>Custom subclass<input name="customSubclass" placeholder="Optional homebrew or licensed content"></label>
+                <label id="fighting-style-field" class="hidden">Fighting style<select name="fightingStyle" id="fighting-style-select"></select><small class="subclass-meta" id="fighting-style-meta"></small></label>
+              </div>
+              <div class="class-choice-fields" id="class-choice-fields"></div>
+            </div>
+
+            <div class="form-step" data-step-panel="4">
+              <div class="step-intro"><span>04</span><div><h2>Set base ability scores</h2><p>Use the standard array or enter your own values. Origin bonuses are applied automatically.</p></div></div>
+              <div class="ability-editor" id="ability-editor"></div>
+              <button class="text-button" type="button" id="standard-array">Apply standard array</button>
+              <div class="field-grid compact">
+                <label>Armor class override<input name="acOverride" type="number" min="0" max="40" placeholder="Auto"></label>
+                <label>Hit point override<input name="hpOverride" type="number" min="1" max="999" placeholder="Auto"></label>
+              </div>
+            </div>
+
+            <div class="form-step" data-step-panel="5">
+              <div class="step-intro"><span>05</span><div><h2>Choose talents</h2><p>Select feats and, for spellcasters, build a spellbook or prepared list.</p></div></div>
+              <section class="choice-section">
+                <div class="choice-heading"><div><h3>Feats</h3><p id="feat-guidance">Choose any feats your table has granted.</p></div></div>
+                <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
+                <div class="option-list" id="feat-list"></div>
+                <label>Custom feats<input name="customFeats" placeholder="Comma-separated homebrew or licensed feats"></label>
+              </section>
+              <section class="choice-section" id="spell-choice-section">
+                <div class="choice-heading">
+                  <div><h3>Spells</h3><p id="spell-guidance"></p></div>
+                  <input id="spell-search" type="search" placeholder="Search this class's spells...">
+                </div>
+                <div class="spell-level-tabs" id="spell-level-tabs"></div>
+                <div class="option-list spell-list" id="spell-list"></div>
+                <label>Custom spells<input name="customSpells" placeholder="Comma-separated homebrew or licensed spells"></label>
+              </section>
+              <section class="choice-section">
+                <div class="choice-heading"><div><h3>Owned content</h3><p>Add options from books you own without copying them into the public app.</p></div></div>
+                <div class="owned-content-form">
+                  <label>Type<select id="owned-type"><option>Feat</option><option>Spell</option><option>Subclass</option><option>Fighting Style</option></select></label>
+                  <label>Name<input id="owned-name" placeholder="Option name"></label>
+                  <label>Level<input id="owned-level" type="number" min="0" max="20" value="1"></label>
+                  <label class="owned-description">Description<textarea id="owned-description" rows="3" placeholder="Enter a summary from material you own"></textarea></label>
+                  <button class="button ghost small" id="add-owned-content" type="button">Add owned option</button>
+                </div>
+                <div class="owned-content-list" id="owned-content-list"></div>
+              </section>
+              <div class="non-caster-note hidden" id="non-caster-note">This class has no core spell list. Feats and custom talents are still available.</div>
+            </div>
+
+            <div class="form-footer">
+              <button type="button" class="button ghost" id="prev-step">Back</button>
+              <span id="step-count">Step 1 of 4</span>
+              <button type="button" class="button primary" id="next-step">Continue</button>
+              <button type="submit" class="button primary hidden" id="save-character">Save character</button>
+            </div>
+          </form>
+
+          <aside class="live-preview">
+            <span class="eyebrow">LIVE PREVIEW</span>
+            <div class="preview-portrait"><img id="preview-image" alt=""><span id="preview-initial">?</span></div>
+            <h2 id="preview-name">Unnamed Wanderer</h2>
+            <p id="preview-summary">Level 1 adventurer</p>
+            <div class="preview-stats">
+              <div><span>AC</span><strong id="preview-ac">12</strong></div>
+              <div><span>HP</span><strong id="preview-hp">8</strong></div>
+              <div><span>PROF</span><strong id="preview-prof">+2</strong></div>
+            </div>
+            <div class="preview-abilities" id="preview-abilities"></div>
+            <p class="autosave-note" id="save-status">Changes are kept in this browser until you save.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="sheet-view">
+        <div id="sheet-empty" class="empty-state">
+          <span>✦</span><h2>No character selected</h2><p>Create a hero or choose one from your vault.</p>
+          <button class="button primary" data-go="builder">Create a character</button>
+        </div>
+        <div id="character-sheet" class="sheet hidden"></div>
+      </section>
+
+      <section class="view" id="dice-view">
+        <div class="page-head"><div><span class="eyebrow">DICE TRAY</span><h1>Let fate decide</h1><p>Build a roll, add a modifier, and keep a session history.</p></div></div>
+        <div class="dice-layout">
+          <div class="dice-panel">
+            <div class="dice-result" id="dice-result"><small>LAST ROLL</small><strong>—</strong><p>Choose a die to begin</p></div>
+            <div class="dice-row" id="dice-buttons"></div>
+            <div class="roll-controls">
+              <label>Dice<input id="dice-count" type="number" min="1" max="20" value="1"></label>
+              <label>Modifier<input id="dice-mod" type="number" min="-99" max="99" value="0"></label>
+              <button class="button primary" id="roll-selected">Roll</button>
+            </div>
+          </div>
+          <aside class="roll-history"><div class="section-heading"><h2>Roll history</h2><button id="clear-history" class="text-button">Clear</button></div><ol id="roll-history"></ol></aside>
+        </div>
+      </section>
+
+      <section class="view" id="vault-view">
+        <div class="page-head">
+          <div><span class="eyebrow">CHARACTER VAULT</span><h1>Your adventurers</h1><p>Saved locally and ready for the next session.</p></div>
+          <button class="button primary" data-go="builder">New character</button>
+        </div>
+        <div class="vault-toolbar">
+          <input id="vault-search" type="search" placeholder="Search characters...">
+          <button class="button ghost small" id="export-data">Export vault</button>
+          <label class="button ghost small">Import vault<input id="import-data" type="file" accept=".json" hidden></label>
+        </div>
+        <div class="character-grid vault-grid" id="vault-characters"></div>
+      </section>
+
+      <footer class="legal-footer">
+        <p>This work includes material taken from the System Reference Document 5.1 (“SRD 5.1”) by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.</p>
+        <p>This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.</p>
+      </footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="account-modal">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
+      <button class="modal-close" id="close-account" aria-label="Close">×</button>
+      <span class="eyebrow">YOUR VAULT</span><h2 id="account-title">Your Arcana Forge account</h2>
+      <p id="account-description">Sign in to keep this vault synchronized across devices. Local storage remains available when cloud sync is not configured.</p>
+      <div class="account-modes" id="account-modes">
+        <button type="button" class="active" data-account-mode="signin">Sign in</button>
+        <button type="button" data-account-mode="signup">Create account</button>
+      </div>
+      <form id="account-form">
+        <label id="display-name-field" class="hidden">Display name<input name="displayName" placeholder="e.g. Morgan"></label>
+        <label>Email<input name="email" type="email" required placeholder="you@example.com"></label>
+        <label>Password<input name="password" type="password" minlength="8" required autocomplete="current-password"></label>
+        <button class="button primary" id="account-submit" type="submit">Sign in and sync</button>
+      </form>
+      <button class="button ghost hidden" id="sign-out" type="button">Sign out</button>
+      <p class="account-status" id="account-status"></p>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="level-up-modal">
+    <section class="modal level-up-modal" role="dialog" aria-modal="true" aria-labelledby="level-up-title">
+      <button class="modal-close" id="close-level-up" aria-label="Close">×</button>
+      <div class="level-up-head">
+        <span class="eyebrow">GUIDED ADVANCEMENT</span>
+        <h2 id="level-up-title">Level up</h2>
+        <p id="level-up-subtitle"></p>
+        <div class="level-track" id="level-track"></div>
+      </div>
+      <form id="level-up-form">
+        <div id="level-up-content"></div>
+        <div class="level-up-footer">
+          <button type="button" class="button ghost" id="cancel-level-up">Cancel</button>
+          <button type="submit" class="button primary" id="confirm-level-up">Complete level up</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="inventory-modal">
+    <section class="modal inventory-modal" role="dialog" aria-modal="true" aria-labelledby="inventory-title">
+      <button class="modal-close" id="close-inventory" aria-label="Close">×</button>
+      <span class="eyebrow">CHARACTER EQUIPMENT</span>
+      <h2 id="inventory-title">Manage inventory</h2>
+      <div class="currency-editor">
+        <label>CP<input id="currency-cp" type="number" min="0" value="0"></label>
+        <label>SP<input id="currency-sp" type="number" min="0" value="0"></label>
+        <label>EP<input id="currency-ep" type="number" min="0" value="0"></label>
+        <label>GP<input id="currency-gp" type="number" min="0" value="0"></label>
+        <label>PP<input id="currency-pp" type="number" min="0" value="0"></label>
+        <button type="button" class="button ghost small" id="save-currency">Save coins</button>
+      </div>
+      <form id="inventory-form">
+        <label>Search SRD equipment<input id="item-search" type="search" placeholder="Search weapons, armor, gear..."></label>
+        <label>Item<select id="item-template" size="7"></select></label>
+        <div class="field-grid compact">
+          <label>Name<input id="item-name" required></label>
+          <label>Type<input id="item-type" placeholder="Adventuring Gear"></label>
+          <label>Quantity<input id="item-quantity" type="number" min="1" value="1"></label>
+          <label>Weight each<input id="item-weight" type="number" min="0" step="0.01" value="0"></label>
+          <label>Cost<input id="item-cost" placeholder="e.g. 10 GP"></label>
+        </div>
+        <label>Notes<textarea id="item-notes" rows="3" placeholder="Properties, charges, contents, or a personal summary"></textarea></label>
+        <div class="inventory-flags">
+          <label><input id="item-carried" type="checkbox" checked> Carried</label>
+          <label><input id="item-equipped" type="checkbox"> Equipped</label>
+          <label><input id="item-attuned" type="checkbox"> Attuned</label>
+        </div>
+        <button class="button primary" type="submit">Add item</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="spell-data.js"></script>
+  <script src="rules-content.js"></script>
+  <script src="expanded-content.js"></script>
+  <script src="catalog-content.js"></script>
+  <script src="rules-descriptions.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="cloud-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
