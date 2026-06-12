@@ -34,7 +34,6 @@ const SKILLS = {
 const STORAGE_KEY = "arcanaForge.characters.v1";
 const PROFILE_KEY = "arcanaForge.profile.v1";
 const ROLL_KEY = "arcanaForge.rolls.v1";
-const OWNED_KEY = "arcanaForge.ownedContent.v1";
 const CLOUD_OWNER_KEY = "arcanaForge.cloudOwner.v1";
 
 let edition = "2014";
@@ -58,7 +57,7 @@ let cloudUser = null;
 let cloudSyncTimer = null;
 let characters = readJson(STORAGE_KEY, []);
 let rollHistory = readJson(ROLL_KEY, []);
-let ownedContent = readJson(OWNED_KEY, []);
+localStorage.removeItem("arcanaForge.ownedContent.v1");
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -158,14 +157,6 @@ function ruleDetails(description) {
   return `<details class="rule-detail"><summary>Read description</summary><p>${escapeHtml(description)}</p></details>`;
 }
 
-function ownedOptions(type, className = selectedClass, rulesEdition = edition) {
-  return ownedContent.filter(item =>
-    item.type === type &&
-    item.edition === rulesEdition &&
-    (!item.className || item.className === className)
-  );
-}
-
 const OPEN_FEATURE_SUMMARIES = {
   "Ability Score Improvement / Feat": "Increase ability scores or choose an eligible feat, following the advancement rules for this level.",
   "Epic Boon": "Choose an Epic Boon feat for which the character qualifies.",
@@ -198,16 +189,38 @@ function openFeatureSummary(name) {
   return OPEN_FEATURE_SUMMARIES[name] || "";
 }
 
+function normalizedRuleName(name = "") {
+  return String(name)
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/\b(melfs|nystuls|leomunds|mordenkainens|otilukes|ottos|rarys|tashas|evards|bigbys|drawmijs|tensers)\b/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function descriptionMatch(records, name) {
+  if (!records) return "";
+  if (records[name]) return records[name];
+  const target = normalizedRuleName(name);
+  const key = Object.keys(records).find(candidate => normalizedRuleName(candidate) === target);
+  return key ? records[key] : "";
+}
+
+function featureDescriptionInEdition(rulesEdition, source, name, className) {
+  const features = RULE_DESCRIPTIONS.features[rulesEdition] || {};
+  return descriptionMatch(features[source], name)
+    || descriptionMatch(features[className], name)
+    || Object.values(features).map(records => descriptionMatch(records, name)).find(Boolean)
+    || "";
+}
+
 function featureDescription(rulesEdition, source, name, className = selectedClass) {
-  const description = RULE_DESCRIPTIONS.features[rulesEdition]?.[source]?.[name]
-    || RULE_DESCRIPTIONS.features[rulesEdition]?.[className]?.[name]
+  const description = featureDescriptionInEdition(rulesEdition, source, name, className)
+    || (rulesEdition === "2024" ? featureDescriptionInEdition("2014", source, name, className) : "")
     || openFeatureSummary(name)
     || "";
   if (description) return description;
-  const subclass = subclassMetadata(className, source, rulesEdition);
-  if (subclass?.source) return `This feature is from ${subclass.source}. Add a personal summary through Owned Content to keep licensed rules text with your own library.`;
-  if (["Artificer", "Blood Hunter"].includes(className)) return `This licensed ${className} feature is level-gated here. Add its rules summary through Owned Content from a source you own.`;
-  return `This ${className} class feature unlocks at the listed level. Add a personal summary through Owned Content when your sourcebook contains additional licensed rules text.`;
+  return `${name} is gained from ${source || className} at the listed character level. It is included automatically in this character's progression once that level is reached.`;
 }
 
 function featEligible(feat, level, className, rulesEdition) {
@@ -220,15 +233,28 @@ function featEligible(feat, level, className, rulesEdition) {
   return true;
 }
 
-function licensedRulesNote(kind, source = "") {
+function catalogRulesSummary(kind, name, source = "", category = "") {
+  const categoryText = category ? `${category} ` : "";
   const sourceText = source ? ` from ${source}` : "";
-  return `This ${kind}${sourceText} is included as source metadata. Add a personal rules summary through Owned Content for licensed text from a book you own.`;
+  return `${name} is a ${categoryText}${kind}${sourceText}. It is available to every player in this builder when its listed character-level and feature prerequisites are met.`;
 }
 
+const OPEN_FIGHTING_STYLE_SUMMARIES = {
+  "Blessed Warrior": "Learn two Cleric cantrips of your choice. They count as Paladin spells for you, and Charisma is your spellcasting ability for them.",
+  "Blind Fighting": "You gain blindsight out to 10 feet, allowing you to perceive creatures and objects in that range unless you are deafened.",
+  "Druidic Warrior": "Learn two Druid cantrips of your choice. They count as Ranger spells for you, and Wisdom is your spellcasting ability for them.",
+  "Dueling": "While wielding a melee weapon in one hand and no other weapons, you gain a +2 bonus to damage rolls with that weapon.",
+  "Interception": "When a nearby creature is hit by an attack, you can use your reaction while wielding a shield or weapon to reduce the damage by 1d10 plus your proficiency bonus.",
+  "Protection": "While wielding a shield, you can use your reaction to interfere with an attack against a nearby ally and impose disadvantage on the attack roll.",
+  "Superior Technique": "Learn one Battle Master maneuver and gain one d6 superiority die to fuel it; the die returns when you finish a short or long rest.",
+  "Thrown Weapon Fighting": "You can draw a thrown weapon as part of the attack, and ranged attacks with thrown weapons gain a +2 bonus to damage.",
+  "Unarmed Fighting": "Your unarmed strikes deal improved bludgeoning damage, and you can deal extra damage to a creature you are grappling."
+};
+
 function featDescription(feat, rulesEdition) {
-  return feat.owned?.description
-    || RULE_DESCRIPTIONS.feats[rulesEdition]?.[feat.name]
-    || licensedRulesNote("feat", feat.source);
+  return descriptionMatch(RULE_DESCRIPTIONS.feats[rulesEdition], feat.name)
+    || (rulesEdition === "2024" && feat.expanded ? descriptionMatch(RULE_DESCRIPTIONS.feats[2014], feat.name) : "")
+    || catalogRulesSummary("feat", feat.name, feat.source, feat.category);
 }
 
 function featAbilityOptions(feat, rulesEdition = edition) {
@@ -250,13 +276,23 @@ function featAbilityBonuses(featNames = selectedFeatNames) {
 }
 
 function spellDescription(name, rulesEdition, source = "") {
-  return RULE_DESCRIPTIONS.spells[rulesEdition]?.[name]
-    || licensedRulesNote("spell", source);
+  return descriptionMatch(RULE_DESCRIPTIONS.spells[rulesEdition], name)
+    || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.spells[2014], name) : "")
+    || catalogRulesSummary("spell", name, source, "expanded");
 }
 
 function fightingStyleDescription(name, rulesEdition) {
-  return RULE_DESCRIPTIONS.fightingStyles[rulesEdition]?.[name]
-    || licensedRulesNote("fighting style", FIGHTING_STYLE_SOURCES[rulesEdition]?.[name] || "");
+  return descriptionMatch(RULE_DESCRIPTIONS.fightingStyles[rulesEdition], name)
+    || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.fightingStyles[2014], name) : "")
+    || OPEN_FIGHTING_STYLE_SUMMARIES[name]
+    || catalogRulesSummary("fighting style", name, FIGHTING_STYLE_SOURCES[rulesEdition]?.[name] || "");
+}
+
+function progressionDescription(group, name, rulesEdition) {
+  if (!name) return "";
+  return descriptionMatch(RULE_DESCRIPTIONS.progression?.[group]?.[rulesEdition], name)
+    || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.progression?.[group]?.[2014], name) : "")
+    || catalogRulesSummary(group === "pactBoons" ? "pact boon" : group === "metamagic" ? "Metamagic option" : "Eldritch Invocation", name);
 }
 
 function resetPortrait() {
@@ -401,7 +437,8 @@ function renderOriginRules(savedCharacter = null) {
       })
     ).join("");
     const fixed = Object.entries(selectedVariant.bonuses || {}).map(([ability, amount]) => `${ability} +${amount}`).join(", ");
-    const featOptions = [...(FEATS[2014] || []).filter(feat => featEligible(feat, 1, selectedClass, "2014")), ...ownedOptions("Feat")]
+    const featOptions = (FEATS[2014] || [])
+      .filter(feat => feat.category !== "Epic Boon" && feat.category !== "Fighting Style")
       .map(feat => feat.name);
     const featField = selectedVariant.featChoice
       ? `<label>Species feat<select name="originFeatChoice" required>${[...new Set(featOptions)].map(name =>
@@ -517,7 +554,7 @@ function renderStartingClassOptions(savedCharacter = null) {
         <input type="checkbox" name="weaponMastery" value="${escapeHtml(weapon)}" ${currentMasteries.has(weapon) ? "checked" : ""}>
         <span>${escapeHtml(weapon)} · ${escapeHtml(WEAPON_MASTERY_PROPERTIES[weapon] || "Mastery")}</span>
       </label>`).join("")}</div>
-      <small>You can replace mastered weapons after a Long Rest. Additional choices unlock at the levels shown in class progression.</small>
+      <small>You can replace mastered weapons after a Long Rest. Additional choices become available at the levels shown in class progression.</small>
     </div>`);
   }
   if (edition === "2024" && selectedClass === "Cleric") {
@@ -547,8 +584,7 @@ function subclassEntries(className = selectedClass, rulesEdition = edition) {
 function subclassMetadata(className, name, rulesEdition) {
   const entries = SUBCLASS_CATALOG[className] || [];
   return entries.find(item => item.name === name && item.rules === rulesEdition)
-    || entries.find(item => item.name === name && item.rules === "2014")
-    || ownedOptions("Subclass", className, rulesEdition).find(item => item.name === name);
+    || entries.find(item => item.name === name && item.rules === "2014");
 }
 
 function updateSubclassMeta() {
@@ -560,16 +596,33 @@ function updateSubclassMeta() {
   if (!meta) {
     $("#subclass-meta").textContent = level < unlock
       ? `Optional plan. ${selectedClass} subclass features activate at level ${unlock}.`
-      : "Custom subclass. Add its feature text through Owned Content.";
-    return;
-  }
-  if (meta.type === "Subclass") {
-    $("#subclass-meta").textContent = `Owned content · ${edition === "2024" ? "5.5e" : "5e"} rules${level < unlock ? ` · planned for level ${unlock}` : ""}`;
+      : "Custom subclass selected.";
     return;
   }
   const rulesLabel = meta.rules === "2024" ? "native 5.5e" : edition === "2024" ? "5e expanded rules" : "5e";
   const levelStatus = level < unlock ? ` · planned for level ${unlock}` : " · active";
-  $("#subclass-meta").textContent = `${meta.source} · ${rulesLabel}${levelStatus}${RULE_DESCRIPTIONS.features[meta.rules]?.[name] ? " · full SRD details included" : " · licensed feature text uses Owned Content"}`;
+  $("#subclass-meta").textContent = `${meta.source} · ${rulesLabel}${levelStatus} · included for all players`;
+}
+
+function renderClassFeaturePreview() {
+  const container = $("#class-feature-preview");
+  if (!container) return;
+  const level = Number(form.elements.level?.value || 1);
+  const subclassName = $("#subclass-select")?.value || "";
+  const classRows = (CLASS_FEATURES[edition]?.[selectedClass] || [])
+    .filter(([featureLevel]) => featureLevel <= level)
+    .map(([featureLevel, name]) => ({ level: featureLevel, name, source: selectedClass }));
+  const subclassRows = subclassName
+    ? resolvedSubclassFeatures(edition, selectedClass, subclassName)
+      .filter(([featureLevel]) => featureLevel <= level)
+      .map(([featureLevel, name]) => ({ level: featureLevel, name, source: subclassName }))
+    : [];
+  const features = [...classRows, ...subclassRows];
+  container.innerHTML = `<h3>Features at level ${level}</h3>
+    <p>Class and subclass features are granted automatically at their listed levels. Every catalog option is available without an ownership gate.</p>
+    <div class="selection-feature-grid">${features.map(feature =>
+      `<article class="feature-card"><small>LEVEL ${feature.level} · ${escapeHtml(feature.source)}</small><strong>${escapeHtml(feature.name)}</strong>${ruleDetails(featureDescription(edition, feature.source, feature.name, selectedClass))}</article>`
+    ).join("") || "<p>No class features are available at this level.</p>"}</div>`;
 }
 
 function populateSubclasses() {
@@ -580,8 +633,6 @@ function populateSubclasses() {
   const options = [];
   if (native.length) options.push(`<optgroup label="${edition === "2024" ? "Native 5.5e subclasses" : "5e subclasses"}">${native.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} · ${escapeHtml(item.source)}</option>`).join("")}</optgroup>`);
   if (expanded.length) options.push(`<optgroup label="5e expanded rules">${expanded.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} · ${escapeHtml(item.source)}</option>`).join("")}</optgroup>`);
-  const owned = ownedOptions("Subclass");
-  if (owned.length) options.push(`<optgroup label="Owned content">${owned.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}</optgroup>`);
   options.push(`<option value="">Custom / none</option>`);
   $("#subclass-select").innerHTML = options.join("");
   $("#subclass-select").disabled = false;
@@ -593,6 +644,7 @@ function populateSubclasses() {
   }
   updateSubclassMeta();
   renderStartingClassOptions();
+  renderClassFeaturePreview();
 }
 
 function selectedValues(name) {
@@ -620,20 +672,19 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (savedFeatAbilities) selectedFeatAbilities = { ...savedFeatAbilities };
   if (currentOriginFeat) selectedFeatNames.add(currentOriginFeat);
   const level = Number(form.elements.level?.value || 1);
-  const ownedFeats = ownedOptions("Feat").map(item => ({ name: item.name, category: "Owned", prerequisite: item.level ? `Level ${item.level}+` : "", owned: item }));
   const featQuery = ($("#feat-search")?.value || "").trim().toLowerCase();
-  let feats = [...(FEATS[edition] || []), ...ownedFeats].filter(feat =>
+  let feats = [...(FEATS[edition] || [])].filter(feat =>
     !featQuery || `${feat.name} ${feat.source || ""} ${feat.category}`.toLowerCase().includes(featQuery)
   );
   if (currentOriginFeat && !feats.some(feat => feat.name === currentOriginFeat) && (!featQuery || currentOriginFeat.toLowerCase().includes(featQuery))) {
     feats.unshift({ name: currentOriginFeat, category: "Origin", source: edition === "2024" ? "Background" : "Species" });
   }
   $("#feat-guidance").textContent = edition === "2014"
-    ? `${FEATS[edition].length} official 5e feat records · licensed entries include source metadata.`
-    : `${FEATS[edition].length} official 5.5e and expanded feat records · grouped by level category.`;
+    ? `${FEATS[edition].length} 5e feat options · all included and filtered by level prerequisites.`
+    : `${FEATS[edition].length} 5.5e and expanded feat options · all included and grouped by level category.`;
   $("#feat-list").innerHTML = feats.map(feat => {
     const isOriginFeat = feat.name === currentOriginFeat;
-    const eligible = isOriginFeat || (feat.owned ? level >= Number(feat.owned.level || 0) : featEligible(feat, level, selectedClass, edition));
+    const eligible = isOriginFeat || featEligible(feat, level, selectedClass, edition);
     if (!eligible) selectedFeatNames.delete(feat.name);
     const description = featDescription(feat, edition);
     const abilityChoices = featAbilityOptions(feat);
@@ -648,7 +699,6 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   const lists = SPELL_LISTS[edition]?.[selectedClass];
   $("#spell-choice-section").classList.toggle("hidden", !lists);
   $("#non-caster-note").classList.toggle("hidden", Boolean(lists));
-  renderOwnedContent();
   if (!lists) return;
   const allowed = maxSpellLevel(selectedClass, level, edition);
   $("#spell-guidance").textContent = `${selectedClass} SRD list · spell levels through ${allowed} are available at character level ${level}.`;
@@ -670,27 +720,15 @@ function renderSpellList() {
     if (!query && Number(spellLevel) !== selectedSpellLevel) return;
     spells.filter(name => !query || name.toLowerCase().includes(query)).forEach(name => rows.push({ name, level: Number(spellLevel) }));
   });
-  ownedOptions("Spell").filter(item => !query || item.name.toLowerCase().includes(query)).forEach(item => {
-    if (query || Number(item.level) === selectedSpellLevel) rows.push({ name: item.name, level: Number(item.level), owned: item });
-  });
   $("#spell-list").innerHTML = rows.length ? rows.map(spell => {
     const locked = spell.level > allowed;
-    const source = spell.owned ? "Owned Content" : EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || "";
-    const description = spell.owned?.description || spellDescription(spell.name, edition, source);
+    const source = EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || "";
+    const description = spellDescription(spell.name, edition, source);
     return `<article class="choice-option ${locked ? "locked" : ""}"><label>
       <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${selectedSpellNames.has(spell.name) ? "checked" : ""} ${locked ? "disabled" : ""}>
-      <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${source ? ` · ${escapeHtml(source)}` : ""}${locked ? " · unlocks later" : ""}</small></span>
+      <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${source ? ` · ${escapeHtml(source)}` : ""}${locked ? ` · available when this spell level is reached` : ""}</small></span>
     </label>${ruleDetails(description)}</article>`;
   }).join("") : `<p>No spells match that search.</p>`;
-}
-
-function renderOwnedContent() {
-  if (!$("#owned-content-list")) return;
-  const visible = ownedContent.filter(item => item.edition === edition);
-  $("#owned-content-list").innerHTML = visible.length ? visible.map(item => `<article class="owned-entry">
-    <div><strong>${escapeHtml(item.name)}</strong><br><small>${escapeHtml(item.type)} · ${escapeHtml(item.className || "Any class")} · Level ${item.level}</small>${ruleDetails(item.description)}</div>
-    <button type="button" data-remove-owned="${item.id}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
-  </article>`).join("") : `<p>No owned options added for this edition.</p>`;
 }
 
 function buildAbilities() {
@@ -722,8 +760,7 @@ function formData() {
   data.weaponMastery = selectedValues("weaponMastery");
   const lists = SPELL_LISTS[edition]?.[selectedClass] || {};
   data.spells = [...selectedSpellNames].map(name => {
-    const owned = ownedOptions("Spell").find(item => item.name === name);
-    const spellLevel = owned?.level ?? Object.entries(lists).find(([, names]) => names.includes(name))?.[0] ?? 0;
+    const spellLevel = Object.entries(lists).find(([, names]) => names.includes(name))?.[0] ?? 0;
     return { name, level: Number(spellLevel) };
   });
   data.baseAbilities = {};
@@ -761,7 +798,7 @@ function resolvedSubclassFeatures(rulesEdition, className, subclassName) {
   if (!subclassName) return [];
   const listed = SUBCLASS_FEATURES[rulesEdition]?.[subclassName] || [];
   if (listed.length) return listed;
-  return (SUBCLASS_LEVELS[rulesEdition]?.[className] || []).map(level => [level, `${subclassName}: subclass feature unlocked`]);
+  return (SUBCLASS_LEVELS[rulesEdition]?.[className] || []).map(level => [level, `${subclassName}: subclass feature gained`]);
 }
 
 function updatePreview() {
@@ -1126,11 +1163,11 @@ function renderSheet() {
     if (name) characterChoices.push({ name, source, description });
   };
   [...new Set([c.fightingStyle, ...(c.fightingStyles || [])].filter(Boolean))].forEach(name =>
-    addChoice(name, "Fighting Style", ownedContent.find(item => item.type === "Fighting Style" && item.name === name)?.description || fightingStyleDescription(name, c.edition))
+    addChoice(name, "Fighting Style", fightingStyleDescription(name, c.edition))
   );
-  addChoice(c.pactBoon, "Pact Boon", RULE_DESCRIPTIONS.progression?.pactBoons?.[c.edition]?.[c.pactBoon] || "");
-  (c.metamagic || []).forEach(name => addChoice(name, "Metamagic", RULE_DESCRIPTIONS.progression?.metamagic?.[c.edition]?.[name] || ""));
-  (c.invocations || []).forEach(name => addChoice(name, "Eldritch Invocation", RULE_DESCRIPTIONS.progression?.invocations?.[c.edition]?.[name] || ""));
+  addChoice(c.pactBoon, "Pact Boon", progressionDescription("pactBoons", c.pactBoon, c.edition));
+  (c.metamagic || []).forEach(name => addChoice(name, "Metamagic", progressionDescription("metamagic", name, c.edition)));
+  (c.invocations || []).forEach(name => addChoice(name, "Eldritch Invocation", progressionDescription("invocations", name, c.edition)));
   (c.expertise || []).forEach(name => addChoice(name, "Expertise", `Your proficiency bonus is doubled for checks you make with ${name}.`));
   (c.weaponMastery || []).forEach(name => addChoice(name, "Weapon Mastery", `${WEAPON_MASTERY_PROPERTIES[name] || "Mastery"} property · usable when the weapon's requirements are met.`));
   addChoice(c.divineOrder, "Divine Order");
@@ -1188,16 +1225,15 @@ function renderSheet() {
     <section class="sheet-panel sheet-wide">
       <h2>Feats</h2>
       <div class="tag-list">${feats.map(feat => {
-        const owned = ownedContent.find(item => item.type === "Feat" && item.name === feat);
         const featRecord = (FEATS[c.edition] || []).find(item => item.name === feat) || { name: feat };
-        return `<div class="tag">${escapeHtml(feat)}${ruleDetails(owned?.description || featDescription(featRecord, c.edition))}</div>`;
+        return `<div class="tag">${escapeHtml(feat)}${ruleDetails(featDescription(featRecord, c.edition))}</div>`;
       }).join("") || "<p>No feats selected.</p>"}</div>
     </section>
     ${SPELL_LISTS[c.edition]?.[c.className] ? `<section class="sheet-panel sheet-wide">
       <h2>Spellcasting</h2>
       <div class="sheet-spell-summary"><span><strong>Ability:</strong> ${spellAbility}</span><span><strong>Save DC:</strong> ${spellSave}</span><span><strong>Attack:</strong> ${signed(spellAttack)}</span><span><strong>Selected:</strong> ${spells.length}</span></div>
       <div class="sheet-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell =>
-        `<div class="sheet-spell"><strong>${escapeHtml(spell.name)}</strong><br><small>${spell.level === 0 ? "Cantrip" : spell.level === "Custom" ? "Custom" : `Level ${spell.level}`}</small>${ruleDetails(ownedContent.find(item => item.type === "Spell" && item.name === spell.name)?.description || spellDescription(spell.name, c.edition, EXPANDED_SPELL_SOURCES[c.edition]?.[spell.name] || ""))}</div>`
+        `<div class="sheet-spell"><strong>${escapeHtml(spell.name)}</strong><br><small>${spell.level === 0 ? "Cantrip" : spell.level === "Custom" ? "Custom" : `Level ${spell.level}`}</small>${ruleDetails(spellDescription(spell.name, c.edition, EXPANDED_SPELL_SOURCES[c.edition]?.[spell.name] || ""))}</div>`
       ).join("") || "<p>No spells selected.</p>"}</div>
     </section>` : ""}
     ${(c.progressionHistory || []).length ? `<section class="sheet-panel sheet-wide">
@@ -1285,7 +1321,7 @@ function progressionChoiceBlocks(character, targetLevel, features) {
   const levelRules = LEVEL_CHOICE_RULES[character.edition]?.[character.className] || {};
   const subclassAt = subclassLevel(character.className, character.edition);
   if (targetLevel === subclassAt) {
-    const subclasses = [...subclassEntries(character.className, character.edition).map(item => item.name), ...ownedOptions("Subclass", character.className, character.edition).map(item => item.name)];
+    const subclasses = subclassEntries(character.className, character.edition).map(item => item.name);
     blocks.push(`<div class="progression-choice">
       <label for="level-subclass">Choose your ${character.className} subclass</label>
       <select id="level-subclass" name="subclassChoice" required>${[...new Set(subclasses)].map(name => {
@@ -1299,29 +1335,28 @@ function progressionChoiceBlocks(character, targetLevel, features) {
     .some(([unlock, name]) => unlock <= targetLevel && name.includes("Fighting Style"));
   if (featureNames.some(name => name.includes("Fighting Style")) || (hasFightingStyleFeature && !character.fightingStyle)) {
     const existingStyles = new Set([character.fightingStyle, ...(character.fightingStyles || [])].filter(Boolean));
-    const styles = [...fightingStylesForClass(character.className, character.edition), ...ownedOptions("Fighting Style", character.className, character.edition).map(item => item.name)]
-      .filter(name => !existingStyles.has(name));
+    const styles = fightingStylesForClass(character.className, character.edition).filter(name => !existingStyles.has(name));
     blocks.push(`<div class="progression-choice"><strong>Choose a Fighting Style</strong>${optionRadios("fightingStyle", styles, "", true, option =>
-      ownedContent.find(item => item.type === "Fighting Style" && item.name === option)?.description || fightingStyleDescription(option, character.edition)
+      fightingStyleDescription(option, character.edition)
     )}</div>`);
   }
   const metamagicCount = Number(levelRules.metamagic?.[targetLevel] || 0);
   if (metamagicCount) {
     const options = PROGRESSION_OPTIONS.metamagic[character.edition].filter(option => !(character.metamagic || []).includes(option));
     blocks.push(`<div class="progression-choice" data-min-choices="${metamagicCount}" data-choice-name="metamagic"><strong>Choose ${metamagicCount} Metamagic option${metamagicCount > 1 ? "s" : ""}</strong>${optionChecks("metamagic", options, [], metamagicCount, option =>
-      RULE_DESCRIPTIONS.progression?.metamagic?.[character.edition]?.[option] || ""
+      progressionDescription("metamagic", option, character.edition)
     )}</div>`);
   }
   if (featureNames.includes("Pact Boon")) {
     blocks.push(`<div class="progression-choice"><strong>Choose a Pact Boon</strong>${optionRadios("pactBoon", PROGRESSION_OPTIONS.pactBoons2014, "", true, option =>
-      RULE_DESCRIPTIONS.progression?.pactBoons?.[character.edition]?.[option] || ""
+      progressionDescription("pactBoons", option, character.edition)
     )}</div>`);
   }
   const invocationCount = Number(levelRules.invocations?.[targetLevel] || 0);
   if (invocationCount) {
     const options = PROGRESSION_OPTIONS.invocations[character.edition].filter(option => !(character.invocations || []).includes(option));
     blocks.push(`<div class="progression-choice" data-min-choices="${invocationCount}" data-choice-name="invocations"><strong>Choose ${invocationCount} Eldritch Invocation${invocationCount > 1 ? "s" : ""}</strong>${optionChecks("invocations", options, [], invocationCount, option =>
-      RULE_DESCRIPTIONS.progression?.invocations?.[character.edition]?.[option] || ""
+      progressionDescription("invocations", option, character.edition)
     )}</div>`);
   }
   const expertiseCount = Number(levelRules.expertise?.[targetLevel] || 0);
@@ -1354,16 +1389,13 @@ function progressionChoiceBlocks(character, targetLevel, features) {
       ? [4, 8, 10, 12, 16, 19]
       : [4, 8, 12, 16, 19];
   if (advancementLevels.includes(targetLevel)) {
-    const availableFeats = [
-      ...FEATS[character.edition].filter(feat =>
+    const availableFeats = FEATS[character.edition].filter(feat =>
         !feat.category.includes("Fighting Style")
         && feat.name !== "Ability Score Improvement"
         && featEligible(feat, targetLevel, character.className, character.edition)
         && (character.edition !== "2024" || feat.category === "General" || (targetLevel >= 19 && feat.category === "Epic Boon"))
         && !(character.feats || []).includes(feat.name)
-      ),
-      ...ownedOptions("Feat", character.className, character.edition).filter(item => Number(item.level || 0) <= targetLevel).map(item => ({ name: item.name, category: "Owned" }))
-    ];
+      );
     const firstFeatAbilities = featAbilityOptions(availableFeats[0] || {}, character.edition);
     blocks.push(`<div class="progression-choice">
       <strong>Choose an advancement</strong>
@@ -1402,9 +1434,6 @@ function levelSpellChoices(character, targetLevel) {
     .filter(([level]) => Number(level) > 0 && Number(level) <= newMax)
     .flatMap(([level, spells]) => spells.map(name => ({ name, level: Number(level) })))
     .filter(spell => !existing.has(spell.name));
-  ownedOptions("Spell", character.className, character.edition)
-    .filter(item => Number(item.level) > 0 && Number(item.level) <= newMax && !existing.has(item.name))
-    .forEach(item => available.push({ name: item.name, level: Number(item.level), owned: item }));
   const modeLabel = progression.mode === "spellbook" ? "spellbook" : progression.mode === "known" ? "spells known" : "prepared spells";
   return `<section class="advancement-section">
     <h3>Add ${count} spell${count > 1 ? "s" : ""}</h3>
@@ -1412,7 +1441,7 @@ function levelSpellChoices(character, targetLevel) {
     <div class="progression-choice" data-min-choices="${count}" data-choice-name="levelSpells">
       ${optionChecks("levelSpells", available.map(spell => spell.name), [], count, name => {
         const spell = available.find(item => item.name === name);
-        return spell?.owned?.description || RULE_DESCRIPTIONS.spells[character.edition]?.[name] || "";
+        return spellDescription(name, character.edition, EXPANDED_SPELL_SOURCES[character.edition]?.[name] || "");
       })}
     </div>
   </section>`;
@@ -1428,7 +1457,7 @@ function levelCantripChoices(character, targetLevel) {
     <h3>Learn ${count} cantrip${count > 1 ? "s" : ""}</h3>
     <p>Your class gains another cantrip at this level.</p>
     <div class="progression-choice" data-min-choices="${count}" data-choice-name="levelCantrips">
-      ${optionChecks("levelCantrips", available, [], count, name => RULE_DESCRIPTIONS.spells[character.edition]?.[name] || "")}
+      ${optionChecks("levelCantrips", available, [], count, name => spellDescription(name, character.edition, EXPANDED_SPELL_SOURCES[character.edition]?.[name] || ""))}
     </div>
   </section>`;
 }
@@ -1443,7 +1472,7 @@ function mysticArcanumChoices(character, targetLevel) {
     <h3>Choose a level ${arcanumLevel} Mystic Arcanum</h3>
     <p>This spell is gained through Mystic Arcanum, separate from your Pact Magic spell slots.</p>
     <div class="progression-choice" data-min-choices="1" data-choice-name="mysticArcanum">
-      ${optionRadios("mysticArcanum", available, "", true, name => RULE_DESCRIPTIONS.spells[character.edition]?.[name] || "")}
+      ${optionRadios("mysticArcanum", available, "", true, name => spellDescription(name, character.edition, EXPANDED_SPELL_SOURCES[character.edition]?.[name] || ""))}
     </div>
   </section>`;
 }
@@ -1453,7 +1482,7 @@ function updateLevelFeatAbilityOptions(character) {
   const select = $("#level-up-form").elements.levelFeatAbility;
   const featName = $("#level-up-form").elements.levelFeat?.value;
   if (!field || !select || !featName) return;
-  const feat = (FEATS[character.edition] || []).find(item => item.name === featName) || { name: featName, category: "Owned" };
+  const feat = (FEATS[character.edition] || []).find(item => item.name === featName) || { name: featName, category: "Custom" };
   const options = featAbilityOptions(feat, character.edition);
   field.classList.toggle("hidden", !options.length);
   select.innerHTML = abilityOptions(options, options[0]);
@@ -1473,7 +1502,7 @@ function openLevelUp(id) {
   $("#level-up-content").innerHTML = `
     <section class="advancement-section">
       <h3>Features gained</h3>
-      <p>These features unlock automatically at this level.</p>
+      <p>These features are gained automatically at this level.</p>
       <div class="unlock-list">${features.map(feature => `<article class="unlock-card"><span class="check">✓</span><div><strong>${escapeHtml(feature.name)}</strong><small>${escapeHtml(feature.source)}</small>${ruleDetails(featureDescription(character.edition, feature.source, feature.name, character.className))}</div></article>`).join("") || `<article class="unlock-card"><span class="check">✓</span><div><strong>Core progression</strong><small>Proficiency, spell slots, or existing features may improve.</small></div></article>`}</div>
     </section>
     <section class="advancement-section">
@@ -1604,7 +1633,7 @@ function completeLevelUp(event) {
   } else if (advancementType === "Feat") {
     const feat = formValues.get("levelFeat");
     if (feat) {
-      const featRecord = (FEATS[updated.edition] || []).find(item => item.name === feat) || { name: feat, category: "Owned" };
+      const featRecord = (FEATS[updated.edition] || []).find(item => item.name === feat) || { name: feat, category: "Custom" };
       const allowedAbilities = featAbilityOptions(featRecord, updated.edition);
       const featAbility = formValues.get("levelFeatAbility");
       if (allowedAbilities.length && !allowedAbilities.includes(featAbility)) {
@@ -1775,14 +1804,6 @@ function initEvents() {
     const edit = event.target.closest("[data-edit]"); if (edit) editCharacter(edit.dataset.edit);
     const levelUp = event.target.closest("[data-level-up]"); if (levelUp && !levelUp.disabled) openLevelUp(levelUp.dataset.levelUp);
     const delevel = event.target.closest("[data-delevel]"); if (delevel && !delevel.disabled) delevelCharacter(delevel.dataset.delevel);
-    const removeOwned = event.target.closest("[data-remove-owned]");
-    if (removeOwned) {
-      ownedContent = ownedContent.filter(item => item.id !== removeOwned.dataset.removeOwned);
-      saveJson(OWNED_KEY, ownedContent);
-      populateRules();
-      renderTalentChoices();
-      toast("Owned option removed");
-    }
     const del = event.target.closest("[data-delete]");
     if (del && confirm("Delete this character from the local vault?")) {
       characters = characters.filter(c => c.id !== del.dataset.delete); persistCharacters(); renderCards($("#vault-search").value); toast("Character deleted");
@@ -1804,7 +1825,10 @@ function initEvents() {
       selectedFeatAbilities[event.target.dataset.featAbility] = event.target.value;
       updatePreview();
     }
-    if (event.target.name === "subclass") updateSubclassMeta();
+    if (event.target.name === "subclass") {
+      updateSubclassMeta();
+      renderClassFeaturePreview();
+    }
     if (["species", "background", "speciesVariant", "backgroundAbilityMode"].includes(event.target.name)) {
       renderOriginRules();
       renderTalentChoices();
@@ -1826,28 +1850,6 @@ function initEvents() {
   form.elements.level.addEventListener("change", () => { populateSubclasses(); renderTalentChoices(); });
   $("#feat-search").addEventListener("input", () => renderTalentChoices());
   $("#spell-search").addEventListener("input", () => renderSpellList());
-  $("#add-owned-content").addEventListener("click", () => {
-    const type = $("#owned-type").value;
-    const name = $("#owned-name").value.trim();
-    const level = Number($("#owned-level").value || 0);
-    const description = $("#owned-description").value.trim();
-    if (!name || !description) { toast("Add a name and description"); return; }
-    ownedContent.push({
-      id: crypto.randomUUID(),
-      type,
-      name,
-      level,
-      description,
-      edition,
-      className: ["Spell", "Subclass", "Fighting Style"].includes(type) ? selectedClass : ""
-    });
-    saveJson(OWNED_KEY, ownedContent);
-    $("#owned-name").value = "";
-    $("#owned-description").value = "";
-    populateRules();
-    renderTalentChoices();
-    toast(`${name} added to owned content`);
-  });
   $("#close-inventory").addEventListener("click", closeInventory);
   $("#inventory-modal").addEventListener("click", event => { if (event.target.id === "inventory-modal") closeInventory(); });
   $("#item-search").addEventListener("input", event => renderItemTemplates(event.target.value));

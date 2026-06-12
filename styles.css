@@ -161,12 +161,10 @@ textarea { resize: vertical; }
 .spell-level-tabs button { min-width: 38px; padding: 7px 9px; border: 1px solid var(--line); background: #f8f4ed; cursor: pointer; font-size: 11px; }
 .spell-level-tabs button.active { color: white; border-color: var(--green); background: var(--green); }
 .non-caster-note { padding: 20px; color: var(--muted); border: 1px dashed var(--line); background: #f7f2e9; text-align: center; }
-.owned-content-form { display: grid; grid-template-columns: 1fr 1fr 100px; gap: 10px; align-items: end; }
-.owned-description { grid-column: 1 / -1; }
-.owned-content-form .button { justify-self: start; }
-.owned-content-list { display: grid; gap: 7px; margin-top: 14px; }
-.owned-entry { padding: 10px 12px; display: flex; justify-content: space-between; gap: 12px; border: 1px solid var(--line); background: #f8f4ed; }
-.owned-entry button { border: 0; color: var(--red); background: transparent; cursor: pointer; }
+.selection-details { margin-top: 22px; padding: 18px; border: 1px solid var(--line); border-left: 3px solid var(--green); background: #f8f4ed; }
+.selection-details h3 { margin: 0 0 4px; font-size: 15px; }
+.selection-details > p { margin: 0 0 14px; font-size: 12px; }
+.selection-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .form-footer { padding: 18px 24px; display: flex; align-items: center; justify-content: flex-end; gap: 15px; border-top: 1px solid var(--line); }
 .form-footer span { margin-right: auto; color: var(--muted); font-size: 12px; }
 .hidden { display: none !important; }
@@ -370,8 +368,7 @@ textarea { resize: vertical; }
   .class-grid { grid-template-columns: repeat(3, 1fr); }
   .ability-editor { grid-template-columns: repeat(3, 1fr); }
   .option-list, .feature-grid, .sheet-spells, .resource-grid { grid-template-columns: 1fr; }
-  .owned-content-form { grid-template-columns: 1fr; }
-  .owned-description { grid-column: auto; }
+  .selection-feature-grid { grid-template-columns: 1fr; }
   .choice-heading { align-items: stretch; flex-direction: column; }
   .currency-editor { grid-template-columns: repeat(3, 1fr); }
   .currency-editor .button { grid-column: 1 / -1; }

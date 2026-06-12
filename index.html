@@ -140,10 +140,11 @@
               <div class="class-grid" id="class-grid"></div>
               <div class="field-grid compact">
                 <label>Subclass<select name="subclass" id="subclass-select"></select><small class="subclass-meta" id="subclass-meta"></small></label>
-                <label>Custom subclass<input name="customSubclass" placeholder="Optional homebrew or licensed content"></label>
+                <label>Custom subclass<input name="customSubclass" placeholder="Optional homebrew subclass"></label>
                 <label id="fighting-style-field" class="hidden">Fighting style<select name="fightingStyle" id="fighting-style-select"></select><small class="subclass-meta" id="fighting-style-meta"></small></label>
               </div>
               <div class="class-choice-fields" id="class-choice-fields"></div>
+              <section class="selection-details" id="class-feature-preview" aria-live="polite"></section>
             </div>
 
             <div class="form-step" data-step-panel="4">
@@ -162,7 +163,7 @@
                 <div class="choice-heading"><div><h3>Feats</h3><p id="feat-guidance">Choose any feats your table has granted.</p></div></div>
                 <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
                 <div class="option-list" id="feat-list"></div>
-                <label>Custom feats<input name="customFeats" placeholder="Comma-separated homebrew or licensed feats"></label>
+                <label>Custom feats<input name="customFeats" placeholder="Comma-separated homebrew feats"></label>
               </section>
               <section class="choice-section" id="spell-choice-section">
                 <div class="choice-heading">
@@ -171,18 +172,7 @@
                 </div>
                 <div class="spell-level-tabs" id="spell-level-tabs"></div>
                 <div class="option-list spell-list" id="spell-list"></div>
-                <label>Custom spells<input name="customSpells" placeholder="Comma-separated homebrew or licensed spells"></label>
-              </section>
-              <section class="choice-section">
-                <div class="choice-heading"><div><h3>Owned content</h3><p>Add options from books you own without copying them into the public app.</p></div></div>
-                <div class="owned-content-form">
-                  <label>Type<select id="owned-type"><option>Feat</option><option>Spell</option><option>Subclass</option><option>Fighting Style</option></select></label>
-                  <label>Name<input id="owned-name" placeholder="Option name"></label>
-                  <label>Level<input id="owned-level" type="number" min="0" max="20" value="1"></label>
-                  <label class="owned-description">Description<textarea id="owned-description" rows="3" placeholder="Enter a summary from material you own"></textarea></label>
-                  <button class="button ghost small" id="add-owned-content" type="button">Add owned option</button>
-                </div>
-                <div class="owned-content-list" id="owned-content-list"></div>
+                <label>Custom spells<input name="customSpells" placeholder="Comma-separated homebrew spells"></label>
               </section>
               <div class="non-caster-note hidden" id="non-caster-note">This class has no core spell list. Feats and custom talents are still available.</div>
             </div>

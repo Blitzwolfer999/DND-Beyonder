@@ -10,7 +10,7 @@ A dependency-free fantasy character builder for 2014 5e and revised 2024 5e rule
 - Correct 2024 background ability selections and automatically granted Origin feats
 - 2024 feat ability increases with feat-specific choices and Epic Boon limits
 - Automatic modifiers, proficiency, AC, HP, initiative, passive Perception, and spell math
-- Class and subclass features listed at their unlock levels
+- Class and subclass features listed at the levels where they are gained
 - Resource tracking for spell slots, class uses, hit dice, and point pools
 - Searchable equipment, inventory, currency, carried weight, and attunement
 - Built-in rolls, roll history, portraits, import, and export
@@ -51,6 +51,6 @@ Cloudflare Pages, Netlify, and Vercel can also host this static folder.
 
 ## Content And Licensing
 
-The project does not copy D&D Beyond branding, artwork, or non-SRD commercial rules text. Open rules content is drawn from SRD 5.1 and SRD 5.2.1 under CC BY 4.0, with attribution included in the app. Public option names and short rules facts are source metadata; licensed descriptions can be added privately through Owned Content.
+The project does not copy D&D Beyond branding or artwork. Open rules content is drawn from SRD 5.1 and SRD 5.2.1 under CC BY 4.0, with attribution included in the app. Every catalog option is available without purchase or ownership gates. Non-SRD entries use concise original summaries rather than reproducing commercial sourcebook text.
 
 Product names and trademarks belong to their respective owners. Arcana Forge is independent and is not endorsed by Wizards of the Coast.
