@@ -31,6 +31,7 @@ const SKILLS = {
   Insight: "WIS", Intimidation: "CHA", Investigation: "INT", Medicine: "WIS", Nature: "INT", Perception: "WIS",
   Performance: "CHA", Persuasion: "CHA", Religion: "INT", "Sleight of Hand": "DEX", Stealth: "DEX", Survival: "WIS"
 };
+const CONDITIONS = ["Blinded", "Charmed", "Deafened", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Exhaustion"];
 const STORAGE_KEY = "arcanaForge.characters.v1";
 const PROFILE_KEY = "arcanaForge.profile.v1";
 const ROLL_KEY = "arcanaForge.rolls.v1";
@@ -47,6 +48,7 @@ let selectedSpellNames = new Set();
 let levelingCharacterId = null;
 let inventoryCharacterId = null;
 let activeCharacterId = null;
+let activeSheetSection = "overview";
 let drawing = false;
 let drawEnabled = false;
 let portraitData = "";
@@ -1049,13 +1051,13 @@ function inventoryWeight(character) {
   );
 }
 
-function renderInventorySection(character) {
+function renderInventorySection(character, extraClass = "") {
   const inventory = character.inventory || [];
   const currency = characterCurrency(character);
   const weight = inventoryWeight(character);
   const capacity = Math.max(0, Number(character.STR || 10) * 15);
   const attuned = inventory.filter(item => item.attuned).length;
-  return `<section class="sheet-panel sheet-wide">
+  return `<section class="sheet-panel sheet-wide ${extraClass}">
     <div class="resource-toolbar">
       <h2>Equipment & inventory</h2>
       <button type="button" class="button ghost small" data-inventory-open="${character.id}">Add or manage items</button>
@@ -1140,6 +1142,30 @@ function saveInventoryCharacter(character) {
   renderSheet();
 }
 
+function saveSessionCharacter(character) {
+  character.updatedAt = Date.now();
+  persistCharacters();
+  renderSheet();
+}
+
+function renderDeathSaves(character) {
+  const saves = { successes: 0, failures: 0, ...(character.deathSaves || {}) };
+  const group = (type, count) => `<div class="death-save-group"><span>${type === "successes" ? "Successes" : "Failures"}</span><div>${Array.from({ length: 3 }, (_, index) =>
+    `<button type="button" class="${index < count ? "active" : ""} ${type === "failures" ? "failure" : ""}" data-death-save="${type}" data-death-index="${index}" data-character="${character.id}" aria-label="${type} ${index + 1}"></button>`
+  ).join("")}</div></div>`;
+  return `<div class="death-saves"><strong>Death saves</strong>${group("successes", saves.successes)}${group("failures", saves.failures)}</div>`;
+}
+
+function renderConditionPicker(character) {
+  const active = new Set(character.conditions || []);
+  return `<details class="condition-picker">
+    <summary>Conditions <span>${active.size || "None"}</span></summary>
+    <div class="condition-menu">${CONDITIONS.map(condition =>
+      `<button type="button" class="${active.has(condition) ? "active" : ""}" data-condition="${escapeHtml(condition)}" data-character="${character.id}">${escapeHtml(condition)}</button>`
+    ).join("")}</div>
+  </details>`;
+}
+
 function renderSheet() {
   const c = characters.find(x => x.id === activeCharacterId) || characters[0];
   if (!c) { $("#sheet-empty").classList.remove("hidden"); $("#character-sheet").classList.add("hidden"); return; }
@@ -1175,6 +1201,13 @@ function renderSheet() {
   addChoice(c.blessedStrikes, "Blessed Strikes");
   addChoice(c.elementalFury, "Elemental Fury");
   const resources = resourceDefinitions(c);
+  const hasSpellcasting = Boolean(SPELL_LISTS[c.edition]?.[c.className]);
+  if (activeSheetSection === "spells" && !hasSpellcasting) activeSheetSection = "overview";
+  const sectionClass = section => activeSheetSection === section ? "" : "hidden";
+  const maximumHp = d.hp;
+  const currentHp = Math.max(0, Math.min(maximumHp, Number(c.currentHp ?? maximumHp)));
+  const temporaryHp = Math.max(0, Number(c.temporaryHp || 0));
+  const activeConditions = c.conditions || [];
   $("#sheet-empty").classList.add("hidden");
   const sheet = $("#character-sheet"); sheet.classList.remove("hidden");
   sheet.innerHTML = `<div class="sheet-header">
@@ -1183,7 +1216,8 @@ function renderSheet() {
     <div class="sheet-core">
       <button data-sheet-roll="Initiative" data-modifier="${d.initiative}"><small>INITIATIVE</small><strong>${signed(d.initiative)}</strong></button>
       <button><small>ARMOR CLASS</small><strong>${d.ac}</strong></button>
-      <button data-sheet-roll="Hit Die" data-die="${cls.hit}"><small>HIT POINTS</small><strong>${d.hp}</strong></button>
+      <button data-sheet-section-jump="overview"><small>HIT POINTS</small><strong>${currentHp}/${maximumHp}</strong></button>
+      <button><small>PROFICIENCY</small><strong>${signed(d.prof)}</strong></button>
     </div>
     <div class="sheet-header-actions">
       <button class="button ghost" data-edit="${c.id}">Edit character</button>
@@ -1191,52 +1225,82 @@ function renderSheet() {
       <button class="button primary" data-level-up="${c.id}" ${c.level >= 20 ? "disabled" : ""}>${c.level >= 20 ? "Maximum level" : "Level up"}</button>
     </div>
   </div>
+  <div class="session-toolbar">
+    <div class="session-hp" data-session-character="${c.id}">
+      <div class="session-label"><span>Current HP</span><strong>${currentHp}<small> / ${maximumHp}</small></strong>${temporaryHp ? `<em>+${temporaryHp} temp</em>` : ""}</div>
+      <label>Amount<input type="number" min="1" max="999" value="1" data-hp-amount></label>
+      <button type="button" class="session-action damage" data-hp-action="damage" data-character="${c.id}">Damage</button>
+      <button type="button" class="session-action heal" data-hp-action="heal" data-character="${c.id}">Heal</button>
+      <button type="button" class="session-action temp" data-hp-action="temp" data-character="${c.id}">Temp HP</button>
+    </div>
+    <div class="session-rests">
+      <button type="button" data-rest="short" data-character="${c.id}"><span>☾</span><strong>Short Rest</strong></button>
+      <button type="button" data-rest="long" data-character="${c.id}"><span>✦</span><strong>Long Rest</strong></button>
+    </div>
+    <button type="button" class="inspiration-toggle ${c.inspiration ? "active" : ""}" data-inspiration data-character="${c.id}" aria-pressed="${Boolean(c.inspiration)}"><span>◆</span><strong>Inspiration</strong></button>
+    ${renderConditionPicker(c)}
+  </div>
+  <nav class="sheet-tabs" aria-label="Character sheet sections">
+    <button type="button" class="${activeSheetSection === "overview" ? "active" : ""}" data-sheet-section="overview">Overview</button>
+    <button type="button" class="${activeSheetSection === "inventory" ? "active" : ""}" data-sheet-section="inventory">Inventory</button>
+    <button type="button" class="${activeSheetSection === "features" ? "active" : ""}" data-sheet-section="features">Features</button>
+    ${hasSpellcasting ? `<button type="button" class="${activeSheetSection === "spells" ? "active" : ""}" data-sheet-section="spells">Spells</button>` : ""}
+  </nav>
   <div class="sheet-body">
-    <section class="sheet-panel"><h2>Abilities</h2><div class="sheet-abilities">${ABILITIES.map(a =>
+    <section class="sheet-panel ${sectionClass("overview")}"><h2>Abilities</h2><div class="sheet-abilities">${ABILITIES.map(a =>
       `<button class="sheet-ability" data-sheet-roll="${a} check" data-modifier="${modifier(c[a])}"><small>${a}</small><strong>${signed(modifier(c[a]))}</strong><span>${c[a]}</span></button>`
-    ).join("")}</div></section>
-    <section class="sheet-panel"><h2>Skills</h2><div class="skill-list">${Object.entries(SKILLS).map(([skill, ability]) =>
+    ).join("")}</div>
+      <h2 class="subsection-title">Saving throws</h2>
+      <div class="saving-throw-list">${ABILITIES.map(ability => {
+        const proficient = cls.save.includes(ability);
+        const saveModifier = modifier(c[ability]) + (proficient ? d.prof : 0);
+        return `<button type="button" data-sheet-roll="${ability} saving throw" data-modifier="${saveModifier}"><span class="${proficient ? "proficient" : ""}">${ability}</span><strong>${signed(saveModifier)}</strong></button>`;
+      }).join("")}</div>
+    </section>
+    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills</h2><div class="skill-list">${Object.entries(SKILLS).map(([skill, ability]) =>
       `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${modifier(c[ability])}"><span>${skill} <small>(${ability})</small></span><strong>${signed(modifier(c[ability]))}</strong></button>`
     ).join("")}</div></section>
-    <section class="sheet-panel">
+    <section class="sheet-panel ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <p><strong>Proficiency bonus:</strong> ${signed(d.prof)}</p><p><strong>Passive Perception:</strong> ${d.passive}</p>
       <p><strong>Saving throw proficiencies:</strong> ${cls.save.join(", ")}</p><p><strong>Primary ability:</strong> ${cls.primary}</p>
+      <p><strong>Active conditions:</strong> ${activeConditions.length ? escapeHtml(activeConditions.join(", ")) : "None"}</p>
+      ${renderDeathSaves(c)}
       <h2>Background</h2><p><strong>${escapeHtml(c.background)}</strong> · ${escapeHtml(c.alignment)}</p>
       <div class="sheet-notes">${escapeHtml(c.backstory || "No backstory recorded yet.")}</div>
     </section>
-    ${resources.length ? `<section class="sheet-panel sheet-wide">
-      <div class="resource-toolbar"><h2>Resources & spell slots</h2><button class="button ghost small" data-rest="short" data-character="${c.id}">Short rest</button><button class="button ghost small" data-rest="long" data-character="${c.id}">Long rest</button></div>
+    ${resources.length ? `<section class="sheet-panel sheet-wide ${sectionClass("overview")}">
+      <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
-    ${renderInventorySection(c)}
-    <section class="sheet-panel sheet-wide">
+    ${renderInventorySection(c, sectionClass("inventory"))}
+    <section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Class & subclass features</h2>
       <div class="feature-grid">${[...classFeatures.map(([level,name]) => ({level,name,source:c.className})), ...subclassFeatures.map(([level,name]) => ({level,name,source:subclassName}))].map(feature =>
         `<article class="feature-card"><small>LEVEL ${feature.level} · ${escapeHtml(feature.source)}</small><strong>${escapeHtml(feature.name)}</strong>${ruleDetails(featureDescription(c.edition, feature.source, feature.name, c.className))}</article>`
       ).join("") || "<p>No features are available at this level.</p>"}</div>
     </section>
-    ${characterChoices.length ? `<section class="sheet-panel sheet-wide">
+    ${characterChoices.length ? `<section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Chosen class options</h2>
       <div class="feature-grid">${characterChoices.map(choice =>
         `<article class="feature-card"><small>${escapeHtml(choice.source)}</small><strong>${escapeHtml(choice.name)}</strong>${ruleDetails(choice.description)}</article>`
       ).join("")}</div>
     </section>` : ""}
-    <section class="sheet-panel sheet-wide">
+    <section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Feats</h2>
       <div class="tag-list">${feats.map(feat => {
         const featRecord = (FEATS[c.edition] || []).find(item => item.name === feat) || { name: feat };
         return `<div class="tag">${escapeHtml(feat)}${ruleDetails(featDescription(featRecord, c.edition))}</div>`;
       }).join("") || "<p>No feats selected.</p>"}</div>
     </section>
-    ${SPELL_LISTS[c.edition]?.[c.className] ? `<section class="sheet-panel sheet-wide">
+    ${hasSpellcasting ? `<section class="sheet-panel sheet-wide ${sectionClass("spells")}">
       <h2>Spellcasting</h2>
       <div class="sheet-spell-summary"><span><strong>Ability:</strong> ${spellAbility}</span><span><strong>Save DC:</strong> ${spellSave}</span><span><strong>Attack:</strong> ${signed(spellAttack)}</span><span><strong>Selected:</strong> ${spells.length}</span></div>
       <div class="sheet-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell =>
         `<div class="sheet-spell"><strong>${escapeHtml(spell.name)}</strong><br><small>${spell.level === 0 ? "Cantrip" : spell.level === "Custom" ? "Custom" : `Level ${spell.level}`}</small>${ruleDetails(spellDescription(spell.name, c.edition, EXPANDED_SPELL_SOURCES[c.edition]?.[spell.name] || ""))}</div>`
       ).join("") || "<p>No spells selected.</p>"}</div>
     </section>` : ""}
-    ${(c.progressionHistory || []).length ? `<section class="sheet-panel sheet-wide">
+    ${(c.progressionHistory || []).length ? `<section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Level-up history</h2>
       <div class="feature-grid">${[...c.progressionHistory].reverse().map(entry => {
         const choiceText = Object.entries(entry.choices || {}).map(([name, value]) => `${name}: ${Array.isArray(value) ? value.join(", ") : value}`).join(" · ");
@@ -1729,6 +1793,11 @@ function applyCharacterRest(character, restType) {
     else if (Number(resource.shortRecovery) > 0) usage[resource.id] = Math.max(0, used - Number(resource.shortRecovery));
   });
   character.resourceUsage = usage;
+  if (restType === "long") {
+    character.currentHp = derived(character).hp;
+    character.temporaryHp = 0;
+    character.deathSaves = { successes: 0, failures: 0 };
+  }
   character.updatedAt = Date.now();
   persistCharacters();
   renderSheet();
@@ -1742,6 +1811,65 @@ function initDice() {
 
 function initEvents() {
   document.addEventListener("click", event => {
+    const sheetSection = event.target.closest("[data-sheet-section]");
+    if (sheetSection) {
+      activeSheetSection = sheetSection.dataset.sheetSection;
+      renderSheet();
+      return;
+    }
+    const sheetJump = event.target.closest("[data-sheet-section-jump]");
+    if (sheetJump) {
+      activeSheetSection = sheetJump.dataset.sheetSectionJump;
+      renderSheet();
+      return;
+    }
+    const hpAction = event.target.closest("[data-hp-action]");
+    if (hpAction) {
+      const character = characters.find(item => item.id === hpAction.dataset.character);
+      if (!character) return;
+      const maximum = derived(character).hp;
+      const current = Math.max(0, Math.min(maximum, Number(character.currentHp ?? maximum)));
+      const amount = Math.max(1, Number(hpAction.closest(".session-hp")?.querySelector("[data-hp-amount]")?.value || 1));
+      if (hpAction.dataset.hpAction === "damage") {
+        const absorbed = Math.min(Number(character.temporaryHp || 0), amount);
+        character.temporaryHp = Math.max(0, Number(character.temporaryHp || 0) - absorbed);
+        character.currentHp = Math.max(0, current - (amount - absorbed));
+      }
+      if (hpAction.dataset.hpAction === "heal") character.currentHp = Math.min(maximum, current + amount);
+      if (hpAction.dataset.hpAction === "temp") character.temporaryHp = amount;
+      saveSessionCharacter(character);
+      return;
+    }
+    const inspiration = event.target.closest("[data-inspiration]");
+    if (inspiration) {
+      const character = characters.find(item => item.id === inspiration.dataset.character);
+      if (!character) return;
+      character.inspiration = !character.inspiration;
+      saveSessionCharacter(character);
+      return;
+    }
+    const conditionButton = event.target.closest("[data-condition]");
+    if (conditionButton) {
+      const character = characters.find(item => item.id === conditionButton.dataset.character);
+      if (!character) return;
+      const conditions = new Set(character.conditions || []);
+      conditions.has(conditionButton.dataset.condition) ? conditions.delete(conditionButton.dataset.condition) : conditions.add(conditionButton.dataset.condition);
+      character.conditions = [...conditions];
+      saveSessionCharacter(character);
+      return;
+    }
+    const deathSave = event.target.closest("[data-death-save]");
+    if (deathSave) {
+      const character = characters.find(item => item.id === deathSave.dataset.character);
+      if (!character) return;
+      const type = deathSave.dataset.deathSave;
+      const index = Number(deathSave.dataset.deathIndex);
+      const saves = { successes: 0, failures: 0, ...(character.deathSaves || {}) };
+      saves[type] = index < saves[type] ? index : index + 1;
+      character.deathSaves = saves;
+      saveSessionCharacter(character);
+      return;
+    }
     const inventoryOpen = event.target.closest("[data-inventory-open]");
     if (inventoryOpen) {
       openInventory(inventoryOpen.dataset.inventoryOpen);
@@ -1769,24 +1897,25 @@ function initEvents() {
       saveInventoryCharacter(character);
       return;
     }
-    const resourceCharacterId = event.target.dataset.character;
-    if (resourceCharacterId && (event.target.dataset.resourcePip !== undefined || event.target.dataset.resourceRemaining || event.target.dataset.resourceReset || event.target.dataset.rest)) {
+    const resourceControl = event.target.closest("[data-resource-pip], [data-resource-remaining], [data-resource-reset], [data-rest]");
+    const resourceCharacterId = resourceControl?.dataset.character;
+    if (resourceControl && resourceCharacterId) {
       const character = characters.find(item => item.id === resourceCharacterId);
       if (!character) return;
-      if (event.target.dataset.rest) {
-        applyCharacterRest(character, event.target.dataset.rest);
+      if (resourceControl.dataset.rest) {
+        applyCharacterRest(character, resourceControl.dataset.rest);
         return;
       }
-      const resourceId = event.target.dataset.resource || event.target.dataset.resourceReset;
+      const resourceId = resourceControl.dataset.resource || resourceControl.dataset.resourceReset;
       const resource = resourceDefinitions(character).find(item => item.id === resourceId);
       if (!resource) return;
       const used = resourceUsed(character, resource);
-      if (event.target.dataset.resourceReset) saveResourceUsage(character, resourceId, 0);
-      else if (event.target.dataset.resourcePip !== undefined) {
-        const index = Number(event.target.dataset.resourcePip);
+      if (resourceControl.dataset.resourceReset) saveResourceUsage(character, resourceId, 0);
+      else if (resourceControl.dataset.resourcePip !== undefined) {
+        const index = Number(resourceControl.dataset.resourcePip);
         saveResourceUsage(character, resourceId, index < used ? index : index + 1);
       } else {
-        const remainingDelta = Number(event.target.dataset.resourceRemaining);
+        const remainingDelta = Number(resourceControl.dataset.resourceRemaining);
         saveResourceUsage(character, resourceId, used - remainingDelta);
       }
       return;
