@@ -793,7 +793,12 @@ function updatePreview() {
 function setStep(step) {
   currentStep = Math.max(1, Math.min(5, step));
   $$(".form-step").forEach(x => x.classList.toggle("active", Number(x.dataset.stepPanel) === currentStep));
-  $$(".step-tabs button").forEach(x => x.classList.toggle("active", Number(x.dataset.step) === currentStep));
+  $$(".step-tabs button").forEach(x => {
+    const tabStep = Number(x.dataset.step);
+    x.classList.toggle("active", tabStep === currentStep);
+    x.classList.toggle("complete", tabStep < currentStep);
+  });
+  $("#character-form").dataset.currentStep = currentStep;
   $("#prev-step").style.visibility = currentStep === 1 ? "hidden" : "visible";
   $("#next-step").classList.toggle("hidden", currentStep === 5);
   $("#save-character").classList.toggle("hidden", currentStep !== 5);
@@ -839,7 +844,12 @@ function characterCard(character, withActions = false) {
     <div class="art">${character.portrait ? `<img src="${character.portrait}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}
       ${withActions ? `<div class="card-actions"><button data-level-up="${character.id}" title="Level up">↑</button><button data-edit="${character.id}" title="Edit">✎</button><button data-delete="${character.id}" title="Delete">×</button></div>` : ""}
     </div>
-    <div class="card-copy"><h3>${escapeHtml(character.name)}</h3><p>Level ${character.level} ${escapeHtml(character.species)} ${escapeHtml(subclass)}</p></div>
+    <div class="card-copy">
+      <div class="card-meta"><span>${character.edition === "2024" ? "5.5e · 2024" : "5e · 2014"}</span><strong>Level ${character.level}</strong></div>
+      <h3>${escapeHtml(character.name)}</h3>
+      <p>${escapeHtml(character.species)} ${escapeHtml(character.className)} · ${escapeHtml(subclass)}</p>
+      <span class="card-open">Open character <b>→</b></span>
+    </div>
   </article>`;
 }
 
