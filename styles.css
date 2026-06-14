@@ -1245,3 +1245,42 @@ textarea:focus-visible {
   .topnav .nav-item { width: 100%; }
   .topnav .mobile-menu { display: block; color: #ece5d8; font-size: 22px; }
 }
+
+/* ===== Sleek modern reskin (cleaner surfaces, flatter cards) ===== */
+:root {
+  --paper: #f3f5f8;
+  --paper-2: #e9edf2;
+  --panel: #ffffff;
+  --line: #e4e7ee;
+  --ink: #1b1f27;
+  --muted: #697079;
+}
+body { background: var(--paper); }
+.button { border-radius: 9px; }
+.view { padding-top: 34px; }
+
+/* Hero: flat, clean, rounded */
+.hero {
+  background: linear-gradient(125deg, #ffffff 0%, #f5f4f1 64%, #eef1f6 100%);
+  border: 1px solid var(--line); border-radius: 20px;
+  box-shadow: 0 1px 3px rgba(20, 22, 28, .04);
+}
+
+/* Cards & panels: white, light border, soft shadow, consistent radius */
+.character-card {
+  border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(20, 22, 28, .05);
+}
+.character-card:hover { box-shadow: 0 10px 28px rgba(20, 22, 28, .10); border-color: #cfd3db; }
+.sheet-panel { border: 1px solid var(--line); border-top: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(20, 22, 28, .04); }
+.feature-card, .resource-card, .class-choice-block, .choice-option, .sheet-spell, .sheet-spell-summary span, .inventory-summary span { border-radius: 12px; }
+.feature-strip { border: 0; gap: 14px; padding: 18px 0; }
+.feature-strip article { padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.builder-card, .live-preview, .origin-rules, .modal { border-radius: 16px; }
+.edition-toggle { border-radius: 11px; }
+.edition-toggle button { border-radius: 8px; }
+.step-tabs { border-radius: 14px 14px 0 0; overflow: hidden; }
+.welcome-tip { border-radius: 12px; }
+
+/* Page-meta breadcrumb a touch more subtle */
+.page-meta { padding-top: 20px; }
