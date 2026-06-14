@@ -13,38 +13,33 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Primary navigation">
+    <header class="topnav">
       <a class="brand" href="#" data-view-link="dashboard" aria-label="Arcana Forge home">
         <span class="brand-mark">AF</span>
-        <span><strong>Arcana</strong><small>Forge</small></span>
+        <span class="brand-word"><strong>Arcana</strong><small>Forge</small></span>
       </a>
-      <nav class="nav-list">
+      <nav class="nav-list" aria-label="Primary navigation">
         <button class="nav-item active" data-view="dashboard"><span>⌂</span> Hall</button>
         <button class="nav-item" data-view="builder"><span>✦</span> Create</button>
-        <button class="nav-item" data-view="sheet"><span>▤</span> Character Sheet</button>
-        <button class="nav-item" data-view="dice"><span>◇</span> Dice Tray</button>
-        <button class="nav-item" data-view="vault"><span>⌑</span> Character Vault</button>
+        <button class="nav-item" data-view="sheet"><span>▤</span> Sheet</button>
+        <button class="nav-item" data-view="dice"><span>◇</span> Dice</button>
+        <button class="nav-item" data-view="vault"><span>⌑</span> Vault</button>
       </nav>
-      <div class="sidebar-foot">
-        <button type="button" id="toggle-help" class="help-toggle" aria-pressed="true">Beginner help: on</button>
-        <p>OPEN RULES</p>
-        <span>5e SRD 5.1</span>
-        <span>Revised SRD 5.2</span>
+      <div class="top-actions">
+        <button class="icon-button" id="quick-roll" title="Quick roll a d20">d20</button>
+        <button class="profile-button" id="account-button">
+          <span class="avatar-mini">W</span>
+          <span><small>Wanderer</small><strong id="account-label">Sign in</strong></span>
+        </button>
+        <button class="mobile-menu" id="mobile-menu" aria-label="Open menu" aria-expanded="false">☰</button>
       </div>
-    </aside>
+    </header>
 
     <main>
-      <header class="topbar">
-        <button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button>
+      <div class="page-meta">
         <div class="breadcrumbs"><span>Arcana Forge</span><b>/</b><strong id="page-title">Hall</strong></div>
-        <div class="top-actions">
-          <button class="icon-button" id="quick-roll" title="Quick roll a d20">d20</button>
-          <button class="profile-button" id="account-button">
-            <span class="avatar-mini">W</span>
-            <span><small>Wanderer</small><strong id="account-label">Sign in</strong></span>
-          </button>
-        </div>
-      </header>
+        <button type="button" id="toggle-help" class="help-toggle" aria-pressed="true">Beginner help: on</button>
+      </div>
 
       <section class="view active" id="dashboard-view">
         <div class="welcome-tip" id="welcome-tip" hidden>

@@ -1054,7 +1054,7 @@ function navigate(view) {
   $$(".view").forEach(x => x.classList.toggle("active", x.id === `${view}-view`));
   $$(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === view));
   $("#page-title").textContent = ({ dashboard: "Hall", builder: "Create", sheet: "Character Sheet", dice: "Dice Tray", vault: "Vault" })[view];
-  $(".sidebar").classList.remove("open");
+  $(".topnav")?.classList.remove("open");
   if (view === "vault" || view === "dashboard") renderCards();
   if (view === "sheet") renderSheet();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2399,7 +2399,7 @@ function initEvents() {
     setCloudStatus("Signed out. This browser still has a local copy of the vault.");
     toast("Signed out");
   });
-  $("#mobile-menu").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
+  $("#mobile-menu").addEventListener("click", () => $(".topnav")?.classList.toggle("open"));
   $("#close-level-up").addEventListener("click", closeLevelUp);
   $("#cancel-level-up").addEventListener("click", closeLevelUp);
   $("#level-up-modal").addEventListener("click", event => { if (event.target.id === "level-up-modal") closeLevelUp(); });
