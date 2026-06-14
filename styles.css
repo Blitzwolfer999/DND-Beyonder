@@ -1197,7 +1197,12 @@ textarea:focus-visible {
 /* Skills - clean rows with emphasized modifier */
 .skill-roll { align-items: center; padding: 8px; border-bottom: 1px solid var(--line); border-radius: 6px; }
 .skill-roll:hover { background: #f8eee9; padding-left: 12px; }
-.skill-roll span { font-size: 13px; }
+.skill-roll span { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.skill-roll span::before {
+  content: ""; width: 9px; height: 9px; flex: 0 0 auto;
+  border: 1.5px solid var(--gold-dark); border-radius: 50%; background: transparent;
+}
+.skill-roll span.proficient::before { background: var(--gold-dark); box-shadow: inset 0 0 0 2px var(--panel); }
 .skill-roll span small { color: var(--muted); }
 .skill-roll strong { font: 700 14px Cinzel, serif; color: var(--gold-dark); }
 

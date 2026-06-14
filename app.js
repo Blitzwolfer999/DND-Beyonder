@@ -31,6 +31,85 @@ const SKILLS = {
   Insight: "WIS", Intimidation: "CHA", Investigation: "INT", Medicine: "WIS", Nature: "INT", Perception: "WIS",
   Performance: "CHA", Persuasion: "CHA", Religion: "INT", "Sleight of Hand": "DEX", Stealth: "DEX", Survival: "WIS"
 };
+const CLASS_SKILLS = {
+  Barbarian: { count: 2, options: ["Animal Handling", "Athletics", "Intimidation", "Nature", "Perception", "Survival"] },
+  Bard: { count: 3, options: Object.keys(SKILLS) },
+  Cleric: { count: 2, options: ["History", "Insight", "Medicine", "Persuasion", "Religion"] },
+  Druid: { count: 2, options: ["Arcana", "Animal Handling", "Insight", "Medicine", "Nature", "Perception", "Religion", "Survival"] },
+  Fighter: { count: 2, options: ["Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Persuasion", "Survival"] },
+  Monk: { count: 2, options: ["Acrobatics", "Athletics", "History", "Insight", "Religion", "Stealth"] },
+  Paladin: { count: 2, options: ["Athletics", "Insight", "Intimidation", "Medicine", "Persuasion", "Religion"] },
+  Ranger: { count: 3, options: ["Animal Handling", "Athletics", "Insight", "Investigation", "Nature", "Perception", "Stealth", "Survival"] },
+  Rogue: { count: 4, options: ["Acrobatics", "Athletics", "Deception", "Insight", "Intimidation", "Investigation", "Perception", "Performance", "Persuasion", "Sleight of Hand", "Stealth"] },
+  Sorcerer: { count: 2, options: ["Arcana", "Deception", "Insight", "Intimidation", "Persuasion", "Religion"] },
+  Warlock: { count: 2, options: ["Arcana", "Deception", "History", "Intimidation", "Investigation", "Nature", "Religion"] },
+  Wizard: { count: 2, options: ["Arcana", "History", "Insight", "Investigation", "Medicine", "Nature", "Religion"] },
+  Artificer: { count: 2, options: ["Arcana", "History", "Investigation", "Medicine", "Nature", "Perception", "Sleight of Hand"] },
+  "Blood Hunter": { count: 3, options: ["Acrobatics", "Arcana", "Athletics", "History", "Insight", "Investigation", "Religion", "Survival"] }
+};
+const BACKGROUND_SKILLS = {
+  Acolyte: ["Insight", "Religion"], Artisan: ["Investigation", "Persuasion"], Charlatan: ["Deception", "Sleight of Hand"],
+  Criminal: ["Deception", "Stealth"], Entertainer: ["Acrobatics", "Performance"], Farmer: ["Animal Handling", "Nature"],
+  "Folk Hero": ["Animal Handling", "Survival"], "Guild Artisan": ["Insight", "Persuasion"], Guard: ["Athletics", "Perception"],
+  Guide: ["Stealth", "Survival"], Hermit: ["Medicine", "Religion"], Merchant: ["Animal Handling", "Persuasion"],
+  Noble: ["History", "Persuasion"], Outlander: ["Athletics", "Survival"], Sage: ["Arcana", "History"],
+  Sailor: ["Athletics", "Perception"], Scribe: ["Investigation", "Perception"], Soldier: ["Athletics", "Intimidation"],
+  Urchin: ["Sleight of Hand", "Stealth"], Wayfarer: ["Insight", "Stealth"]
+};
+const SPELLCASTING_ABILITIES = {
+  Bard: "CHA", Cleric: "WIS", Druid: "WIS", Paladin: "CHA", Ranger: "WIS", Sorcerer: "CHA",
+  Warlock: "CHA", Wizard: "INT", Artificer: "INT"
+};
+const ARMOR_RULES = {
+  "Padded Armor": { base: 11, dex: Infinity, type: "Light Armor" },
+  "Leather Armor": { base: 11, dex: Infinity, type: "Light Armor" },
+  "Studded Leather Armor": { base: 12, dex: Infinity, type: "Light Armor" },
+  "Hide Armor": { base: 12, dex: 2, type: "Medium Armor" },
+  "Chain Shirt": { base: 13, dex: 2, type: "Medium Armor" },
+  "Scale Mail": { base: 14, dex: 2, type: "Medium Armor" },
+  Breastplate: { base: 14, dex: 2, type: "Medium Armor" },
+  "Half Plate Armor": { base: 15, dex: 2, type: "Medium Armor" },
+  "Ring Mail": { base: 14, dex: 0, type: "Heavy Armor" },
+  "Chain Mail": { base: 16, dex: 0, type: "Heavy Armor" },
+  "Splint Armor": { base: 17, dex: 0, type: "Heavy Armor" },
+  "Plate Armor": { base: 18, dex: 0, type: "Heavy Armor" }
+};
+const SUBCLASS_CHOICE_RULES = {
+  "Path of the Totem Warrior": [
+    { key: "totemSpirit", label: "Totem Spirit", level: 3, options: ["Bear", "Eagle", "Wolf"] },
+    { key: "beastAspect", label: "Aspect of the Beast", level: 6, options: ["Bear", "Eagle", "Elk", "Tiger", "Wolf"] },
+    { key: "totemicAttunement", label: "Totemic Attunement", level: 14, options: ["Bear", "Eagle", "Elk", "Tiger", "Wolf"] }
+  ],
+  "Path of the Wild Heart": [
+    { key: "rageOfWilds", label: "Rage of the Wilds", level: 3, options: ["Bear", "Eagle", "Wolf"] },
+    { key: "aspectOfWilds", label: "Aspect of the Wilds", level: 6, options: ["Owl", "Panther", "Salmon"] },
+    { key: "powerOfWilds", label: "Power of the Wilds", level: 14, options: ["Falcon", "Lion", "Ram"] }
+  ],
+  "Path of the Storm Herald": [
+    { key: "stormAura", label: "Storm Aura", level: 3, options: ["Desert", "Sea", "Tundra"] }
+  ],
+  "Circle of the Land": [
+    { key: "circleLand", label: "Land type", level: 2, options: ["Arctic", "Coast", "Desert", "Forest", "Grassland", "Mountain", "Swamp", "Underdark"] }
+  ],
+  "Draconic Bloodline": [
+    { key: "draconicAncestry", label: "Dragon Ancestor", level: 1, options: ["Acid", "Cold", "Fire", "Lightning", "Poison"] }
+  ],
+  "Draconic Sorcery": [
+    { key: "draconicAncestry", label: "Draconic damage type", level: 3, options: ["Acid", "Cold", "Fire", "Lightning", "Poison"] }
+  ],
+  "The Genie": [
+    { key: "genieKind", label: "Genie patron", level: 1, options: ["Dao (Earth)", "Djinni (Air)", "Efreeti (Fire)", "Marid (Water)"] }
+  ],
+  "Lunar Sorcery": [
+    { key: "lunarPhase", label: "Current lunar phase", level: 1, options: ["Full Moon", "New Moon", "Crescent Moon"] }
+  ],
+  Hunter: [
+    { key: "huntersPrey", label: "Hunter's Prey", level: 3, editions: ["2014"], options: ["Colossus Slayer", "Giant Killer", "Horde Breaker"] },
+    { key: "defensiveTactics", label: "Defensive Tactics", level: 7, editions: ["2014"], options: ["Escape the Horde", "Multiattack Defense", "Steel Will"] },
+    { key: "multiattack", label: "Multiattack", level: 11, editions: ["2014"], options: ["Volley", "Whirlwind Attack"] },
+    { key: "superiorDefense", label: "Superior Hunter's Defense", level: 15, editions: ["2014"], options: ["Evasion", "Stand Against the Tide", "Uncanny Dodge"] }
+  ]
+};
 const CONDITIONS = ["Blinded", "Charmed", "Deafened", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Exhaustion"];
 const STORAGE_KEY = "arcanaForge.characters.v1";
 const PROFILE_KEY = "arcanaForge.profile.v1";
@@ -587,9 +666,18 @@ function validateOriginChoices(raw = originFormValues()) {
   return !rule.featChoice || Boolean(String(raw.originFeatChoice || "").trim());
 }
 
+function backgroundSkillBlock(savedCharacter, backgroundName, currentSelections = []) {
+  const defaults = BACKGROUND_SKILLS[backgroundName] || [];
+  const selected = savedCharacter?.backgroundSkills?.length
+    ? savedCharacter.backgroundSkills
+    : currentSelections.length === 2 ? currentSelections : defaults;
+  return choiceChecks("backgroundSkills", Object.keys(SKILLS), selected, 2, "Background skill proficiencies");
+}
+
 function renderOriginRules(savedCharacter = null) {
   const container = $("#origin-rules");
   if (!container) return;
+  const currentBackgroundSkills = selectedValues("backgroundSkills", container);
   updateOriginDescriptions();
   const live = originFormValues();
   const saved = savedCharacter || live;
@@ -646,6 +734,8 @@ function renderOriginRules(savedCharacter = null) {
       </div>
       <p class="origin-summary">Eligible abilities: ${rule.abilities.join(", ")}. The granted feat is added to the character sheet automatically.</p>`;
   }
+  const backgroundName = saved.background || $("#background-select").value;
+  container.insertAdjacentHTML("beforeend", backgroundSkillBlock(savedCharacter, backgroundName, currentBackgroundSkills));
   setCurrentOriginFeat(originFeatFromForm());
   updatePreview();
 }
@@ -692,6 +782,67 @@ function classChoiceSelect(name, label, options, selected = "") {
   ).join("")}</select></label>`;
 }
 
+function choiceChecks(name, options, selected, limit, label) {
+  const chosen = new Set(selected || []);
+  return `<div class="class-choice-block" data-builder-choice-name="${name}" data-builder-choice-limit="${limit}">
+    <strong>${escapeHtml(label)} · choose ${limit}</strong>
+    <div class="radio-grid">${options.map(option => `<label class="radio-option">
+      <input type="checkbox" name="${name}" value="${escapeHtml(option)}" ${chosen.has(option) ? "checked" : ""}>
+      <span>${escapeHtml(option)}</span>
+    </label>`).join("")}</div>
+  </div>`;
+}
+
+function expertiseCountAtLevel(className, level, rulesEdition) {
+  const rows = LEVEL_CHOICE_RULES[rulesEdition]?.[className]?.expertise || {};
+  return Object.entries(rows).reduce((total, [unlock, count]) => total + (level >= Number(unlock) ? Number(count) : 0), 0);
+}
+
+function classSkillRuleAtLevel(className, level, rulesEdition, subclass = "") {
+  const base = CLASS_SKILLS[className] || { count: 0, options: [] };
+  let count = base.count;
+  let options = [...base.options];
+  if (rulesEdition === "2014" && className === "Fighter") options = options.filter(skill => skill !== "Persuasion");
+  if (rulesEdition === "2014" && className === "Wizard") options = options.filter(skill => skill !== "Nature");
+  if (rulesEdition === "2024" && className === "Rogue") options = options.filter(skill => skill !== "Performance");
+  if (rulesEdition === "2024" && className === "Barbarian" && level >= 3) count += 1;
+  if (subclass === "College of Lore" && level >= 3) {
+    count += 3;
+    options = Object.keys(SKILLS);
+  }
+  return { count, options };
+}
+
+function subclassChoiceBlocks(savedCharacter, level) {
+  const subclass = $("#subclass-select")?.value || savedCharacter?.subclass || "";
+  const saved = savedCharacter?.subclassChoices || {};
+  return subclassChoiceMarkup(subclass, level, saved, true);
+}
+
+function subclassChoiceMarkup(subclass, level, saved = {}, includeEarlier = false, rulesEdition = edition) {
+  return (SUBCLASS_CHOICE_RULES[subclass] || [])
+    .filter(choice => includeEarlier ? level >= choice.level : level === choice.level)
+    .filter(choice => !choice.editions || choice.editions.includes(rulesEdition))
+    .map(choice => classChoiceSelect(`subclassChoice_${choice.key}`, choice.label, choice.options, saved[choice.key]))
+    .join("");
+}
+
+function levelSubclassChoiceMarkup(character, subclass, targetLevel) {
+  let markup = subclassChoiceMarkup(
+    subclass,
+    targetLevel,
+    character.subclassChoices || {},
+    true,
+    character.edition
+  );
+  if (subclass === "College of Lore" && targetLevel >= 3 && Number(character.level || 1) < 3) {
+    const trained = proficientSkills(character);
+    const options = Object.keys(SKILLS).filter(skill => !trained.has(skill));
+    markup += `<div data-min-choices="3" data-choice-name="skillProficiencies"><strong>Choose three bonus skill proficiencies</strong>${optionChecks("skillProficiencies", options, [], 3)}</div>`;
+  }
+  return markup;
+}
+
 function renderStartingClassOptions(savedCharacter = null) {
   const field = $("#fighting-style-field");
   const select = $("#fighting-style-select");
@@ -713,8 +864,18 @@ function renderStartingClassOptions(savedCharacter = null) {
   const choiceFields = $("#class-choice-fields");
   if (!choiceFields) return;
   const currentMasteries = new Set(savedCharacter?.weaponMastery || selectedValues("weaponMastery"));
+  const classSkillRule = classSkillRuleAtLevel(selectedClass, level, edition, $("#subclass-select")?.value || "");
+  const currentSkills = savedCharacter?.skillProficiencies || selectedValues("skillProficiencies");
+  const currentExpertise = savedCharacter?.expertise || selectedValues("expertise");
   const currentChoice = name => savedCharacter?.[name] || form.elements[name]?.value || "";
   const blocks = [];
+  if (classSkillRule.count) {
+    blocks.push(choiceChecks("skillProficiencies", classSkillRule.options, currentSkills, classSkillRule.count, "Class skill proficiencies"));
+  }
+  const expertiseCount = expertiseCountAtLevel(selectedClass, level, edition);
+  if (expertiseCount) {
+    blocks.push(choiceChecks("expertise", Object.keys(SKILLS), currentExpertise, expertiseCount, "Expertise"));
+  }
   const masteryCount = weaponMasteryCount(selectedClass, level, edition);
   if (masteryCount) {
     blocks.push(`<div class="class-choice-block" data-builder-choice-name="weaponMastery" data-builder-choice-limit="${masteryCount}">
@@ -738,6 +899,7 @@ function renderStartingClassOptions(savedCharacter = null) {
   if (edition === "2024" && selectedClass === "Druid" && level >= 7) {
     blocks.push(classChoiceSelect("elementalFury", "Elemental Fury", ["Potent Spellcasting", "Primal Strike"], currentChoice("elementalFury")));
   }
+  blocks.push(subclassChoiceBlocks(savedCharacter, level));
   choiceFields.innerHTML = blocks.join("");
 }
 
@@ -816,12 +978,26 @@ function populateSubclasses() {
   renderClassFeaturePreview();
 }
 
-function selectedValues(name) {
-  return $$(`input[name="${name}"]:checked`).map(input => input.value);
+function selectedValues(name, root = document) {
+  return $$(`input[name="${name}"]:checked`, root).map(input => input.value);
 }
 
-function maxSpellLevel(className, level, rulesEdition) {
-  if (!SPELL_LISTS[rulesEdition]?.[className]) return -1;
+function spellListClass(className, subclass = "") {
+  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return "Wizard";
+  if (subclass === "Order of the Profane Soul") return "Warlock";
+  return className;
+}
+
+function spellListsFor(rulesEdition, className, subclass = "") {
+  return SPELL_LISTS[rulesEdition]?.[spellListClass(className, subclass)];
+}
+
+function maxSpellLevel(className, level, rulesEdition, subclass = "") {
+  if (!spellListsFor(rulesEdition, className, subclass)) return -1;
+  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) {
+    return (THIRD_CASTER_SLOTS[level - 1] || []).length;
+  }
+  if (subclass === "Order of the Profane Soul") return Math.min(4, Math.floor((level + 5) / 6));
   if (className === "Artificer") return Math.min(5, Math.ceil(level / 2));
   if (className === "Paladin" || className === "Ranger") {
     if (rulesEdition === "2014" && level < 2) return 0;
@@ -871,11 +1047,12 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
     </label>${abilityChoices.length ? `<label class="feat-ability-choice">+1 ability<select data-feat-ability="${escapeHtml(feat.name)}">${abilityOptions(abilityChoices, selectedAbility)}</select></label>` : ""}${ruleDetails(description)}</article>`;
   }).join("");
 
-  const lists = SPELL_LISTS[edition]?.[selectedClass];
+  const selectedSubclass = $("#subclass-select")?.value || "";
+  const lists = spellListsFor(edition, selectedClass, selectedSubclass);
   $("#spell-choice-section").classList.toggle("hidden", !lists);
   $("#non-caster-note").classList.toggle("hidden", Boolean(lists));
   if (!lists) return;
-  const allowed = maxSpellLevel(selectedClass, level, edition);
+  const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
   $("#spell-guidance").textContent = `${selectedClass} spell list · spell levels through ${allowed} are available at character level ${level}.`;
   $("#spell-level-tabs").innerHTML = Object.keys(lists).filter(key => lists[key].length).map(key =>
     `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? "Cantrip" : key}</button>`
@@ -884,12 +1061,13 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
 }
 
 function renderSpellList() {
-  const lists = SPELL_LISTS[edition]?.[selectedClass];
+  const selectedSubclass = $("#subclass-select")?.value || "";
+  const lists = spellListsFor(edition, selectedClass, selectedSubclass);
   if (!lists) return;
   selectedValues("spells").forEach(name => selectedSpellNames.add(name));
   const query = ($("#spell-search")?.value || "").trim().toLowerCase();
   const level = Number(form.elements.level?.value || 1);
-  const allowed = maxSpellLevel(selectedClass, level, edition);
+  const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
   const rows = [];
   Object.entries(lists).forEach(([spellLevel, spells]) => {
     if (!query && Number(spellLevel) !== selectedSpellLevel) return;
@@ -943,8 +1121,8 @@ function formData() {
   data.edition = edition;
   data.className = selectedClass;
   data.portrait = portraitData;
-  selectedValues("feats").forEach(name => selectedFeatNames.add(name));
-  selectedValues("spells").forEach(name => selectedSpellNames.add(name));
+  selectedValues("feats", form).forEach(name => selectedFeatNames.add(name));
+  selectedValues("spells", form).forEach(name => selectedSpellNames.add(name));
   $$("select[data-feat-ability]").forEach(select => { selectedFeatAbilities[select.dataset.featAbility] = select.value; });
   const originBonuses = originAbilityBonuses(data);
   const originFeat = originFeatFromForm(data);
@@ -957,8 +1135,16 @@ function formData() {
     .map(name => [name, selectedFeatAbilities[name]]));
   const featBonuses = featAbilityBonuses(new Set(data.feats));
   data.featBonuses = { ...featBonuses };
-  data.weaponMastery = selectedValues("weaponMastery");
-  const lists = SPELL_LISTS[edition]?.[selectedClass] || {};
+  data.skillProficiencies = selectedValues("skillProficiencies", form);
+  data.backgroundSkills = selectedValues("backgroundSkills", form);
+  data.expertise = selectedValues("expertise", form);
+  data.weaponMastery = selectedValues("weaponMastery", form);
+  data.subclassChoices = {};
+  $$("[data-subclass-choice], select[name^='subclassChoice_']", form).forEach(input => {
+    const key = input.dataset.subclassChoice || input.name.replace("subclassChoice_", "");
+    if (key && input.value) data.subclassChoices[key] = input.value;
+  });
+  const lists = spellListsFor(edition, selectedClass, data.subclass) || {};
   data.spells = [...selectedSpellNames].map(name => {
     const spellLevel = Object.entries(lists).find(([, names]) => names.includes(name))?.[0] ?? 0;
     return { name, level: Number(spellLevel) };
@@ -987,27 +1173,169 @@ function formData() {
   return data;
 }
 
-// Best unarmored AC, accounting for class/subclass Unarmored Defense rules.
-function unarmoredAc(data) {
+function subclassName(data) {
+  return data.customSubclass || data.subclass || "";
+}
+
+function equippedItems(data) {
+  return (data.inventory || []).filter(item => item.equipped && item.carried !== false);
+}
+
+// Best unarmored AC, accounting for class, subclass, feat, and species rules.
+function unarmoredAcOptions(data, hasShield = false) {
   const dex = modifier(data.DEX);
-  let ac = 10 + dex;
-  const subclass = data.customSubclass || data.subclass || "";
-  if (data.className === "Barbarian") ac = Math.max(ac, 10 + dex + modifier(data.CON)); // Unarmored Defense
-  if (data.className === "Monk") ac = Math.max(ac, 10 + dex + modifier(data.WIS)); // Unarmored Defense
-  if (data.className === "Sorcerer" && /Draconic/i.test(subclass)) ac = Math.max(ac, 13 + dex); // Draconic Resilience
-  return ac;
+  const level = Number(data.level || 1);
+  const subclass = subclassName(data);
+  const feats = new Set(data.feats || []);
+  const options = [{ value: 10 + dex, source: "Unarmored (10 + DEX)" }];
+  if (data.className === "Barbarian") {
+    options.push({ value: 10 + dex + modifier(data.CON), source: "Barbarian Unarmored Defense" });
+  }
+  if (data.className === "Monk" && !hasShield) {
+    options.push({ value: 10 + dex + modifier(data.WIS), source: "Monk Unarmored Defense" });
+  }
+  if (data.className === "Sorcerer" && subclass === "Draconic Sorcery" && level >= 3) {
+    options.push({ value: 10 + dex + modifier(data.CHA), source: "Draconic Resilience (10 + DEX + CHA)" });
+  }
+  if (data.className === "Sorcerer" && subclass === "Draconic Bloodline" && level >= 1) {
+    options.push({ value: 13 + dex, source: "Draconic Resilience (13 + DEX)" });
+  }
+  if (feats.has("Dragon Hide")) options.push({ value: 13 + dex, source: "Dragon Hide natural armor" });
+  if (data.species === "Tortle") options.push({ value: 17, source: "Tortle natural armor" });
+  if (data.species === "Lizardfolk") options.push({ value: 13 + dex, source: "Lizardfolk natural armor" });
+  if (data.species === "Loxodon") options.push({ value: 12 + modifier(data.CON), source: "Loxodon natural armor" });
+  if (["Autognome", "Thri-kreen"].includes(data.species)) options.push({ value: 13 + dex, source: `${data.species} natural armor` });
+  return options;
+}
+
+function armorClassDetails(data) {
+  if (Number(data.acOverride)) return { value: Number(data.acOverride), source: "Manual override" };
+  const items = equippedItems(data);
+  const hasShield = items.some(item => item.name === "Shield" || item.type === "Shield");
+  const shieldBonus = hasShield ? 2 : 0;
+  const defenseStyle = [data.fightingStyle, ...(data.fightingStyles || [])].includes("Defense");
+  const mediumDexCap = (data.feats || []).includes("Medium Armor Master") ? 3 : 2;
+  const armorOptions = items.flatMap(item => {
+    const rule = ARMOR_RULES[item.name];
+    if (!rule) return [];
+    const dexCap = rule.type === "Medium Armor" ? mediumDexCap : rule.dex;
+    const dexBonus = dexCap === Infinity ? modifier(data.DEX) : Math.min(dexCap, modifier(data.DEX));
+    return [{
+      value: rule.base + dexBonus + shieldBonus + (defenseStyle ? 1 : 0),
+      source: `${item.name}${hasShield ? " + Shield" : ""}${defenseStyle ? " + Defense style" : ""}`
+    }];
+  });
+  const options = armorOptions.length
+    ? armorOptions
+    : unarmoredAcOptions(data, hasShield).map(option => ({ ...option, value: option.value + shieldBonus }));
+  let best = options.reduce((highest, option) => option.value > highest.value ? option : highest, options[0]);
+  if (data.species === "Warforged") best = { value: best.value + 1, source: `${best.source} + Integrated Protection` };
+  return best;
 }
 
 // Extra maximum HP granted by feats/features that scale with level.
 function bonusMaxHp(data) {
   const level = Number(data.level || 1);
-  const subclass = data.customSubclass || data.subclass || "";
+  const subclass = subclassName(data);
   const feats = data.feats || [];
   let bonus = 0;
   if (feats.includes("Tough")) bonus += level * 2;
   if (feats.includes("Dwarven Fortitude")) { /* heals on Dodge; no flat max change */ }
-  if (data.className === "Sorcerer" && /Draconic/i.test(subclass)) bonus += level; // Draconic Resilience
+  if (data.className === "Sorcerer" && (
+    (subclass === "Draconic Sorcery" && level >= 3)
+    || (subclass === "Draconic Bloodline" && level >= 1)
+  )) bonus += level;
+  if (data.species === "Dwarf" && (data.edition === "2024" || /Hill Dwarf/i.test(data.speciesVariant || ""))) bonus += level;
   return bonus;
+}
+
+function spellcastingAbility(data) {
+  const subclass = subclassName(data);
+  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return "INT";
+  if (subclass === "Order of the Profane Soul") return data.hemocraftAbility || "INT";
+  return SPELLCASTING_ABILITIES[data.className] || RULES.classes[data.className]?.primary || "INT";
+}
+
+function proficientSkills(data) {
+  const skills = new Set([...(data.skillProficiencies || []), ...(data.backgroundSkills || []), ...(data.expertise || [])]);
+  const subclass = subclassName(data);
+  const level = Number(data.level || 1);
+  if (subclass === "Scout" && level >= 3) ["Nature", "Survival"].forEach(skill => skills.add(skill));
+  if (["Bladesinging", "Bladesinger"].includes(subclass) && level >= (data.edition === "2024" ? 3 : 2)) skills.add("Performance");
+  return skills;
+}
+
+function expertiseSkills(data) {
+  const skills = new Set(data.expertise || []);
+  if (subclassName(data) === "Scout" && Number(data.level || 1) >= 3) ["Nature", "Survival"].forEach(skill => skills.add(skill));
+  return skills;
+}
+
+function halfProficiencyApplies(data, ability, alreadyProficient) {
+  if (alreadyProficient) return false;
+  const level = Number(data.level || 1);
+  if (data.className === "Bard" && level >= 2) return true;
+  return data.edition === "2014"
+    && subclassName(data) === "Champion"
+    && level >= 7
+    && ["STR", "DEX", "CON"].includes(ability);
+}
+
+function skillModifier(data, skill) {
+  const ability = SKILLS[skill];
+  const prof = proficiency(data.level);
+  const proficient = proficientSkills(data).has(skill);
+  const expertise = expertiseSkills(data).has(skill);
+  return modifier(data[ability]) + (expertise ? prof * 2 : proficient ? prof : halfProficiencyApplies(data, ability, false) ? Math.floor(prof / 2) : 0);
+}
+
+function initiativeDetails(data) {
+  const level = Number(data.level || 1);
+  const prof = proficiency(level);
+  const subclass = subclassName(data);
+  const feats = new Set(data.feats || []);
+  const parts = ["DEX"];
+  let value = modifier(data.DEX);
+  let addsProficiency = false;
+  if (data.edition === "2024" && feats.has("Alert")) addsProficiency = true;
+  if (data.edition === "2014" && feats.has("Alert")) { value += 5; parts.push("Alert +5"); }
+  if (data.species === "Harengon") addsProficiency = true;
+  if (subclass === "Gunslinger" && level >= 7) addsProficiency = true;
+  if (subclass === "Oath of the Watchers" && level >= 7) addsProficiency = true;
+  if (addsProficiency) { value += prof; parts.push("proficiency"); }
+  else if (halfProficiencyApplies(data, "DEX", false)) { value += Math.floor(prof / 2); parts.push("half proficiency"); }
+  if (["War Magic", "Chronurgy Magic"].includes(subclass) && level >= 2) { value += modifier(data.INT); parts.push("INT"); }
+  if (subclass === "Gloom Stalker" && level >= 3) { value += modifier(data.WIS); parts.push("WIS"); }
+  if (subclass === "Swashbuckler" && level >= 3) { value += modifier(data.CHA); parts.push("CHA"); }
+  const advantage = (data.className === "Barbarian" && level >= 7)
+    || (data.edition === "2024" && subclass === "Champion" && level >= 3);
+  return { value, source: parts.join(" + "), advantage };
+}
+
+function savingThrowProficiencies(data) {
+  const proficiencies = new Set(RULES.classes[data.className]?.save || []);
+  const level = Number(data.level || 1);
+  const subclass = subclassName(data);
+  if (data.className === "Monk" && level >= 14) ABILITIES.forEach(ability => proficiencies.add(ability));
+  if (data.className === "Rogue" && level >= 15) {
+    proficiencies.add("WIS");
+    if (data.edition === "2024") proficiencies.add("CHA");
+  }
+  if (subclass === "Gloom Stalker" && level >= 7) proficiencies.add("WIS");
+  if (subclass === "Samurai" && level >= 7) proficiencies.add("WIS");
+  const resilientAbility = data.featAbilityChoices?.Resilient;
+  if (resilientAbility) proficiencies.add(resilientAbility);
+  return proficiencies;
+}
+
+function savingThrowModifier(data, ability) {
+  const prof = proficiency(data.level);
+  let value = modifier(data[ability]) + (savingThrowProficiencies(data).has(ability) ? prof : 0);
+  if (data.className === "Paladin" && Number(data.level || 1) >= 6) value += Math.max(1, modifier(data.CHA));
+  if (data.className === "Artificer" && Number(data.level || 1) >= 20) {
+    value += (data.inventory || []).filter(item => item.attuned).length;
+  }
+  return value;
 }
 
 function derived(data) {
@@ -1015,12 +1343,17 @@ function derived(data) {
   const level = Number(data.level || 1);
   const con = modifier(data.CON);
   const baseHp = Math.max(1, cls.hit + con + (level - 1) * (Math.ceil(cls.hit / 2) + 1 + con));
+  const armor = armorClassDetails(data);
+  const initiative = initiativeDetails(data);
   return {
     prof: proficiency(level),
-    ac: Number(data.acOverride) || unarmoredAc(data),
+    ac: armor.value,
+    acSource: armor.source,
     hp: Number(data.hpOverride) || Math.max(1, baseHp + bonusMaxHp(data)),
-    initiative: modifier(data.DEX),
-    passive: 10 + modifier(data.WIS)
+    initiative: initiative.value,
+    initiativeSource: initiative.source,
+    initiativeAdvantage: initiative.advantage,
+    passive: 10 + skillModifier(data, "Perception") + (data.edition === "2014" && (data.feats || []).includes("Observant") ? 5 : 0)
   };
 }
 
@@ -1139,13 +1472,18 @@ function valueByLevel(level, rows) {
 function spellSlotResources(character) {
   const level = Number(character.level);
   const className = character.className;
+  const subclass = character.customSubclass || character.subclass || "";
+  if (subclass === "Order of the Profane Soul" && level >= 3) {
+    const slots = level >= 6 ? 2 : 1;
+    const slotLevel = Math.min(4, Math.floor((level + 5) / 6));
+    return [{ id: "profane-soul-slots", name: `Pact Magic · level ${slotLevel}`, max: slots, recovery: "short", shortRecovery: "all", group: "spell" }];
+  }
   if (className === "Warlock") {
     const slots = level >= 17 ? 4 : level >= 11 ? 3 : level >= 2 ? 2 : 1;
     const slotLevel = level >= 9 ? 5 : Math.ceil(level / 2);
     return [{ id: "pact-slots", name: `Pact Magic · level ${slotLevel}`, max: slots, recovery: "short", shortRecovery: "all", group: "spell" }];
   }
   let table = null;
-  const subclass = character.customSubclass || character.subclass || "";
   if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(className)) table = FULL_CASTER_SLOTS;
   if (["Paladin", "Ranger"].includes(className)) table = character.edition === "2024" ? HALF_CASTER_SLOTS_2024 : HALF_CASTER_SLOTS_2014;
   if (className === "Artificer") table = HALF_CASTER_SLOTS_2024;
@@ -1234,6 +1572,18 @@ function classResourceDefinitions(character) {
   if (subclass === "Arcane Archer" && level >= 3) add("arcane-shot", "Arcane Shot", 2, "short", { shortRecovery: "all" });
   if (subclass === "Samurai" && level >= 3) add("fighting-spirit", "Fighting Spirit", 3);
   if (subclass === "Psi Warrior" && level >= 3) add("psionic-energy-dice", "Psionic Energy Dice", 2 * proficiency(level));
+  if (subclass === "Soulknife" && level >= 3) add("psionic-energy-dice", "Psionic Energy Dice", 2 * proficiency(level));
+  if (subclass === "Rune Knight" && level >= 3) add("giants-might", "Giant's Might", proficiency(level));
+  if (subclass === "Echo Knight" && level >= 3) add("unleash-incarnation", "Unleash Incarnation", Math.max(1, modifier(character.CON)));
+  if (["Bladesinging", "Bladesinger"].includes(subclass) && level >= (revised ? 3 : 2)) add("bladesong", "Bladesong", proficiency(level));
+  if (subclass === "School of Divination" && level >= 2) add("portent", "Portent dice", level >= 14 ? 3 : 2);
+  if (subclass === "Chronurgy Magic" && level >= 2) add("chronal-shift", "Chronal Shift", 2);
+  if (subclass === "Wild Magic" && level >= 1) add("tides-of-chaos", "Tides of Chaos", 1);
+  if (subclass === "Clockwork Soul" && level >= 1) add("restore-balance", "Restore Balance", proficiency(level));
+  if (subclass === "The Undead" && level >= 1) add("form-of-dread", "Form of Dread", proficiency(level));
+  if (subclass === "Celestial Patron" && level >= 3) add("healing-light", "Healing Light dice", 1 + level, "long", { type: "pool" });
+  if (subclass === "The Celestial" && level >= 1) add("healing-light", "Healing Light dice", 1 + level, "long", { type: "pool" });
+  if (subclass === "Drakewarden" && level >= 3) add("drake-companion", "Summon Drake · free use", 1);
   if ((subclass === "The Fiend" || subclass === "Fiend Patron") && level >= 6) add("dark-ones-own-luck", "Dark One's Own Luck", revised ? abilityUses("CHA") : 1, revised ? "long" : "short", revised ? {} : { shortRecovery: "all" });
   if (subclass === "Circle of the Land" && level >= (revised ? 6 : 2)) add("natural-recovery", "Natural Recovery", 1);
   if ((subclass === "Way of the Open Hand" || subclass === "Warrior of the Open Hand") && level >= 6) add("wholeness-of-body", "Wholeness of Body", revised ? abilityUses("WIS") : 1);
@@ -1411,7 +1761,7 @@ function renderSheet() {
   const feats = [...(c.feats || []), ...String(c.customFeats || "").split(",").map(x => x.trim()).filter(Boolean)];
   const customSpells = String(c.customSpells || "").split(",").map(x => x.trim()).filter(Boolean).map(name => ({ name, level: "Custom" }));
   const spells = [...(c.spells || []).map(spell => typeof spell === "string" ? { name: spell, level: 0 } : spell), ...customSpells];
-  const spellAbility = cls.primary;
+  const spellAbility = spellcastingAbility(c);
   const spellAttack = d.prof + modifier(c[spellAbility]);
   const spellSave = 8 + spellAttack;
   const characterChoices = [];
@@ -1430,8 +1780,14 @@ function renderSheet() {
   addChoice(c.primalOrder, "Primal Order", classChoiceDescription(c.primalOrder));
   addChoice(c.blessedStrikes, "Blessed Strikes", classChoiceDescription(c.blessedStrikes));
   addChoice(c.elementalFury, "Elemental Fury", classChoiceDescription(c.elementalFury));
+  (SUBCLASS_CHOICE_RULES[subclassName] || []).filter(choice =>
+    !choice.editions || choice.editions.includes(c.edition)
+  ).forEach(choice => {
+    const value = c.subclassChoices?.[choice.key];
+    if (value && Number(c.level || 1) >= choice.level) addChoice(value, choice.label, `${choice.label}: ${value}.`);
+  });
   const resources = resourceDefinitions(c);
-  const hasSpellcasting = Boolean(SPELL_LISTS[c.edition]?.[c.className]);
+  const hasSpellcasting = Boolean(spellListsFor(c.edition, c.className, subclassName));
   if (activeSheetSection === "spells" && !hasSpellcasting) activeSheetSection = "overview";
   const sectionClass = section => activeSheetSection === section ? "" : "hidden";
   const maximumHp = d.hp;
@@ -1444,7 +1800,7 @@ function renderSheet() {
     <div class="sheet-portrait">${c.portrait ? `<img src="${c.portrait}" alt="">` : escapeHtml(c.name.charAt(0))}</div>
     <div><span class="eyebrow">${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${c.level} ${escapeHtml(c.species)} ${escapeHtml(c.className)} · ${escapeHtml(c.customSubclass || c.subclass || "Adventurer")}</p>${subclassMeta?.source ? `<small class="sheet-source">${escapeHtml(subclassMeta.source)} · ${subclassMeta.rules === "2024" ? "native 5.5e" : c.edition === "2024" ? "5e expanded rules" : "5e"}${escapeHtml(subclassStatus)}</small>` : ""}</div>
     <div class="sheet-core">
-      <button data-sheet-roll="Initiative" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}</strong></button>
+      <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></button>
       <button><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong></button>
       <button data-sheet-section-jump="overview"><small>HIT POINTS${helpChip("hp")}</small><strong>${currentHp}/${maximumHp}</strong></button>
       <button><small>PROFICIENCY${helpChip("proficiency")}</small><strong>${signed(d.prof)}</strong></button>
@@ -1483,18 +1839,23 @@ function renderSheet() {
     ).join("")}</div>
       <h2 class="subsection-title">Saving throws${helpChip("save")}</h2>
       <div class="saving-throw-list">${ABILITIES.map(ability => {
-        const proficient = cls.save.includes(ability);
-        const saveModifier = modifier(c[ability]) + (proficient ? d.prof : 0);
+        const proficient = savingThrowProficiencies(c).has(ability);
+        const saveModifier = savingThrowModifier(c, ability);
         return `<button type="button" data-sheet-roll="${ability} saving throw" data-modifier="${saveModifier}"><span class="${proficient ? "proficient" : ""}">${ability}</span><strong>${signed(saveModifier)}</strong></button>`;
       }).join("")}</div>
     </section>
-    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${Object.entries(SKILLS).map(([skill, ability]) =>
-      `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${modifier(c[ability])}"><span>${skill} <small>(${ability})</small></span><strong>${signed(modifier(c[ability]))}</strong></button>`
-    ).join("")}</div></section>
+    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${Object.entries(SKILLS).map(([skill, ability]) => {
+      const proficient = proficientSkills(c).has(skill);
+      const expertise = expertiseSkills(c).has(skill);
+      const value = skillModifier(c, skill);
+      return `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${value}"><span class="${proficient ? "proficient" : ""}">${skill} <small>(${ability})${expertise ? " · Expertise" : ""}</small></span><strong>${signed(value)}</strong></button>`;
+    }).join("")}</div></section>
     <section class="sheet-panel ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <p><strong>Proficiency bonus:</strong> ${signed(d.prof)}</p><p><strong>Passive Perception:</strong> ${d.passive}</p>
-      <p><strong>Saving throw proficiencies:</strong> ${cls.save.join(", ")}</p><p><strong>Primary ability:</strong> ${cls.primary}</p>
+      <p><strong>Armor Class source:</strong> ${escapeHtml(d.acSource)}</p><p><strong>Initiative:</strong> ${escapeHtml(d.initiativeSource)}${d.initiativeAdvantage ? " · advantage" : ""}</p>
+      <p><strong>Saving throw proficiencies:</strong> ${[...savingThrowProficiencies(c)].join(", ")}</p><p><strong>Primary ability:</strong> ${cls.primary}</p>
+      <p><strong>Skill proficiencies:</strong> ${[...proficientSkills(c)].sort().join(", ") || "None selected"}</p>
       <p><strong>Active conditions:</strong> ${activeConditions.length ? escapeHtml(activeConditions.join(", ")) : "None"}</p>
       ${renderDeathSaves(c)}
       <h2>Background</h2><p><strong>${escapeHtml(c.background)}</strong> · ${escapeHtml(c.alignment)}</p>
@@ -1559,7 +1920,10 @@ function editCharacter(id) {
   const legacyOriginBonuses = c.originBonuses || originAbilityBonuses();
   ABILITIES.forEach(ability => {
     const storedBase = c.baseAbilities?.[ability];
-    const derivedBase = Number(c[ability] || 10) - Number(legacyOriginBonuses[ability] || 0) - Number(c.featBonuses?.[ability] || 0);
+    const derivedBase = Number(c[ability] || 10)
+      - Number(legacyOriginBonuses[ability] || 0)
+      - Number(c.featBonuses?.[ability] || 0)
+      - Number(c.asiBonuses?.[ability] || 0);
     form.elements[ability].value = storedBase ?? derivedBase;
   });
   populateSubclasses();
@@ -1618,14 +1982,21 @@ function progressionChoiceBlocks(character, targetLevel, features) {
   const subclassAt = subclassLevel(character.className, character.edition);
   if (targetLevel === subclassAt) {
     const subclasses = subclassEntries(character.className, character.edition).map(item => item.name);
+    const initialSubclass = character.subclass || subclasses[0] || "";
     blocks.push(`<div class="progression-choice">
       <label for="level-subclass">Choose your ${character.className} subclass</label>
       <select id="level-subclass" name="subclassChoice" required>${[...new Set(subclasses)].map(name => {
         const meta = subclassMetadata(character.className, name, character.edition);
         const suffix = meta?.source ? ` · ${meta.source}${meta.rules === "2014" && character.edition === "2024" ? " · expanded 5e" : ""}` : "";
-        return `<option value="${escapeHtml(name)}" ${name === character.subclass ? "selected" : ""}>${escapeHtml(name + suffix)}</option>`;
+        return `<option value="${escapeHtml(name)}" ${name === initialSubclass ? "selected" : ""}>${escapeHtml(name + suffix)}</option>`;
       }).join("")}</select>
+      <div id="level-subclass-choices">${levelSubclassChoiceMarkup(character, initialSubclass, targetLevel)}</div>
     </div>`);
+  } else if (character.subclass) {
+    const subclassChoices = subclassChoiceMarkup(character.subclass, targetLevel, character.subclassChoices || {}, false, character.edition);
+    if (subclassChoices) {
+      blocks.push(`<div class="progression-choice"><strong>Choose your subclass feature option</strong>${subclassChoices}</div>`);
+    }
   }
   const hasFightingStyleFeature = (CLASS_FEATURES[character.edition]?.[character.className] || [])
     .some(([unlock, name]) => unlock <= targetLevel && name.includes("Fighting Style"));
@@ -1657,8 +2028,14 @@ function progressionChoiceBlocks(character, targetLevel, features) {
   }
   const expertiseCount = Number(levelRules.expertise?.[targetLevel] || 0);
   if (expertiseCount) {
-    const options = PROGRESSION_OPTIONS.skills.filter(option => !(character.expertise || []).includes(option));
+    const trained = proficientSkills(character);
+    const options = PROGRESSION_OPTIONS.skills.filter(option => trained.has(option) && !(character.expertise || []).includes(option));
     blocks.push(`<div class="progression-choice" data-min-choices="${expertiseCount}" data-choice-name="expertise"><strong>Choose ${expertiseCount} skills for Expertise</strong>${optionChecks("expertise", options, [], expertiseCount)}</div>`);
+  }
+  if (character.edition === "2024" && character.className === "Barbarian" && targetLevel === 3) {
+    const trained = proficientSkills(character);
+    const options = CLASS_SKILLS.Barbarian.options.filter(skill => !trained.has(skill));
+    blocks.push(`<div class="progression-choice" data-min-choices="1" data-choice-name="skillProficiencies"><strong>Choose a Primal Knowledge skill</strong>${optionChecks("skillProficiencies", options, [], 1)}</div>`);
   }
   const masteryIncrease = Math.max(0, weaponMasteryCount(character.className, targetLevel, character.edition) - (character.weaponMastery || []).length);
   if (masteryIncrease > 0) {
@@ -1709,10 +2086,16 @@ function progressionChoiceBlocks(character, targetLevel, features) {
 }
 
 function levelSpellChoices(character, targetLevel) {
-  const lists = SPELL_LISTS[character.edition]?.[character.className];
+  const lists = spellListsFor(character.edition, character.className, subclassName(character));
   if (!lists) return "";
-  const newMax = maxSpellLevel(character.className, targetLevel, character.edition);
-  const progression = SPELL_PROGRESSION[character.edition]?.[character.className];
+  const newMax = maxSpellLevel(character.className, targetLevel, character.edition, subclassName(character));
+  const thirdCasterTotals = {
+    "Eldritch Knight": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
+    "Arcane Trickster": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
+    "Order of the Profane Soul": [0,0,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,11]
+  };
+  const progression = SPELL_PROGRESSION[character.edition]?.[character.className]
+    || (thirdCasterTotals[subclassName(character)] ? { mode: "known", totals: thirdCasterTotals[subclassName(character)] } : null);
   let count = 0;
   if (progression?.perLevel) count = progression.perLevel;
   if (progression?.totals) {
@@ -1740,8 +2123,12 @@ function levelSpellChoices(character, targetLevel) {
 }
 
 function levelCantripChoices(character, targetLevel) {
-  const count = Number(CANTRIP_PROGRESSION[character.edition]?.[character.className]?.[targetLevel] || 0);
-  const cantrips = SPELL_LISTS[character.edition]?.[character.className]?.[0] || [];
+  const subclass = subclassName(character);
+  const thirdCasterCantrips = ["Eldritch Knight", "Arcane Trickster"].includes(subclass)
+    ? ({ 3: 2, 10: 1 })[targetLevel]
+    : subclass === "Order of the Profane Soul" ? ({ 3: 2, 10: 1 })[targetLevel] : 0;
+  const count = Number(CANTRIP_PROGRESSION[character.edition]?.[character.className]?.[targetLevel] || thirdCasterCantrips || 0);
+  const cantrips = spellListsFor(character.edition, character.className, subclass)?.[0] || [];
   if (!count || !cantrips.length) return "";
   const existing = new Set((character.spells || []).map(spell => typeof spell === "string" ? spell : spell.name));
   const available = cantrips.filter(name => !existing.has(name));
@@ -1823,7 +2210,7 @@ function closeLevelUp() {
 }
 
 function progressionSnapshot(character) {
-  const keys = ["level", "hpOverride", "subclass", "customSubclass", "feats", "spells", "fightingStyle", "fightingStyles", "pactBoon", "metamagic", "invocations", "expertise", "weaponMastery", "divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "resourceUsage", "baseAbilities", "originBonuses", "originFeat", "featAbilityChoices", "featBonuses", "speciesVariant", "backgroundAbilityMode", "backgroundPrimary", "backgroundSecondary", "originFeatChoice", ...ABILITIES];
+  const keys = ["level", "hpOverride", "subclass", "customSubclass", "subclassChoices", "feats", "spells", "fightingStyle", "fightingStyles", "pactBoon", "metamagic", "invocations", "skillProficiencies", "backgroundSkills", "expertise", "weaponMastery", "divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "resourceUsage", "baseAbilities", "originBonuses", "originFeat", "featAbilityChoices", "featBonuses", "speciesVariant", "backgroundAbilityMode", "backgroundPrimary", "backgroundSecondary", "originFeatChoice", ...ABILITIES];
   return Object.fromEntries(keys.map(name => [name, structuredClone(character[name])]));
 }
 
@@ -1862,7 +2249,7 @@ function delevelCharacter(id) {
         history.pop();
       } else {
         updated.level = Math.max(1, Number(updated.level) - 1);
-        const allowed = maxSpellLevel(updated.className, updated.level, updated.edition);
+        const allowed = maxSpellLevel(updated.className, updated.level, updated.edition, subclassName(updated));
         updated.spells = (updated.spells || []).filter(spell => Number(typeof spell === "string" ? 0 : spell.level) <= allowed);
         if (last?.level > updated.level) history.pop();
       }
@@ -1889,7 +2276,7 @@ function completeLevelUp(event) {
     const name = block.dataset.choiceName;
     const required = Number(block.dataset.minChoices);
     const count = formValues.getAll(name).length;
-    const labels = { levelCantrips: "cantrip", levelSpells: "spell", mysticArcanum: "Mystic Arcanum", metamagic: "Metamagic option", invocations: "Eldritch Invocation", expertise: "Expertise skill", weaponMastery: "mastered weapon" };
+    const labels = { levelCantrips: "cantrip", levelSpells: "spell", mysticArcanum: "Mystic Arcanum", metamagic: "Metamagic option", invocations: "Eldritch Invocation", expertise: "Expertise skill", skillProficiencies: "skill proficiency", weaponMastery: "mastered weapon" };
     const label = labels[name] || `${name} option`;
     if (count < required) { toast(`Choose ${required} ${label}${required > 1 ? "s" : ""}`); return; }
   }
@@ -1911,6 +2298,13 @@ function completeLevelUp(event) {
     updated.customSubclass = "";
   }
   const choices = {};
+  const subclassChoices = { ...(updated.subclassChoices || {}) };
+  $$("select[name^='subclassChoice_']", formElement).forEach(select => {
+    const key = select.name.replace("subclassChoice_", "");
+    if (select.value) subclassChoices[key] = select.value;
+  });
+  updated.subclassChoices = subclassChoices;
+  if (Object.keys(subclassChoices).length) choices.subclassChoices = { ...subclassChoices };
   const fightingStyle = formValues.get("fightingStyle");
   if (fightingStyle) {
     choices.fightingStyle = fightingStyle;
@@ -1919,7 +2313,7 @@ function completeLevelUp(event) {
   }
   const pactBoon = formValues.get("pactBoon");
   if (pactBoon) { choices.pactBoon = pactBoon; updated.pactBoon = pactBoon; }
-  ["metamagic", "invocations", "expertise", "weaponMastery"].forEach(name => {
+  ["metamagic", "invocations", "expertise", "skillProficiencies", "weaponMastery"].forEach(name => {
     const values = formValues.getAll(name);
     if (values.length) {
       choices[name] = values;
@@ -1969,7 +2363,7 @@ function completeLevelUp(event) {
   const arcanum = formValues.get("mysticArcanum");
   const addedSpells = [...addedCantrips, ...formValues.getAll("levelSpells"), ...(arcanum ? [arcanum] : [])];
   if (addedSpells.length) {
-    const lists = SPELL_LISTS[updated.edition]?.[updated.className] || {};
+    const lists = spellListsFor(updated.edition, updated.className, subclassName(updated)) || {};
     const spellRecords = addedSpells.map(name => ({
       name,
       level: Number(Object.entries(lists).find(([, names]) => names.includes(name))?.[0] || 0)
@@ -2259,7 +2653,7 @@ function initEvents() {
       });
     }
     const sheetRoll = event.target.closest("[data-sheet-roll]");
-    if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), "normal"); return; }
+    if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.rollMode || "normal"); return; }
   });
   form.addEventListener("input", event => {
     updatePreview();
@@ -2277,7 +2671,9 @@ function initEvents() {
     }
     if (event.target.name === "subclass") {
       updateSubclassMeta();
+      renderStartingClassOptions();
       renderClassFeaturePreview();
+      renderTalentChoices();
     }
     if (["species", "background", "speciesVariant", "backgroundAbilityMode"].includes(event.target.name)) {
       renderOriginRules();
@@ -2287,13 +2683,13 @@ function initEvents() {
       renderTalentChoices();
       updatePreview();
     }
-    if (event.target.name === "weaponMastery" && event.target.checked) {
+    if (event.target.type === "checkbox" && event.target.checked) {
       const block = event.target.closest("[data-builder-choice-limit]");
       const limit = Number(block?.dataset.builderChoiceLimit || 0);
-      const checked = $$('input[name="weaponMastery"]:checked', block);
+      const checked = block ? $$(`input[name="${event.target.name}"]:checked`, block) : [];
       if (limit && checked.length > limit) {
         event.target.checked = false;
-        toast(`Choose up to ${limit} mastered weapons`);
+        toast(`Choose up to ${limit} options`);
       }
     }
   });
@@ -2381,6 +2777,29 @@ function initEvents() {
     const data = formData();
     if (!data.name.trim()) { setStep(5); form.elements.name.focus(); toast("Your character needs a name"); return; }
     if (!validateOriginChoices()) { setStep(2); toast("Choose different eligible abilities and complete the origin feat selection"); return; }
+    const skillRule = classSkillRuleAtLevel(data.className, data.level, data.edition, data.subclass);
+    if (data.skillProficiencies.length !== skillRule.count) {
+      setStep(1);
+      toast(`Choose ${skillRule.count} class skill proficiencies`);
+      return;
+    }
+    if (data.backgroundSkills.length !== 2 || new Set(data.backgroundSkills).size !== 2) {
+      setStep(2);
+      toast("Choose two different background skill proficiencies");
+      return;
+    }
+    const trainedSkills = new Set([...data.skillProficiencies, ...data.backgroundSkills]);
+    if (data.expertise.some(skill => !trainedSkills.has(skill))) {
+      setStep(1);
+      toast("Expertise must be assigned to a proficient skill");
+      return;
+    }
+    const expertiseRequired = expertiseCountAtLevel(data.className, data.level, data.edition);
+    if (data.expertise.length !== expertiseRequired) {
+      setStep(1);
+      toast(`Choose ${expertiseRequired} skills for Expertise`);
+      return;
+    }
     const masteryRequired = weaponMasteryCount(data.className, data.level, data.edition);
     if (data.weaponMastery.length !== masteryRequired) { setStep(1); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
     data.id = activeCharacterId && activeCharacterId !== "demo-lyra" ? activeCharacterId : crypto.randomUUID();
@@ -2488,6 +2907,13 @@ function initEvents() {
   $("#level-up-modal").addEventListener("click", event => { if (event.target.id === "level-up-modal") closeLevelUp(); });
   $("#level-up-form").addEventListener("submit", completeLevelUp);
   $("#level-up-form").addEventListener("change", event => {
+    if (event.target.name === "subclassChoice") {
+      const character = characters.find(item => item.id === levelingCharacterId);
+      const target = $("#level-subclass-choices");
+      if (character && target) {
+        target.innerHTML = levelSubclassChoiceMarkup(character, event.target.value, Number(character.level) + 1);
+      }
+    }
     if (event.target.name === "advancementType") {
       const featMode = event.target.value === "Feat";
       $("#ability-advancement")?.classList.toggle("hidden", featMode);
