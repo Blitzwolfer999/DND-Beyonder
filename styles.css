@@ -1142,3 +1142,5 @@ textarea:focus-visible {
 .sheet-ability:hover, .sheet-core button:hover { border-color: var(--gold-dark); }
 .class-option { transition: border-color .14s ease, background .14s ease, transform .12s ease; }
 .class-option:hover { border-color: var(--gold-dark); transform: translateY(-2px); }
+.field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.4; font-weight: 400; }
+.field-hint:empty { display: none; }

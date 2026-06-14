@@ -459,6 +459,19 @@ function resetPortrait() {
   updatePreview();
 }
 
+function speciesDescription(name) {
+  return (typeof CONTENT_SUMMARIES !== "undefined" && CONTENT_SUMMARIES.species && CONTENT_SUMMARIES.species[name]) || "";
+}
+function backgroundDescription(name) {
+  return (typeof CONTENT_SUMMARIES !== "undefined" && CONTENT_SUMMARIES.backgrounds && CONTENT_SUMMARIES.backgrounds[name]) || "";
+}
+function updateOriginDescriptions() {
+  const sd = $("#species-desc");
+  if (sd) sd.textContent = speciesDescription($("#species-select")?.value || "");
+  const bd = $("#background-desc");
+  if (bd) bd.textContent = backgroundDescription($("#background-select")?.value || "");
+}
+
 function populateRules(savedCharacter = null) {
   $("#species-select").innerHTML = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014])
     .map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
@@ -577,6 +590,7 @@ function validateOriginChoices(raw = originFormValues()) {
 function renderOriginRules(savedCharacter = null) {
   const container = $("#origin-rules");
   if (!container) return;
+  updateOriginDescriptions();
   const live = originFormValues();
   const saved = savedCharacter || live;
   if (edition === "2014") {
