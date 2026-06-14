@@ -1424,6 +1424,7 @@ function renderSheet() {
       <button><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong></button>
       <button data-sheet-section-jump="overview"><small>HIT POINTS${helpChip("hp")}</small><strong>${currentHp}/${maximumHp}</strong></button>
       <button><small>PROFICIENCY${helpChip("proficiency")}</small><strong>${signed(d.prof)}</strong></button>
+      <button data-sheet-section-jump="overview"><small>PASSIVE PERCEPTION</small><strong>${d.passive}</strong></button>
     </div>
     <div class="sheet-header-actions">
       <button class="button ghost" data-edit="${c.id}">Edit character</button>
