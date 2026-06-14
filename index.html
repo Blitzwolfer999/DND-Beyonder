@@ -26,6 +26,7 @@
         <button class="nav-item" data-view="vault"><span>⌑</span> Character Vault</button>
       </nav>
       <div class="sidebar-foot">
+        <button type="button" id="toggle-help" class="help-toggle" aria-pressed="true">Beginner help: on</button>
         <p>OPEN RULES</p>
         <span>5e SRD 5.1</span>
         <span>Revised SRD 5.2</span>
@@ -46,6 +47,13 @@
       </header>
 
       <section class="view active" id="dashboard-view">
+        <div class="welcome-tip" id="welcome-tip" hidden>
+          <div class="welcome-tip-body">
+            <strong>New to building D&amp;D characters?</strong>
+            <p>Tap the small <span class="welcome-q">?</span> icons anywhere for plain-language explanations. To begin, choose <b>Create a character</b> and follow the five guided steps — everything is filled in and calculated for you.</p>
+          </div>
+          <button type="button" id="dismiss-welcome" class="button small">Got it</button>
+        </div>
         <div class="hero">
           <div class="hero-copy">
             <span class="eyebrow">YOUR STORY AWAITS</span>
@@ -91,15 +99,15 @@
         <div class="builder-layout">
           <form class="builder-card" id="character-form">
             <div class="step-tabs">
-              <button type="button" class="active" data-step="1"><span>1</span> Identity</button>
-              <button type="button" data-step="2"><span>2</span> Origins</button>
-              <button type="button" data-step="3"><span>3</span> Class</button>
-              <button type="button" data-step="4"><span>4</span> Abilities</button>
-              <button type="button" data-step="5"><span>5</span> Talents</button>
+              <button type="button" class="active" data-step="1"><span>1</span> Class</button>
+              <button type="button" data-step="2"><span>2</span> Origin</button>
+              <button type="button" data-step="3"><span>3</span> Abilities</button>
+              <button type="button" data-step="4"><span>4</span> Talents</button>
+              <button type="button" data-step="5"><span>5</span> Details</button>
             </div>
 
-            <div class="form-step active" data-step-panel="1">
-              <div class="step-intro"><span>01</span><div><h2>Who are they?</h2><p>Give your character a face and a name.</p></div></div>
+            <div class="form-step" data-step-panel="5">
+              <div class="step-intro"><span>05</span><div><h2>Finishing details</h2><p>Name your hero and give them a face. You're almost done!</p></div></div>
               <div class="identity-grid">
                 <div class="portrait-editor">
                   <canvas id="portrait-canvas" width="420" height="420" aria-label="Character portrait"></canvas>
@@ -114,7 +122,6 @@
                   <label>Character name<input name="name" required maxlength="40" placeholder="e.g. Lyra Moonfall"></label>
                   <label>Player name<input name="player" maxlength="40" placeholder="Your name"></label>
                   <label>Pronouns<input name="pronouns" maxlength="30" placeholder="e.g. she / her"></label>
-                  <label>Level<input name="level" type="number" min="1" max="20" value="1"></label>
                 </div>
               </div>
             </div>
@@ -135,8 +142,11 @@
               <label>Backstory<textarea name="backstory" rows="6" placeholder="A few lines about where your hero came from..."></textarea></label>
             </div>
 
-            <div class="form-step" data-step-panel="3">
-              <div class="step-intro"><span>03</span><div><h2>Choose a calling</h2><p>Core, Artificer, and Blood Hunter class paths are ready to build.</p></div></div>
+            <div class="form-step active" data-step-panel="1">
+              <div class="step-intro"><span>01</span><div><h2>Choose a class</h2><p>Your class is the heart of your character &mdash; what they can do in and out of a fight. Pick one, then set your level.</p></div></div>
+              <div class="field-grid compact">
+                <label>Level <span class="help-chip" role="button" tabindex="0" data-help="level" aria-label="What is Level?">?</span><input name="level" type="number" min="1" max="20" value="1"></label>
+              </div>
               <div class="class-grid" id="class-grid"></div>
               <div class="field-grid compact">
                 <label>Subclass<select name="subclass" id="subclass-select"></select><small class="subclass-meta" id="subclass-meta"></small></label>
@@ -147,18 +157,22 @@
               <section class="selection-details" id="class-feature-preview" aria-live="polite"></section>
             </div>
 
-            <div class="form-step" data-step-panel="4">
-              <div class="step-intro"><span>04</span><div><h2>Set base ability scores</h2><p>Use the standard array or enter your own values. Origin bonuses are applied automatically.</p></div></div>
+            <div class="form-step" data-step-panel="3">
+              <div class="step-intro"><span>03</span><div><h2>Set ability scores</h2><p>New here? The standard array (recommended) is the easy choice &mdash; origin bonuses are added for you.</p></div></div>
               <div class="ability-editor" id="ability-editor"></div>
-              <button class="text-button" type="button" id="standard-array">Apply standard array</button>
+              <button class="text-button" type="button" id="standard-array">Use standard array (recommended)</button>
               <div class="field-grid compact">
                 <label>Armor class override<input name="acOverride" type="number" min="0" max="40" placeholder="Auto"></label>
                 <label>Hit point override<input name="hpOverride" type="number" min="1" max="999" placeholder="Auto"></label>
               </div>
             </div>
 
-            <div class="form-step" data-step-panel="5">
-              <div class="step-intro"><span>05</span><div><h2>Choose talents</h2><p>Select feats and, for spellcasters, build a spellbook or prepared list.</p></div></div>
+            <div class="form-step" data-step-panel="4">
+              <div class="step-intro"><span>04</span><div><h2>Choose talents</h2><p>Pick ability boosts or feats, and &mdash; for spellcasters &mdash; your spells.</p></div></div>
+              <section class="choice-section hidden" id="asi-section">
+                <div class="choice-heading"><div><h3>Ability Score Improvements</h3><p id="asi-guidance"></p></div></div>
+                <div class="option-list" id="asi-list"></div>
+              </section>
               <section class="choice-section">
                 <div class="choice-heading"><div><h3>Feats</h3><p id="feat-guidance">Choose any feats your table has granted.</p></div></div>
                 <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
@@ -328,6 +342,7 @@
   <script src="catalog-content.js"></script>
   <script src="rules-descriptions.js"></script>
   <script src="content-summaries.js"></script>
+  <script src="subclass-features.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js"></script>
   <script src="app.js"></script>

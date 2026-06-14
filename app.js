@@ -45,6 +45,7 @@ let selectedDie = 20;
 let selectedSpellLevel = 0;
 let selectedFeatNames = new Set();
 let selectedFeatAbilities = {};
+let selectedAsi = {};
 let selectedSpellNames = new Set();
 let levelingCharacterId = null;
 let inventoryCharacterId = null;
@@ -186,6 +187,54 @@ function prepareUserVault(user) {
 }
 function modifier(score) { return Math.floor((Number(score || 10) - 10) / 2); }
 function signed(value) { return value >= 0 ? `+${value}` : String(value); }
+
+// Plain-language help for new players. Each entry: [term, explanation].
+const GLOSSARY = {
+  ac: ["Armor Class (AC)", "How hard you are to hit. An attacker must roll this number or higher to land a hit on you. Higher is better."],
+  hp: ["Hit Points (HP)", "Your health. You lose HP when you take damage and fall unconscious at 0. Resting restores it."],
+  proficiency: ["Proficiency Bonus", "A bonus you add to things your character is trained in — attacks, certain skills, and saving throws. It grows as you level up."],
+  initiative: ["Initiative", "A quick Dexterity roll at the start of a fight that sets turn order. Higher numbers act first."],
+  ability: ["Ability Scores", "Your six core traits: Strength, Dexterity, Constitution, Intelligence, Wisdom, and Charisma. The big number is the score; the +/- beside it is the modifier you add to rolls."],
+  save: ["Saving Throws", "Rolls to resist danger — dodging a blast, shrugging off poison, keeping your nerve. You add the matching ability modifier, plus your proficiency bonus when you're proficient."],
+  skill: ["Skills", "Specific things you can be good at, like Stealth or Persuasion. You roll a d20 and add the linked ability modifier and any bonus."],
+  spellSave: ["Spell Save DC", "The number an enemy must beat on its saving throw to resist one of your spells."],
+  spellAttack: ["Spell Attack Bonus", "What you add to your roll when you attack a target with a spell."],
+  asi: ["Ability Score Improvement", "At certain levels you can raise your ability scores — or take a feat instead — to get better at what you do."],
+  feat: ["Feats", "Special talents that grant a unique ability. You can take one in place of an Ability Score Improvement."],
+  subclass: ["Subclass", "A specialization within your class that grants extra features as you level, like a Cleric choosing a divine domain."],
+  level: ["Level", "How experienced your character is, from 1 to 20. Higher levels unlock more power and new features."]
+};
+
+function helpChip(key) {
+  const entry = GLOSSARY[key];
+  if (!entry) return "";
+  return `<span class="help-chip" role="button" tabindex="0" data-help="${key}" aria-label="What is ${escapeHtml(entry[0])}?">?</span>`;
+}
+
+let helpPopoverEl = null;
+function hideHelpPopover() { if (helpPopoverEl) { helpPopoverEl.remove(); helpPopoverEl = null; } }
+function showHelpPopover(chip) {
+  hideHelpPopover();
+  const entry = GLOSSARY[chip.dataset.help];
+  if (!entry) return;
+  const pop = document.createElement("div");
+  pop.className = "help-popover";
+  pop.innerHTML = `<strong>${escapeHtml(entry[0])}</strong><p>${escapeHtml(entry[1])}</p>`;
+  document.body.appendChild(pop);
+  const rect = chip.getBoundingClientRect();
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 10;
+  pop.style.top = `${window.scrollY + rect.bottom + 8}px`;
+  pop.style.left = `${Math.max(10, Math.min(window.scrollX + rect.left - 6, maxLeft))}px`;
+  helpPopoverEl = pop;
+}
+
+function showWelcomeIfNeeded() {
+  const tip = $("#welcome-tip");
+  if (!tip) return;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem("af-welcome-dismissed") === "1"; } catch (e) {}
+  if (!dismissed) tip.removeAttribute("hidden");
+}
 function proficiency(level) { return 2 + Math.floor((Math.max(1, Number(level)) - 1) / 4); }
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -271,10 +320,10 @@ function featureDescriptionInEdition(rulesEdition, source, name, className) {
 }
 
 function featureDescription(rulesEdition, source, name, className = selectedClass) {
-  const description = featureDescriptionInEdition(rulesEdition, source, name, className)
-    || (rulesEdition === "2024" ? featureDescriptionInEdition("2014", source, name, className) : "")
-    || openFeatureSummary(name)
+  const description = openFeatureSummary(name)
     || contentSummary("features", name)
+    || featureDescriptionInEdition(rulesEdition, source, name, className)
+    || (rulesEdition === "2024" ? featureDescriptionInEdition("2014", source, name, className) : "")
     || "";
   if (description) return description;
   return `${name} is gained automatically at the listed level and applies the class or subclass benefit represented by this feature.`;
@@ -343,6 +392,25 @@ function featAbilityBonuses(featNames = selectedFeatNames) {
     const options = featAbilityOptions(feat, "2024");
     const selected = selectedFeatAbilities[name];
     if (options.includes(selected)) bonuses[selected] += 1;
+  });
+  return bonuses;
+}
+
+function advancementLevelsFor(className) {
+  return className === "Fighter" ? [4, 6, 8, 12, 14, 16, 19]
+    : className === "Rogue" ? [4, 8, 10, 12, 16, 19]
+    : [4, 8, 12, 16, 19];
+}
+
+function asiSlotCount(className, level) {
+  return advancementLevelsFor(className).filter(unlock => unlock <= Number(level || 1)).length;
+}
+
+function asiAbilityBonuses(asiState = selectedAsi) {
+  const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
+  Object.values(asiState || {}).forEach(slot => {
+    if (slot?.one) bonuses[slot.one] = (bonuses[slot.one] || 0) + 1;
+    if (slot?.two) bonuses[slot.two] = (bonuses[slot.two] || 0) + 1;
   });
   return bonuses;
 }
@@ -751,6 +819,12 @@ function maxSpellLevel(className, level, rulesEdition) {
 
 function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!$("#feat-list")) return;
+  $$("select[data-asi-slot]").forEach(select => {
+    const slot = select.dataset.asiSlot, part = select.dataset.asiPart;
+    selectedAsi[slot] = selectedAsi[slot] || { one: "", two: "" };
+    selectedAsi[slot][part] = select.value;
+  });
+  renderAsiChoices();
   $$("select[data-feat-ability]").forEach(select => { selectedFeatAbilities[select.dataset.featAbility] = select.value; });
   selectedValues("feats").forEach(name => selectedFeatNames.add(name));
   selectedValues("spells").forEach(name => selectedSpellNames.add(name));
@@ -818,6 +892,31 @@ function renderSpellList() {
   }).join("") : `<p>No spells match that search.</p>`;
 }
 
+function renderAsiChoices() {
+  const container = $("#asi-list");
+  const section = $("#asi-section");
+  if (!container || !section) return;
+  const level = Number(form.elements.level?.value || 1);
+  const slots = asiSlotCount(selectedClass, level);
+  Object.keys(selectedAsi).forEach(key => { if (Number(key) >= slots) delete selectedAsi[key]; });
+  section.classList.toggle("hidden", slots < 1);
+  const guidance = $("#asi-guidance");
+  if (guidance) {
+    guidance.textContent = slots < 1
+      ? `${selectedClass} gains its first Ability Score Improvement at level 4.`
+      : `${selectedClass} gains ${slots} Ability Score Improvement${slots > 1 ? "s" : ""} by level ${level}. Increase one ability by +2 or two abilities by +1 each, or leave a slot empty to take a feat instead. Scores cap at 20.`;
+  }
+  if (slots < 1) { container.innerHTML = ""; return; }
+  const optionsFor = current => `<option value="">— none —</option>` + ABILITIES.map(ability => `<option value="${ability}" ${ability === current ? "selected" : ""}>${ability}</option>`).join("");
+  container.innerHTML = Array.from({ length: slots }, (_, index) => {
+    const slot = selectedAsi[index] || { one: "", two: "" };
+    return `<article class="choice-option asi-option"><span><strong>Ability Score Improvement ${index + 1}</strong><small>Increase one ability by +2 (choose it twice) or two abilities by +1 each.</small></span>
+      <label class="feat-ability-choice">+1<select data-asi-slot="${index}" data-asi-part="one">${optionsFor(slot.one)}</select></label>
+      <label class="feat-ability-choice">+1<select data-asi-slot="${index}" data-asi-part="two">${optionsFor(slot.two)}</select></label>
+    </article>`;
+  }).join("");
+}
+
 function buildAbilities() {
   $("#ability-editor").innerHTML = ABILITIES.map((ability, i) =>
     `<div class="ability-box"><label>${ability}<input name="${ability}" type="number" min="1" max="30" value="${[15,14,13,12,10,8][i]}"></label><small data-origin-bonus="${ability}">Origin +0</small><span data-mod="${ability}">${signed(modifier([15,14,13,12,10,8][i]))}</span></div>`
@@ -850,6 +949,9 @@ function formData() {
     const spellLevel = Object.entries(lists).find(([, names]) => names.includes(name))?.[0] ?? 0;
     return { name, level: Number(spellLevel) };
   });
+  const asiBonuses = asiAbilityBonuses(selectedAsi);
+  data.asi = JSON.parse(JSON.stringify(selectedAsi));
+  data.asiBonuses = { ...asiBonuses };
   data.baseAbilities = {};
   ABILITIES.forEach(ability => {
     const base = Number(data[ability] || 10);
@@ -862,7 +964,10 @@ function formData() {
     const maximum = hasEpicIncrease ? 30 : 20;
     const appliedFeatBonus = Math.max(0, Math.min(Number(featBonuses[ability] || 0), maximum - beforeFeat));
     data.featBonuses[ability] = appliedFeatBonus;
-    data[ability] = beforeFeat + appliedFeatBonus;
+    const beforeAsi = beforeFeat + appliedFeatBonus;
+    const appliedAsi = Math.max(0, Math.min(Number(asiBonuses[ability] || 0), 20 - beforeAsi));
+    data.asiBonuses[ability] = appliedAsi;
+    data[ability] = beforeAsi + appliedAsi;
   });
   data.level = Number(data.level || 1);
   return data;
@@ -908,7 +1013,8 @@ function updatePreview() {
     if (bonus) {
       const originAmount = Number(data.originBonuses?.[a] || 0);
       const featAmount = Number(data.featBonuses?.[a] || 0);
-      bonus.textContent = `Bonuses ${signed(originAmount + featAmount)} · final ${score}`;
+      const asiAmount = Number(data.asiBonuses?.[a] || 0);
+      bonus.textContent = `Bonuses ${signed(originAmount + featAmount + asiAmount)} · final ${score}`;
     }
     const preview = $(`[data-preview-mod="${a}"]`); if (preview) preview.textContent = mod;
   });
@@ -927,7 +1033,7 @@ function setStep(step) {
   $("#next-step").classList.toggle("hidden", currentStep === 5);
   $("#save-character").classList.toggle("hidden", currentStep !== 5);
   $("#step-count").textContent = `Step ${currentStep} of 5`;
-  if (currentStep === 5) renderTalentChoices();
+  if (currentStep === 4) renderTalentChoices();
 }
 
 function navigate(view) {
@@ -948,6 +1054,7 @@ function startNewCharacter() {
   currentOriginFeat = "";
   selectedFeatNames.clear();
   selectedFeatAbilities = {};
+  selectedAsi = {};
   selectedSpellNames.clear();
   form.reset();
   form.elements.level.value = 1;
@@ -1299,10 +1406,10 @@ function renderSheet() {
     <div class="sheet-portrait">${c.portrait ? `<img src="${c.portrait}" alt="">` : escapeHtml(c.name.charAt(0))}</div>
     <div><span class="eyebrow">${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${c.level} ${escapeHtml(c.species)} ${escapeHtml(c.className)} · ${escapeHtml(c.customSubclass || c.subclass || "Adventurer")}</p>${subclassMeta?.source ? `<small class="sheet-source">${escapeHtml(subclassMeta.source)} · ${subclassMeta.rules === "2024" ? "native 5.5e" : c.edition === "2024" ? "5e expanded rules" : "5e"}${escapeHtml(subclassStatus)}</small>` : ""}</div>
     <div class="sheet-core">
-      <button data-sheet-roll="Initiative" data-modifier="${d.initiative}"><small>INITIATIVE</small><strong>${signed(d.initiative)}</strong></button>
-      <button><small>ARMOR CLASS</small><strong>${d.ac}</strong></button>
-      <button data-sheet-section-jump="overview"><small>HIT POINTS</small><strong>${currentHp}/${maximumHp}</strong></button>
-      <button><small>PROFICIENCY</small><strong>${signed(d.prof)}</strong></button>
+      <button data-sheet-roll="Initiative" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}</strong></button>
+      <button><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong></button>
+      <button data-sheet-section-jump="overview"><small>HIT POINTS${helpChip("hp")}</small><strong>${currentHp}/${maximumHp}</strong></button>
+      <button><small>PROFICIENCY${helpChip("proficiency")}</small><strong>${signed(d.prof)}</strong></button>
     </div>
     <div class="sheet-header-actions">
       <button class="button ghost" data-edit="${c.id}">Edit character</button>
@@ -1332,17 +1439,17 @@ function renderSheet() {
     ${hasSpellcasting ? `<button type="button" class="${activeSheetSection === "spells" ? "active" : ""}" data-sheet-section="spells">Spells</button>` : ""}
   </nav>
   <div class="sheet-body">
-    <section class="sheet-panel ${sectionClass("overview")}"><h2>Abilities</h2><div class="sheet-abilities">${ABILITIES.map(a =>
+    <section class="sheet-panel ${sectionClass("overview")}"><h2>Abilities${helpChip("ability")}</h2><div class="sheet-abilities">${ABILITIES.map(a =>
       `<button class="sheet-ability" data-sheet-roll="${a} check" data-modifier="${modifier(c[a])}"><small>${a}</small><strong>${signed(modifier(c[a]))}</strong><span>${c[a]}</span></button>`
     ).join("")}</div>
-      <h2 class="subsection-title">Saving throws</h2>
+      <h2 class="subsection-title">Saving throws${helpChip("save")}</h2>
       <div class="saving-throw-list">${ABILITIES.map(ability => {
         const proficient = cls.save.includes(ability);
         const saveModifier = modifier(c[ability]) + (proficient ? d.prof : 0);
         return `<button type="button" data-sheet-roll="${ability} saving throw" data-modifier="${saveModifier}"><span class="${proficient ? "proficient" : ""}">${ability}</span><strong>${signed(saveModifier)}</strong></button>`;
       }).join("")}</div>
     </section>
-    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills</h2><div class="skill-list">${Object.entries(SKILLS).map(([skill, ability]) =>
+    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${Object.entries(SKILLS).map(([skill, ability]) =>
       `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${modifier(c[ability])}"><span>${skill} <small>(${ability})</small></span><strong>${signed(modifier(c[ability]))}</strong></button>`
     ).join("")}</div></section>
     <section class="sheet-panel ${sectionClass("overview")}">
@@ -1380,7 +1487,7 @@ function renderSheet() {
     </section>
     ${hasSpellcasting ? `<section class="sheet-panel sheet-wide ${sectionClass("spells")}">
       <h2>Spellcasting</h2>
-      <div class="sheet-spell-summary"><span><strong>Ability:</strong> ${spellAbility}</span><span><strong>Save DC:</strong> ${spellSave}</span><span><strong>Attack:</strong> ${signed(spellAttack)}</span><span><strong>Selected:</strong> ${spells.length}</span></div>
+      <div class="sheet-spell-summary"><span><strong>Ability:</strong> ${spellAbility}</span><span><strong>Save DC:</strong> ${spellSave}${helpChip("spellSave")}</span><span><strong>Attack:</strong> ${signed(spellAttack)}${helpChip("spellAttack")}</span><span><strong>Selected:</strong> ${spells.length}</span></div>
       <div class="sheet-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell =>
         `<div class="sheet-spell"><strong>${escapeHtml(spell.name)}</strong><br><small>${spell.level === 0 ? "Cantrip" : spell.level === "Custom" ? "Custom" : `Level ${spell.level}`}</small>${ruleDetails(spellDescription(spell.name, c.edition, EXPANDED_SPELL_SOURCES[c.edition]?.[spell.name] || ""))}</div>`
       ).join("") || "<p>No spells selected.</p>"}</div>
@@ -1400,6 +1507,7 @@ function editCharacter(id) {
   activeCharacterId = id; edition = c.edition || "2014"; selectedClass = c.className || "Fighter";
   currentOriginFeat = c.originFeat || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
+  selectedAsi = c.asi ? JSON.parse(JSON.stringify(c.asi)) : {};
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
   $("#builder-title").textContent = `Edit ${c.name}`;
   $("#builder-description").textContent = "Adjust any saved detail directly. Use Level Up for guided progression.";
@@ -1532,11 +1640,7 @@ function progressionChoiceBlocks(character, targetLevel, features) {
   if (character.edition === "2024" && character.className === "Druid" && targetLevel >= 7 && !character.elementalFury) {
     blocks.push(`<div class="progression-choice"><strong>Choose Elemental Fury</strong>${optionRadios("elementalFury", ["Potent Spellcasting", "Primal Strike"])}</div>`);
   }
-  const advancementLevels = character.className === "Fighter"
-    ? [4, 6, 8, 12, 14, 16, 19]
-    : character.className === "Rogue"
-      ? [4, 8, 10, 12, 16, 19]
-      : [4, 8, 12, 16, 19];
+  const advancementLevels = advancementLevelsFor(character.className);
   if (advancementLevels.includes(targetLevel)) {
     const availableFeats = FEATS[character.edition].filter(feat =>
         !feat.category.includes("Fighting Style")
@@ -1896,6 +2000,9 @@ function initDice() {
 
 function initEvents() {
   document.addEventListener("click", event => {
+    const helpChipEl = event.target.closest(".help-chip");
+    if (helpChipEl) { event.preventDefault(); showHelpPopover(helpChipEl); return; }
+    if (!event.target.closest(".help-popover")) hideHelpPopover();
     const sheetSection = event.target.closest("[data-sheet-section]");
     if (sheetSection) {
       activeSheetSection = sheetSection.dataset.sheetSection;
@@ -2067,6 +2174,13 @@ function initEvents() {
     }
   });
   form.elements.level.addEventListener("change", () => { populateSubclasses(); renderTalentChoices(); });
+  $("#asi-list").addEventListener("change", event => {
+    const select = event.target.closest("select[data-asi-slot]");
+    if (!select) return;
+    selectedAsi[select.dataset.asiSlot] = selectedAsi[select.dataset.asiSlot] || { one: "", two: "" };
+    selectedAsi[select.dataset.asiSlot][select.dataset.asiPart] = select.value;
+    updatePreview();
+  });
   $("#feat-search").addEventListener("input", () => renderTalentChoices());
   $("#spell-search").addEventListener("input", () => renderSpellList());
   $("#close-inventory").addEventListener("click", closeInventory);
@@ -2112,17 +2226,36 @@ function initEvents() {
   });
   $("#next-step").addEventListener("click", () => setStep(currentStep + 1));
   $("#prev-step").addEventListener("click", () => setStep(currentStep - 1));
+  $("#dismiss-welcome")?.addEventListener("click", () => { try { localStorage.setItem("af-welcome-dismissed", "1"); } catch (e) {} $("#welcome-tip")?.setAttribute("hidden", ""); });
+  showWelcomeIfNeeded();
+  const helpToggle = $("#toggle-help");
+  if (helpToggle) {
+    let helpOff = false;
+    try { helpOff = localStorage.getItem("af-help-off") === "1"; } catch (e) {}
+    const applyHelp = () => {
+      document.body.classList.toggle("help-off", helpOff);
+      helpToggle.textContent = `Beginner help: ${helpOff ? "off" : "on"}`;
+      helpToggle.setAttribute("aria-pressed", String(!helpOff));
+    };
+    applyHelp();
+    helpToggle.addEventListener("click", () => {
+      helpOff = !helpOff;
+      try { localStorage.setItem("af-help-off", helpOff ? "1" : "0"); } catch (e) {}
+      if (helpOff) hideHelpPopover();
+      applyHelp();
+    });
+  }
   $$(".edition-toggle button").forEach(button => button.addEventListener("click", () => {
-    edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
+    edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
   }));
   $("#standard-array").addEventListener("click", () => { [15,14,13,12,10,8].forEach((v, i) => form.elements[ABILITIES[i]].value = v); updatePreview(); });
   form.addEventListener("submit", event => {
     event.preventDefault();
     const data = formData();
-    if (!data.name.trim()) { setStep(1); form.elements.name.focus(); toast("Your character needs a name"); return; }
+    if (!data.name.trim()) { setStep(5); form.elements.name.focus(); toast("Your character needs a name"); return; }
     if (!validateOriginChoices()) { setStep(2); toast("Choose different eligible abilities and complete the origin feat selection"); return; }
     const masteryRequired = weaponMasteryCount(data.className, data.level, data.edition);
-    if (data.weaponMastery.length !== masteryRequired) { setStep(3); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
+    if (data.weaponMastery.length !== masteryRequired) { setStep(1); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
     data.id = activeCharacterId && activeCharacterId !== "demo-lyra" ? activeCharacterId : crypto.randomUUID();
     clearCharacterDeletion(data.id);
     data.updatedAt = Date.now();
