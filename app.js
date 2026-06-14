@@ -1999,6 +1999,60 @@ function renderRolls() {
   ).join("") : `<li><span>No rolls yet</span><strong>—</strong></li>`;
 }
 
+let currentRollContext = null;
+let rollOverlayTimer = null;
+let rollOverlayHideTimer = null;
+// Roll a d20 check/save/skill and show the animated result in place (no page change).
+function rollOnSheet(label, modifier, mode) {
+  mode = mode || "normal";
+  modifier = Number(modifier || 0);
+  let d20s = [Math.floor(Math.random() * 20) + 1];
+  let chosen = d20s[0];
+  if (mode === "advantage" || mode === "disadvantage") {
+    d20s = [Math.floor(Math.random() * 20) + 1, Math.floor(Math.random() * 20) + 1];
+    chosen = mode === "advantage" ? Math.max(...d20s) : Math.min(...d20s);
+  }
+  const total = chosen + modifier;
+  const modeLabel = mode === "advantage" ? " (advantage)" : mode === "disadvantage" ? " (disadvantage)" : "";
+  const detail = `1d20${modifier ? signed(modifier) : ""} [${d20s.join(", ")}${mode !== "normal" ? " → " + chosen : ""}]`;
+  const entry = { total, detail, label: (label || "Roll") + modeLabel, time: Date.now() };
+  rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
+  if ($("#dice-result strong")) { $("#dice-result strong").textContent = total; $("#dice-result p").textContent = `${entry.label} · ${detail}`; }
+  showRollOverlay({ label: label || "Roll", modifier, d20s, chosen, total, mode });
+  return total;
+}
+
+function showRollOverlay(r) {
+  const overlay = $("#roll-overlay");
+  if (!overlay) return;
+  currentRollContext = { label: r.label, modifier: r.modifier };
+  $("#roll-overlay-label").textContent = r.label;
+  const parts = [r.d20s.length > 1 ? `rolled ${r.d20s.join(" & ")} → ${r.chosen}` : "d20"];
+  if (r.modifier) parts.push(signed(r.modifier));
+  if (r.mode === "advantage") parts.push("· advantage");
+  else if (r.mode === "disadvantage") parts.push("· disadvantage");
+  $("#roll-overlay-detail").textContent = parts.join(" ");
+  overlay.hidden = false;
+  overlay.classList.remove("crit", "fumble");
+  const die = $("#roll-die"), num = $("#roll-die-num"), totalEl = $("#roll-total");
+  die.classList.remove("spin"); void die.offsetWidth; die.classList.add("spin");
+  totalEl.textContent = "";
+  clearInterval(rollOverlayTimer);
+  let ticks = 0;
+  rollOverlayTimer = setInterval(() => {
+    num.textContent = Math.floor(Math.random() * 20) + 1;
+    if (++ticks > 11) {
+      clearInterval(rollOverlayTimer);
+      num.textContent = r.chosen;
+      totalEl.textContent = r.total;
+      if (r.chosen === 20) overlay.classList.add("crit");
+      else if (r.chosen === 1) overlay.classList.add("fumble");
+    }
+  }, 45);
+  clearTimeout(rollOverlayHideTimer);
+  rollOverlayHideTimer = setTimeout(() => { overlay.hidden = true; }, 8000);
+}
+
 function saveResourceUsage(character, resourceId, used) {
   const resource = resourceDefinitions(character).find(item => item.id === resourceId);
   if (!resource) return;
@@ -2181,7 +2235,7 @@ function initEvents() {
       });
     }
     const sheetRoll = event.target.closest("[data-sheet-roll]");
-    if (sheetRoll) { const total = roll(Number(sheetRoll.dataset.die || 20), 1, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.sheetRoll); navigate("dice"); toast(`Rolled ${total}`); }
+    if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), "normal"); return; }
   });
   form.addEventListener("input", event => {
     updatePreview();
@@ -2343,7 +2397,12 @@ function initEvents() {
     const die = event.target.closest("[data-die]"); if (!die) return; selectedDie = Number(die.dataset.die); $$(".die").forEach(d => d.classList.toggle("active", d === die));
   });
   $("#roll-selected").addEventListener("click", () => roll(selectedDie, Number($("#dice-count").value), Number($("#dice-mod").value)));
-  $("#quick-roll").addEventListener("click", () => { const total = roll(20, 1, 0, "Quick d20"); toast(`Quick d20: ${total}`); });
+  $("#quick-roll").addEventListener("click", () => rollOnSheet("Quick d20", 0, "normal"));
+  $("#roll-overlay-close")?.addEventListener("click", () => { const ov = $("#roll-overlay"); if (ov) ov.hidden = true; });
+  $("#roll-overlay")?.addEventListener("click", event => {
+    const adv = event.target.closest("[data-roll-mode]");
+    if (adv && currentRollContext) rollOnSheet(currentRollContext.label, currentRollContext.modifier, adv.dataset.rollMode);
+  });
   $("#clear-history").addEventListener("click", () => { rollHistory = []; saveJson(ROLL_KEY, []); renderRolls(); });
   $("#vault-search").addEventListener("input", event => renderCards(event.target.value));
   $("#export-data").addEventListener("click", () => {

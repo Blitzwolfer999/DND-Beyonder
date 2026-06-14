@@ -341,6 +341,19 @@
     </section>
   </div>
 
+  <div class="roll-overlay" id="roll-overlay" role="status" aria-live="polite" hidden>
+    <button type="button" class="roll-overlay-close" id="roll-overlay-close" aria-label="Dismiss">×</button>
+    <div class="roll-main">
+      <div class="roll-die" id="roll-die"><span id="roll-die-num">20</span></div>
+      <div class="roll-info"><strong id="roll-overlay-label">Roll</strong><span id="roll-overlay-detail"></span></div>
+      <div class="roll-total" id="roll-total"></div>
+    </div>
+    <div class="roll-adv">
+      <button type="button" data-roll-mode="advantage">Advantage</button>
+      <button type="button" data-roll-mode="disadvantage">Disadvantage</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="spell-data.js"></script>
   <script src="rules-content.js"></script>

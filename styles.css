@@ -1284,3 +1284,38 @@ body { background: var(--paper); }
 
 /* Page-meta breadcrumb a touch more subtle */
 .page-meta { padding-top: 20px; }
+
+/* ===== In-page roll result overlay (animated d20) ===== */
+.roll-overlay {
+  position: fixed; right: 22px; bottom: 22px; z-index: 80;
+  display: flex; flex-direction: column; gap: 12px;
+  width: 290px; max-width: calc(100vw - 32px); padding: 16px 18px;
+  color: #f2ede3; background: linear-gradient(150deg, #1b2620, #18211d 70%, #221a17);
+  border: 1px solid #33403a; border-radius: 16px; box-shadow: 0 20px 48px rgba(8, 10, 9, .42);
+  animation: roll-in .2s ease;
+}
+.roll-overlay[hidden] { display: none; }
+@keyframes roll-in { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+.roll-overlay-close { position: absolute; top: 7px; right: 10px; border: 0; background: transparent; color: #8a938a; font-size: 18px; line-height: 1; cursor: pointer; }
+.roll-overlay-close:hover { color: #f2ede3; }
+.roll-main { display: flex; align-items: center; gap: 14px; }
+.roll-die {
+  position: relative; flex: 0 0 auto; width: 58px; height: 58px;
+  display: grid; place-items: center; color: var(--gold); font: 700 22px Cinzel, serif;
+  background: radial-gradient(circle at 50% 32%, #2a382f, #161f1a); border: 2px solid var(--gold);
+  clip-path: polygon(50% 1%, 95% 25%, 95% 75%, 50% 99%, 5% 75%, 5% 25%);
+}
+.roll-die.spin { animation: die-spin .56s cubic-bezier(.2, .7, .3, 1); }
+@keyframes die-spin { 0% { transform: rotate(-25deg) scale(.7); } 65% { transform: rotate(370deg) scale(1.14); } 100% { transform: rotate(360deg) scale(1); } }
+.roll-info { flex: 1; min-width: 0; }
+.roll-info strong { display: block; font: 700 14px Cinzel, serif; }
+.roll-info span { display: block; margin-top: 2px; font-size: 12px; color: #9aa39a; }
+.roll-total { flex: 0 0 auto; min-width: 46px; text-align: center; font: 700 34px Cinzel, serif; color: #fff; }
+.roll-adv { display: flex; gap: 8px; }
+.roll-adv button { flex: 1; padding: 7px 10px; font-size: 12px; font-weight: 600; color: var(--gold); background: rgba(185, 138, 62, .08); border: 1px solid var(--gold-dark); border-radius: 9px; cursor: pointer; }
+.roll-adv button:hover { background: rgba(185, 138, 62, .18); }
+.roll-overlay.crit { border-color: #4caf72; }
+.roll-overlay.crit .roll-total { color: #84e3a4; }
+.roll-overlay.fumble { border-color: #c5544e; }
+.roll-overlay.fumble .roll-total { color: #ef918c; }
+@media (max-width: 520px) { .roll-overlay { right: 12px; left: 12px; bottom: 12px; width: auto; } }
