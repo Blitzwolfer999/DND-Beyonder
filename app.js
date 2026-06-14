@@ -987,14 +987,38 @@ function formData() {
   return data;
 }
 
+// Best unarmored AC, accounting for class/subclass Unarmored Defense rules.
+function unarmoredAc(data) {
+  const dex = modifier(data.DEX);
+  let ac = 10 + dex;
+  const subclass = data.customSubclass || data.subclass || "";
+  if (data.className === "Barbarian") ac = Math.max(ac, 10 + dex + modifier(data.CON)); // Unarmored Defense
+  if (data.className === "Monk") ac = Math.max(ac, 10 + dex + modifier(data.WIS)); // Unarmored Defense
+  if (data.className === "Sorcerer" && /Draconic/i.test(subclass)) ac = Math.max(ac, 13 + dex); // Draconic Resilience
+  return ac;
+}
+
+// Extra maximum HP granted by feats/features that scale with level.
+function bonusMaxHp(data) {
+  const level = Number(data.level || 1);
+  const subclass = data.customSubclass || data.subclass || "";
+  const feats = data.feats || [];
+  let bonus = 0;
+  if (feats.includes("Tough")) bonus += level * 2;
+  if (feats.includes("Dwarven Fortitude")) { /* heals on Dodge; no flat max change */ }
+  if (data.className === "Sorcerer" && /Draconic/i.test(subclass)) bonus += level; // Draconic Resilience
+  return bonus;
+}
+
 function derived(data) {
   const cls = RULES.classes[data.className] || RULES.classes.Fighter;
   const level = Number(data.level || 1);
   const con = modifier(data.CON);
+  const baseHp = Math.max(1, cls.hit + con + (level - 1) * (Math.ceil(cls.hit / 2) + 1 + con));
   return {
     prof: proficiency(level),
-    ac: Number(data.acOverride) || 10 + modifier(data.DEX),
-    hp: Number(data.hpOverride) || Math.max(1, cls.hit + con + (level - 1) * (Math.ceil(cls.hit / 2) + 1 + con)),
+    ac: Number(data.acOverride) || unarmoredAc(data),
+    hp: Number(data.hpOverride) || Math.max(1, baseHp + bonusMaxHp(data)),
     initiative: modifier(data.DEX),
     passive: 10 + modifier(data.WIS)
   };
