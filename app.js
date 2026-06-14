@@ -1802,33 +1802,55 @@ function progressionSnapshot(character) {
   return Object.fromEntries(keys.map(name => [name, structuredClone(character[name])]));
 }
 
+let pendingConfirm = null;
+function confirmAction(options) {
+  const opts = options || {};
+  const modal = $("#confirm-modal");
+  if (!modal) { if (opts.onConfirm) opts.onConfirm(); return; }
+  $("#confirm-title").textContent = opts.title || "Are you sure?";
+  $("#confirm-message").textContent = opts.message || "";
+  const ok = $("#confirm-ok");
+  ok.textContent = opts.confirmLabel || "Confirm";
+  ok.classList.toggle("danger", Boolean(opts.danger));
+  pendingConfirm = opts.onConfirm || null;
+  modal.classList.remove("hidden");
+  ok.focus();
+}
+function closeConfirm() { $("#confirm-modal")?.classList.add("hidden"); pendingConfirm = null; }
+
 function delevelCharacter(id) {
   const character = characters.find(item => item.id === id);
   if (!character || character.level <= 1) return;
-  if (!confirm(`Return ${character.name} from level ${character.level} to level ${character.level - 1}? Choices gained at the current level will be rolled back.`)) return;
-  const updated = structuredClone(character);
-  const history = [...(updated.progressionHistory || [])];
-  const last = history.at(-1);
-  if (last?.level === updated.level && last.before) {
-    Object.entries(last.before).forEach(([name, value]) => {
-      if (value === undefined) delete updated[name];
-      else updated[name] = structuredClone(value);
-    });
-    history.pop();
-  } else {
-    updated.level = Math.max(1, Number(updated.level) - 1);
-    const allowed = maxSpellLevel(updated.className, updated.level, updated.edition);
-    updated.spells = (updated.spells || []).filter(spell => Number(typeof spell === "string" ? 0 : spell.level) <= allowed);
-    if (last?.level > updated.level) history.pop();
-  }
-  updated.progressionHistory = history;
-  updated.updatedAt = Date.now();
-  characters[characters.findIndex(item => item.id === id)] = updated;
-  persistCharacters();
-  activeCharacterId = id;
-  renderCards();
-  renderSheet();
-  toast(`${updated.name} returned to level ${updated.level}`);
+  confirmAction({
+    title: "Delevel character?",
+    message: `Return ${character.name} from level ${character.level} to level ${character.level - 1}? Choices gained at the current level will be rolled back.`,
+    confirmLabel: "Delevel",
+    onConfirm: () => {
+      const updated = structuredClone(character);
+      const history = [...(updated.progressionHistory || [])];
+      const last = history.at(-1);
+      if (last?.level === updated.level && last.before) {
+        Object.entries(last.before).forEach(([name, value]) => {
+          if (value === undefined) delete updated[name];
+          else updated[name] = structuredClone(value);
+        });
+        history.pop();
+      } else {
+        updated.level = Math.max(1, Number(updated.level) - 1);
+        const allowed = maxSpellLevel(updated.className, updated.level, updated.edition);
+        updated.spells = (updated.spells || []).filter(spell => Number(typeof spell === "string" ? 0 : spell.level) <= allowed);
+        if (last?.level > updated.level) history.pop();
+      }
+      updated.progressionHistory = history;
+      updated.updatedAt = Date.now();
+      characters[characters.findIndex(item => item.id === id)] = updated;
+      persistCharacters();
+      activeCharacterId = id;
+      renderCards();
+      renderSheet();
+      toast(`${updated.name} returned to level ${updated.level}`);
+    }
+  });
 }
 
 function completeLevelUp(event) {
@@ -2140,13 +2162,22 @@ function initEvents() {
     const levelUp = event.target.closest("[data-level-up]"); if (levelUp && !levelUp.disabled) openLevelUp(levelUp.dataset.levelUp);
     const delevel = event.target.closest("[data-delevel]"); if (delevel && !delevel.disabled) delevelCharacter(delevel.dataset.delevel);
     const del = event.target.closest("[data-delete]");
-    if (del && confirm("Delete this character from your vault on every synchronized device?")) {
-      rememberCharacterDeletion(del.dataset.delete);
-      characters = characters.filter(c => c.id !== del.dataset.delete);
-      persistCharacters();
-      renderCards($("#vault-search").value);
-      renderSheet();
-      toast("Character deleted");
+    if (del) {
+      const deleteId = del.dataset.delete;
+      confirmAction({
+        title: "Delete character?",
+        message: "This removes the character from your vault on every synchronized device.",
+        confirmLabel: "Delete",
+        danger: true,
+        onConfirm: () => {
+          rememberCharacterDeletion(deleteId);
+          characters = characters.filter(c => c.id !== deleteId);
+          persistCharacters();
+          renderCards($("#vault-search").value);
+          renderSheet();
+          toast("Character deleted");
+        }
+      });
     }
     const sheetRoll = event.target.closest("[data-sheet-roll]");
     if (sheetRoll) { const total = roll(Number(sheetRoll.dataset.die || 20), 1, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.sheetRoll); navigate("dice"); toast(`Rolled ${total}`); }
@@ -2199,6 +2230,9 @@ function initEvents() {
   $("#spell-search").addEventListener("input", () => renderSpellList());
   $("#close-inventory").addEventListener("click", closeInventory);
   $("#inventory-modal").addEventListener("click", event => { if (event.target.id === "inventory-modal") closeInventory(); });
+  $("#confirm-ok")?.addEventListener("click", () => { const cb = pendingConfirm; closeConfirm(); if (cb) cb(); });
+  $("#confirm-cancel")?.addEventListener("click", closeConfirm);
+  $("#confirm-modal")?.addEventListener("click", event => { if (event.target.id === "confirm-modal") closeConfirm(); });
   $("#item-search").addEventListener("input", event => renderItemTemplates(event.target.value));
   $("#item-template").addEventListener("change", event => applyItemTemplate(event.target.value));
   $("#save-currency").addEventListener("click", () => {

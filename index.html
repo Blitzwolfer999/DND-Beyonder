@@ -335,6 +335,18 @@
     </section>
   </div>
 
+  <div class="modal-backdrop hidden" id="confirm-modal">
+    <section class="modal confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+      <span class="eyebrow">PLEASE CONFIRM</span>
+      <h2 id="confirm-title">Are you sure?</h2>
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button type="button" class="button ghost" id="confirm-cancel">Cancel</button>
+        <button type="button" class="button primary" id="confirm-ok">Confirm</button>
+      </div>
+    </section>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="spell-data.js"></script>
   <script src="rules-content.js"></script>

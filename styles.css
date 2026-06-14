@@ -1144,3 +1144,8 @@ textarea:focus-visible {
 .class-option:hover { border-color: var(--gold-dark); transform: translateY(-2px); }
 .field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.4; font-weight: 400; }
 .field-hint:empty { display: none; }
+.confirm-modal { max-width: 440px; }
+.confirm-modal p { margin: 6px 0 0; color: var(--ink); line-height: 1.5; }
+.confirm-actions { margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px; }
+.button.danger { border-color: #9c2b2b; background: #9c2b2b; color: #fff; }
+.button.danger:hover { background: #b23636; box-shadow: 0 6px 18px rgba(156, 43, 43, .25); }
