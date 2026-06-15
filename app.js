@@ -2494,7 +2494,7 @@ function showRollOverlay(r) {
   let ticks = 0;
   rollOverlayTimer = setInterval(() => {
     num.textContent = Math.floor(Math.random() * 20) + 1;
-    if (++ticks > 11) {
+    if (++ticks > 14) {
       clearInterval(rollOverlayTimer);
       num.textContent = r.chosen;
       totalEl.textContent = r.total;

@@ -344,7 +344,14 @@
   <div class="roll-overlay" id="roll-overlay" role="status" aria-live="polite" hidden>
     <button type="button" class="roll-overlay-close" id="roll-overlay-close" aria-label="Dismiss">×</button>
     <div class="roll-main">
-      <div class="roll-die" id="roll-die"><span id="roll-die-num">20</span></div>
+      <div class="roll-die" id="roll-die">
+        <svg class="d20-svg" viewBox="0 0 100 100" aria-hidden="true">
+          <polygon class="d20-edge" points="50,4 92,28 92,72 50,96 8,72 8,28"/>
+          <polygon class="d20-face" points="50,34 74,64 26,64"/>
+          <path class="d20-spoke" d="M50,34 L50,4 M50,34 L92,28 M50,34 L8,28 M74,64 L92,72 M74,64 L50,96 M26,64 L8,72 M26,64 L50,96"/>
+        </svg>
+        <span id="roll-die-num">20</span>
+      </div>
       <div class="roll-info"><strong id="roll-overlay-label">Roll</strong><span id="roll-overlay-detail"></span></div>
       <div class="roll-total" id="roll-total"></div>
     </div>

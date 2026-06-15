@@ -1304,14 +1304,24 @@ body { background: var(--paper); }
 .roll-overlay-close { position: absolute; top: 7px; right: 10px; border: 0; background: transparent; color: #8a938a; font-size: 18px; line-height: 1; cursor: pointer; }
 .roll-overlay-close:hover { color: #f2ede3; }
 .roll-main { display: flex; align-items: center; gap: 14px; }
-.roll-die {
-  position: relative; flex: 0 0 auto; width: 58px; height: 58px;
-  display: grid; place-items: center; color: var(--gold); font: 700 22px Cinzel, serif;
-  background: radial-gradient(circle at 50% 32%, #2a382f, #161f1a); border: 2px solid var(--gold);
-  clip-path: polygon(50% 1%, 95% 25%, 95% 75%, 50% 99%, 5% 75%, 5% 25%);
+.roll-die { position: relative; flex: 0 0 auto; width: 62px; height: 62px; perspective: 460px; }
+.d20-svg { width: 100%; height: 100%; display: block; transform-origin: 50% 52%; }
+.d20-edge { fill: rgba(185, 138, 62, .12); stroke: var(--gold); stroke-width: 3.5; stroke-linejoin: round; }
+.d20-face { fill: rgba(185, 138, 62, .26); stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; }
+.d20-spoke { stroke: rgba(232, 200, 130, .5); stroke-width: 1.4; fill: none; }
+.roll-die #roll-die-num { position: absolute; inset: 0; display: grid; place-items: center; padding-top: 7px; color: #fff8e8; font: 700 19px Cinzel, serif; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
+.roll-die.spin .d20-svg { animation: die-tumble .74s cubic-bezier(.2, .68, .25, 1); }
+@keyframes die-tumble {
+  0%   { transform: scale(.45) rotate3d(1, 1, .2, -60deg); opacity: .35; }
+  18%  { transform: scale(1.34) rotate3d(1, 1, 1, 210deg); opacity: 1; }
+  46%  { transform: scale(1.12) rotate3d(.4, 1, 1, 440deg); }
+  74%  { transform: scale(.97) rotate3d(1, .3, 1, 620deg); }
+  100% { transform: scale(1) rotate3d(0, 0, 1, 720deg); }
 }
-.roll-die.spin { animation: die-spin .56s cubic-bezier(.2, .7, .3, 1); }
-@keyframes die-spin { 0% { transform: rotate(-25deg) scale(.7); } 65% { transform: rotate(370deg) scale(1.14); } 100% { transform: rotate(360deg) scale(1); } }
+.roll-overlay.crit .d20-edge, .roll-overlay.crit .d20-face { stroke: #84e3a4; }
+.roll-overlay.crit .d20-edge, .roll-overlay.crit .d20-face { fill: rgba(76, 175, 114, .2); }
+.roll-overlay.fumble .d20-edge, .roll-overlay.fumble .d20-face { stroke: #ef918c; }
+.roll-overlay.fumble .d20-edge, .roll-overlay.fumble .d20-face { fill: rgba(197, 84, 78, .2); }
 .roll-info { flex: 1; min-width: 0; }
 .roll-info strong { display: block; font: 700 14px Cinzel, serif; }
 .roll-info span { display: block; margin-top: 2px; font-size: 12px; color: #9aa39a; }
