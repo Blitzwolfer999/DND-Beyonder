@@ -551,11 +551,28 @@ function updateOriginDescriptions() {
   if (bd) bd.textContent = backgroundDescription($("#background-select")?.value || "");
 }
 
+// Sort source labels with core rulebooks first, then alphabetically.
+function sourceSort(a, b) {
+  const rank = s => /player's handbook|core 5/i.test(s) ? 0 : 1;
+  return rank(a) - rank(b) || a.localeCompare(b);
+}
+// Build <optgroup>-grouped <option>s, one group per source book.
+function groupedSelectOptions(entries) {
+  const groups = {}, order = [];
+  entries.forEach(item => {
+    const src = item.source || "Other";
+    if (!groups[src]) { groups[src] = []; order.push(src); }
+    groups[src].push(item);
+  });
+  order.sort(sourceSort);
+  return order.map(src =>
+    `<optgroup label="${escapeHtml(src)}">${groups[src].slice().sort((a, b) => a.name.localeCompare(b.name)).map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}</optgroup>`
+  ).join("");
+}
+
 function populateRules(savedCharacter = null) {
-  $("#species-select").innerHTML = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014])
-    .map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
-  $("#background-select").innerHTML = customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014])
-    .map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
+  $("#species-select").innerHTML = groupedSelectOptions(customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]));
+  $("#background-select").innerHTML = groupedSelectOptions(customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]));
   $("#class-grid").innerHTML = Object.entries(RULES.classes).map(([name, data]) =>
     `<button type="button" class="class-option ${name === selectedClass ? "selected" : ""}" data-class="${name}"><span>${data.icon}</span><strong>${name}</strong>${data.origin ? `<small>${data.origin}</small>` : ""}</button>`
   ).join("");
@@ -1030,10 +1047,8 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (currentOriginFeat && !feats.some(feat => feat.name === currentOriginFeat) && (!featQuery || currentOriginFeat.toLowerCase().includes(featQuery))) {
     feats.unshift({ name: currentOriginFeat, category: "Origin", source: edition === "2024" ? "Background" : "Species" });
   }
-  $("#feat-guidance").textContent = edition === "2014"
-    ? `${FEATS[edition].length} 5e feat options filtered by level prerequisites.`
-    : `${FEATS[edition].length} 5.5e and expanded feat options grouped by level category.`;
-  $("#feat-list").innerHTML = feats.map(feat => {
+  $("#feat-guidance").textContent = `${FEATS[edition].length} ${edition === "2014" ? "5e" : "5.5e and expanded"} feat options, grouped by source.`;
+  const renderFeat = feat => {
     const isOriginFeat = feat.name === currentOriginFeat;
     const eligible = isOriginFeat || featEligible(feat, level, selectedClass, edition);
     if (!eligible) selectedFeatNames.delete(feat.name);
@@ -1043,9 +1058,19 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
     if (selectedAbility) selectedFeatAbilities[feat.name] = selectedAbility;
     return `<article class="choice-option ${eligible ? "" : "locked"}"><label>
       <input type="checkbox" name="feats" value="${escapeHtml(feat.name)}" ${selectedFeatNames.has(feat.name) || isOriginFeat ? "checked" : ""} ${eligible && !isOriginFeat ? "" : "disabled"}>
-      <span><strong>${escapeHtml(feat.name)}</strong><small>${escapeHtml(feat.category)}${feat.source ? ` · ${escapeHtml(feat.source)}` : ""}${feat.prerequisite ? ` · ${escapeHtml(feat.prerequisite)}` : ""}${eligible ? "" : " · unavailable at this level"}</small></span>
+      <span><strong>${escapeHtml(feat.name)}</strong><small>${escapeHtml(feat.category)}${feat.prerequisite ? ` · ${escapeHtml(feat.prerequisite)}` : ""}${eligible ? "" : " · unavailable at this level"}</small></span>
     </label>${abilityChoices.length ? `<label class="feat-ability-choice">+1 ability<select data-feat-ability="${escapeHtml(feat.name)}">${abilityOptions(abilityChoices, selectedAbility)}</select></label>` : ""}${ruleDetails(description)}</article>`;
-  }).join("");
+  };
+  const featGroups = {}, featOrder = [];
+  feats.forEach(feat => {
+    const src = feat.source || (edition === "2024" ? "Player's Handbook (2024)" : "Player's Handbook (2014)");
+    if (!featGroups[src]) { featGroups[src] = []; featOrder.push(src); }
+    featGroups[src].push(feat);
+  });
+  featOrder.sort(sourceSort);
+  $("#feat-list").innerHTML = featOrder.map(src =>
+    `<div class="choice-group"><div class="choice-group-label">${escapeHtml(src)}</div>${featGroups[src].slice().sort((a, b) => a.name.localeCompare(b.name)).map(renderFeat).join("")}</div>`
+  ).join("") || `<p>No feats match that search.</p>`;
 
   const selectedSubclass = $("#subclass-select")?.value || "";
   const lists = spellListsFor(edition, selectedClass, selectedSubclass);
@@ -1073,15 +1098,25 @@ function renderSpellList() {
     if (!query && Number(spellLevel) !== selectedSpellLevel) return;
     spells.filter(name => !query || name.toLowerCase().includes(query)).forEach(name => rows.push({ name, level: Number(spellLevel) }));
   });
-  $("#spell-list").innerHTML = rows.length ? rows.map(spell => {
+  const renderSpell = spell => {
     const locked = spell.level > allowed;
     const source = EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || "";
     const description = spellDescription(spell.name, edition, source);
     return `<article class="choice-option ${locked ? "locked" : ""}"><label>
       <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${selectedSpellNames.has(spell.name) ? "checked" : ""} ${locked ? "disabled" : ""}>
-      <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${source ? ` · ${escapeHtml(source)}` : ""}${locked ? ` · available when this spell level is reached` : ""}</small></span>
+      <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${locked ? ` · available when this spell level is reached` : ""}</small></span>
     </label>${ruleDetails(description)}</article>`;
-  }).join("") : `<p>No spells match that search.</p>`;
+  };
+  const spellGroups = {}, spellOrder = [];
+  rows.forEach(spell => {
+    const src = EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || (edition === "2024" ? "Player's Handbook (2024)" : "Player's Handbook (2014)");
+    if (!spellGroups[src]) { spellGroups[src] = []; spellOrder.push(src); }
+    spellGroups[src].push(spell);
+  });
+  spellOrder.sort(sourceSort);
+  $("#spell-list").innerHTML = rows.length ? spellOrder.map(src =>
+    `<div class="choice-group"><div class="choice-group-label">${escapeHtml(src)}</div>${spellGroups[src].slice().sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name)).map(renderSpell).join("")}</div>`
+  ).join("") : `<p>No spells match that search.</p>`;
 }
 
 function renderAsiChoices() {

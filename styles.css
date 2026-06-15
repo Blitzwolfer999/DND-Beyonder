@@ -1324,3 +1324,13 @@ body { background: var(--paper); }
 .roll-overlay.fumble { border-color: #c5544e; }
 .roll-overlay.fumble .roll-total { color: #ef918c; }
 @media (max-width: 520px) { .roll-overlay { right: 12px; left: 12px; bottom: 12px; width: auto; } }
+
+/* ===== Source-grouped choice lists (feats / spells) ===== */
+.choice-group + .choice-group { margin-top: 10px; }
+.choice-group-label {
+  position: sticky; top: 0; z-index: 1;
+  margin: 0 0 7px; padding: 7px 2px 6px;
+  font: 700 11px/1.2 "DM Sans", sans-serif; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--gold-dark); background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.choice-group .choice-option { margin-bottom: 6px; }
