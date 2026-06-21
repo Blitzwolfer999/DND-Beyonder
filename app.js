@@ -110,6 +110,101 @@ const SUBCLASS_CHOICE_RULES = {
     { key: "superiorDefense", label: "Superior Hunter's Defense", level: 15, editions: ["2014"], options: ["Evasion", "Stand Against the Tide", "Uncanny Dodge"] }
   ]
 };
+const QUICK_BUILD_PROFILES = {
+  Barbarian: {
+    role: "Tough front-line warrior", tagline: "Charge into danger, shrug off hits, and hit back hard.",
+    abilities: ["STR", "CON", "DEX", "WIS", "CHA", "INT"], skills: ["Athletics", "Perception", "Survival", "Intimidation"],
+    backgrounds: { 2014: "Outlander", 2024: "Soldier" }, equipment: ["Greataxe", "Handaxe", "Handaxe", "Backpack"],
+    masteries: ["Greataxe", "Handaxe"]
+  },
+  Bard: {
+    role: "Supportive magical expert", tagline: "Inspire allies, solve problems, and always have a clever spell.",
+    abilities: ["CHA", "DEX", "CON", "WIS", "INT", "STR"], skills: ["Persuasion", "Performance", "Insight", "Deception"],
+    backgrounds: { 2014: "Entertainer", 2024: "Entertainer" }, equipment: ["Rapier", "Leather Armor", "Dagger", "Backpack"],
+    spells: ["Vicious Mockery", "Mage Hand", "Healing Word", "Dissonant Whispers", "Faerie Fire", "Thunderwave"]
+  },
+  Cleric: {
+    role: "Armored divine spellcaster", tagline: "Protect the party, restore allies, and call down divine power.",
+    abilities: ["WIS", "CON", "STR", "DEX", "CHA", "INT"], skills: ["Insight", "Medicine", "Religion", "Persuasion"],
+    backgrounds: { 2014: "Acolyte", 2024: "Acolyte" }, equipment: ["Scale Mail", "Shield", "Mace", "Light Crossbow", "Backpack"],
+    spells: ["Guidance", "Sacred Flame", "Thaumaturgy", "Bless", "Cure Wounds", "Guiding Bolt", "Healing Word"]
+  },
+  Druid: {
+    role: "Nature spellcaster and shapeshifter", tagline: "Control the battlefield, heal friends, and wield primal magic.",
+    abilities: ["WIS", "CON", "DEX", "INT", "CHA", "STR"], skills: ["Nature", "Perception", "Animal Handling", "Insight"],
+    backgrounds: { 2014: "Hermit", 2024: "Guide" }, equipment: ["Leather Armor", "Shield", "Scimitar", "Backpack"],
+    spells: ["Guidance", "Produce Flame", "Shillelagh", "Entangle", "Faerie Fire", "Goodberry", "Healing Word"]
+  },
+  Fighter: {
+    role: "Reliable weapons specialist", tagline: "Master weapons, wear sturdy armor, and thrive in every battle.",
+    abilities: ["STR", "CON", "DEX", "WIS", "INT", "CHA"], skills: ["Athletics", "Perception", "Insight", "Survival"],
+    backgrounds: { 2014: "Soldier", 2024: "Soldier" }, equipment: ["Chain Mail", "Shield", "Longsword", "Light Crossbow", "Backpack"],
+    fightingStyle: "Defense", masteries: ["Longsword", "Light Crossbow", "Javelin"]
+  },
+  Monk: {
+    role: "Fast unarmored martial artist", tagline: "Move quickly, strike precisely, and turn discipline into defense.",
+    abilities: ["DEX", "WIS", "CON", "STR", "INT", "CHA"], skills: ["Acrobatics", "Stealth", "Insight", "Athletics"],
+    backgrounds: { 2014: "Hermit", 2024: "Guide" }, equipment: ["Quarterstaff", "Dart", "Backpack"]
+  },
+  Paladin: {
+    role: "Protective holy warrior", tagline: "Stand beside your allies with armor, healing, and radiant magic.",
+    abilities: ["STR", "CHA", "CON", "WIS", "DEX", "INT"], skills: ["Athletics", "Persuasion", "Insight", "Intimidation"],
+    backgrounds: { 2014: "Noble", 2024: "Noble" }, equipment: ["Chain Mail", "Shield", "Longsword", "Javelin", "Backpack"],
+    masteries: ["Longsword", "Javelin"], spells: ["Bless", "Cure Wounds", "Divine Favor", "Shield of Faith"]
+  },
+  Ranger: {
+    role: "Mobile wilderness warrior", tagline: "Scout ahead, track danger, and fight effectively at range.",
+    abilities: ["DEX", "WIS", "CON", "STR", "INT", "CHA"], skills: ["Perception", "Stealth", "Survival", "Nature"],
+    backgrounds: { 2014: "Outlander", 2024: "Guide" }, equipment: ["Studded Leather Armor", "Longbow", "Shortsword", "Shortsword", "Backpack"],
+    masteries: ["Longbow", "Shortsword"], spells: ["Cure Wounds", "Ensnaring Strike", "Goodberry", "Hunter's Mark"]
+  },
+  Rogue: {
+    role: "Precise and skillful expert", tagline: "Sneak, investigate, and land one devastating attack at the right moment.",
+    abilities: ["DEX", "INT", "CON", "WIS", "CHA", "STR"], skills: ["Stealth", "Investigation", "Perception", "Sleight of Hand", "Deception"],
+    backgrounds: { 2014: "Criminal", 2024: "Criminal" }, equipment: ["Leather Armor", "Rapier", "Shortbow", "Dagger", "Dagger", "Backpack"],
+    masteries: ["Rapier", "Shortbow"]
+  },
+  Sorcerer: {
+    role: "Instinctive arcane spellcaster", tagline: "Unleash powerful magic through raw talent and personality.",
+    abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Arcana", "Persuasion", "Deception", "Insight"],
+    backgrounds: { 2014: "Charlatan", 2024: "Charlatan" }, equipment: ["Light Crossbow", "Dagger", "Backpack"],
+    spells: ["Fire Bolt", "Mage Hand", "Minor Illusion", "Prestidigitation", "Magic Missile", "Shield"]
+  },
+  Warlock: {
+    role: "Occult spellcaster", tagline: "Mix dependable magical attacks with strange gifts from a patron.",
+    abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Arcana", "Deception", "Investigation", "Intimidation"],
+    backgrounds: { 2014: "Charlatan", 2024: "Charlatan" }, equipment: ["Leather Armor", "Light Crossbow", "Dagger", "Backpack"],
+    spells: ["Eldritch Blast", "Mage Hand", "Armor of Agathys", "Hex"]
+  },
+  Wizard: {
+    role: "Versatile scholarly spellcaster", tagline: "Prepare the right magical tool for almost any problem.",
+    abilities: ["INT", "CON", "DEX", "WIS", "CHA", "STR"], skills: ["Arcana", "Investigation", "History", "Insight"],
+    backgrounds: { 2014: "Sage", 2024: "Sage" }, equipment: ["Quarterstaff", "Dagger", "Book", "Backpack"],
+    spells: ["Fire Bolt", "Mage Hand", "Prestidigitation", "Detect Magic", "Mage Armor", "Magic Missile", "Shield", "Sleep", "Thunderwave"]
+  },
+  Artificer: {
+    role: "Inventive magical specialist", tagline: "Support the party with tools, clever magic, and durable equipment.",
+    abilities: ["INT", "CON", "DEX", "WIS", "CHA", "STR"], skills: ["Arcana", "Investigation", "Perception", "Sleight of Hand"],
+    backgrounds: { 2014: "Sage", 2024: "Artisan" }, equipment: ["Scale Mail", "Shield", "Light Crossbow", "Dagger", "Backpack"],
+    spells: ["Guidance", "Fire Bolt", "Cure Wounds", "Faerie Fire", "Grease"]
+  },
+  "Blood Hunter": {
+    role: "Risk-taking monster hunter", tagline: "Track unnatural threats and trade vitality for specialized combat power.",
+    abilities: ["DEX", "INT", "CON", "WIS", "STR", "CHA"], skills: ["Investigation", "Survival", "Arcana", "Athletics"],
+    backgrounds: { 2014: "Haunted One", 2024: "Criminal" }, equipment: ["Studded Leather Armor", "Longbow", "Shortsword", "Dagger", "Backpack"]
+  }
+};
+const QUICK_SPELL_COUNTS = {
+  Bard: { 0: 2, 1: 4 }, Cleric: { 0: 3, 1: 4 }, Druid: { 0: 2, 1: 4 },
+  Paladin: { 0: 0, 1: 2 }, Ranger: { 0: 0, 1: 2 }, Sorcerer: { 0: 4, 1: 2 },
+  Warlock: { 0: 2, 1: 2 }, Wizard: { 0: 3, 1: 6 }, Artificer: { 0: 2, 1: 3 }
+};
+const QUICK_NAMES = {
+  Aasimar: ["Seraphine", "Valen", "Astra"], Dragonborn: ["Arjhan", "Kava", "Rhogar"], Dwarf: ["Brynja", "Dain", "Torga"],
+  Elf: ["Aelar", "Lia", "Thalion"], Gnome: ["Fizzwick", "Nissa", "Wrenn"], Goliath: ["Korr", "Nalla", "Vimak"],
+  Halfling: ["Bree", "Milo", "Roscoe"], Human: ["Elara", "Garrick", "Rowan"], Orc: ["Dren", "Morga", "Thokk"],
+  Tiefling: ["Ash", "Hope", "Mordai"]
+};
 const CONDITIONS = ["Blinded", "Charmed", "Deafened", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Exhaustion"];
 const STORAGE_KEY = "arcanaForge.characters.v1";
 const PROFILE_KEY = "arcanaForge.profile.v1";
@@ -130,6 +225,8 @@ let levelingCharacterId = null;
 let inventoryCharacterId = null;
 let activeCharacterId = null;
 let activeSheetSection = "overview";
+let quickStep = 1;
+let quickClass = "Fighter";
 let drawing = false;
 let drawEnabled = false;
 let portraitData = "";
@@ -579,6 +676,340 @@ function populateRules(savedCharacter = null) {
   populateSubclasses();
   renderOriginRules(savedCharacter);
   renderTalentChoices();
+}
+
+function quickAbilityScores(className) {
+  const order = QUICK_BUILD_PROFILES[className]?.abilities || ABILITIES;
+  const scores = {};
+  [15, 14, 13, 12, 10, 8].forEach((score, index) => { scores[order[index]] = score; });
+  return Object.fromEntries(ABILITIES.map(ability => [ability, scores[ability] || 10]));
+}
+
+function quickOrigin(className, species, background) {
+  const profile = QUICK_BUILD_PROFILES[className];
+  const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
+  if (edition === "2014") {
+    const rule = SPECIES_RULES_2014[species] || { variants: [flexibleSpeciesVariant()] };
+    const variant = rule.variants[0];
+    Object.entries(variant.bonuses || {}).forEach(([ability, amount]) => { bonuses[ability] += Number(amount); });
+    const chosen = [];
+    (variant.choices || []).forEach(choice => {
+      for (let index = 0; index < choice.count; index += 1) {
+        const ability = profile.abilities.find(candidate =>
+          !choice.exclude?.includes(candidate) && (!choice.distinct || !chosen.includes(candidate))
+        );
+        if (ability) {
+          bonuses[ability] += Number(choice.amount);
+          chosen.push(ability);
+        }
+      }
+    });
+    return {
+      originBonuses: bonuses,
+      speciesVariant: variant.name,
+      originFeat: variant.featChoice ? "Tough" : "",
+      originFeatChoice: variant.featChoice ? "Tough" : ""
+    };
+  }
+  const rule = BACKGROUND_RULES_2024[background] || {
+    abilities: profile.abilities.slice(0, 3),
+    feat: "Skilled"
+  };
+  const primary = profile.abilities.find(ability => rule.abilities.includes(ability)) || rule.abilities[0];
+  const secondary = profile.abilities.find(ability => rule.abilities.includes(ability) && ability !== primary)
+    || rule.abilities.find(ability => ability !== primary);
+  bonuses[primary] += 2;
+  if (secondary) bonuses[secondary] += 1;
+  return {
+    originBonuses: bonuses,
+    backgroundAbilityMode: "split",
+    backgroundPrimary: primary,
+    backgroundSecondary: secondary,
+    originFeat: rule.feat || "Skilled",
+    originFeatChoice: rule.feat ? "" : "Skilled"
+  };
+}
+
+function quickSkillChoices(className, background) {
+  const profile = QUICK_BUILD_PROFILES[className];
+  const backgroundSkills = [...new Set(BACKGROUND_SKILLS[background] || profile.skills.slice(-2))].slice(0, 2);
+  while (backgroundSkills.length < 2) {
+    const fallback = Object.keys(SKILLS).find(skill => !backgroundSkills.includes(skill));
+    backgroundSkills.push(fallback);
+  }
+  const rule = classSkillRuleAtLevel(className, 1, edition);
+  const preferred = profile.skills.filter(skill => rule.options.includes(skill) && !backgroundSkills.includes(skill));
+  const remaining = rule.options.filter(skill => !backgroundSkills.includes(skill) && !preferred.includes(skill));
+  const skillProficiencies = [...preferred, ...remaining].slice(0, rule.count);
+  const expertiseCount = expertiseCountAtLevel(className, 1, edition);
+  return {
+    backgroundSkills,
+    skillProficiencies,
+    expertise: [...skillProficiencies, ...backgroundSkills].slice(0, expertiseCount)
+  };
+}
+
+function quickSpellChoices(className) {
+  const lists = spellListsFor(edition, className) || {};
+  const profile = QUICK_BUILD_PROFILES[className];
+  const counts = { ...(QUICK_SPELL_COUNTS[className] || {}) };
+  if (edition === "2014" && ["Paladin", "Ranger"].includes(className)) counts[1] = 0;
+  const chosen = [];
+  [0, 1].forEach(level => {
+    const available = lists[level] || [];
+    const preferred = (profile.spells || []).filter(name => available.includes(name));
+    [...preferred, ...available].filter((name, index, names) => names.indexOf(name) === index)
+      .slice(0, Number(counts[level] || 0))
+      .forEach(name => chosen.push({ name, level }));
+  });
+  return chosen;
+}
+
+function quickInventory(className) {
+  const names = [...(QUICK_BUILD_PROFILES[className]?.equipment || []), "Bedroll", "Rations, 1 day"];
+  const entries = new Map();
+  names.forEach(name => {
+    const catalog = EQUIPMENT_CATALOG.find(item => item.name === name)
+      || { name, type: "Adventuring Gear", cost: "", weight: 0, details: "" };
+    if (entries.has(name)) {
+      entries.get(name).quantity += 1;
+      return;
+    }
+    const wearable = /Armor$/.test(catalog.type) || catalog.type === "Shield";
+    entries.set(name, {
+      id: crypto.randomUUID(),
+      name: catalog.name,
+      type: catalog.type,
+      quantity: 1,
+      weight: catalog.weight,
+      cost: catalog.cost,
+      notes: catalog.details,
+      carried: true,
+      equipped: wearable || /Weapon/.test(catalog.type),
+      attuned: false
+    });
+  });
+  return [...entries.values()];
+}
+
+function quickDefaultSubclass(className) {
+  if (subclassLevel(className, edition) > 1) return "";
+  const preferred = {
+    "2014:Cleric": "Life Domain",
+    "2014:Sorcerer": "Draconic Bloodline",
+    "2014:Warlock": "The Fiend"
+  }[`${edition}:${className}`];
+  const options = subclassEntries(className, edition);
+  return options.some(item => item.name === preferred) ? preferred : options[0]?.name || "";
+}
+
+function quickSelections() {
+  const profile = QUICK_BUILD_PROFILES[quickClass];
+  const species = $("#quick-species")?.value || (edition === "2024" ? "Human" : "Human");
+  const background = $("#quick-background")?.value || profile.backgrounds[edition];
+  return { profile, species, background };
+}
+
+function buildQuickCharacter(preview = false) {
+  const { profile, species, background } = quickSelections();
+  const baseAbilities = quickAbilityScores(quickClass);
+  const origin = quickOrigin(quickClass, species, background);
+  const skills = quickSkillChoices(quickClass, background);
+  const subclass = quickDefaultSubclass(quickClass);
+  const finalAbilities = Object.fromEntries(ABILITIES.map(ability => [
+    ability,
+    Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0)
+  ]));
+  const masteryCount = weaponMasteryCount(quickClass, 1, edition);
+  const spells = quickSpellChoices(quickClass);
+  const feats = origin.originFeat ? [origin.originFeat] : [];
+  const character = {
+    id: preview ? "quick-preview" : crypto.randomUUID(),
+    name: $("#quick-name")?.value.trim() || generateQuickName(false),
+    player: $("#quick-player")?.value.trim() || "",
+    pronouns: "",
+    level: 1,
+    edition,
+    species,
+    background,
+    alignment: "Unaligned",
+    campaign: "",
+    className: quickClass,
+    subclass,
+    customSubclass: "",
+    ...finalAbilities,
+    baseAbilities,
+    originBonuses: origin.originBonuses,
+    originFeat: origin.originFeat,
+    originFeatChoice: origin.originFeatChoice,
+    speciesVariant: origin.speciesVariant || "",
+    backgroundAbilityMode: origin.backgroundAbilityMode || "",
+    backgroundPrimary: origin.backgroundPrimary || "",
+    backgroundSecondary: origin.backgroundSecondary || "",
+    feats,
+    featAbilityChoices: {},
+    featBonuses: Object.fromEntries(ABILITIES.map(ability => [ability, 0])),
+    asi: {},
+    asiBonuses: Object.fromEntries(ABILITIES.map(ability => [ability, 0])),
+    skillProficiencies: skills.skillProficiencies,
+    backgroundSkills: skills.backgroundSkills,
+    expertise: skills.expertise,
+    weaponMastery: (profile.masteries || []).slice(0, masteryCount),
+    fightingStyle: quickClass === "Fighter" ? profile.fightingStyle || "Defense" : "",
+    fightingStyles: [],
+    divineOrder: edition === "2024" && quickClass === "Cleric" ? "Protector" : "",
+    primalOrder: edition === "2024" && quickClass === "Druid" ? "Magician" : "",
+    invocations: edition === "2024" && quickClass === "Warlock" ? ["Pact of the Tome"] : [],
+    subclassChoices: subclass === "Draconic Bloodline" ? { draconicAncestry: "Fire" } : {},
+    spells,
+    customSpells: "",
+    customFeats: "",
+    inventory: quickInventory(quickClass),
+    currency: { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 },
+    portrait: "",
+    backstory: `${profile.tagline} This quick-build character is ready to play and can be fully customized from the character sheet.`,
+    acOverride: "",
+    hpOverride: "",
+    resourceUsage: {},
+    conditions: [],
+    progressionHistory: [],
+    quickBuilt: true,
+    updatedAt: Date.now()
+  };
+  character.currentHp = derived(character).hp;
+  return character;
+}
+
+function renderQuickClasses() {
+  const container = $("#quick-class-grid");
+  if (!container) return;
+  container.innerHTML = Object.entries(RULES.classes).map(([name, data]) => {
+    const profile = QUICK_BUILD_PROFILES[name];
+    return `<button type="button" class="quick-class-card ${name === quickClass ? "selected" : ""}" data-quick-class="${escapeHtml(name)}">
+      <span class="quick-class-icon">${data.icon}</span>
+      <span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(profile.role)}</small><em>${escapeHtml(profile.tagline)}</em></span>
+      <b aria-hidden="true">✓</b>
+    </button>`;
+  }).join("");
+}
+
+function renderQuickOrigin(resetBackground = false) {
+  const speciesSelect = $("#quick-species");
+  const backgroundSelect = $("#quick-background");
+  if (!speciesSelect || !backgroundSelect) return;
+  const speciesValue = speciesSelect.value || "Human";
+  const preferredBackground = QUICK_BUILD_PROFILES[quickClass].backgrounds[edition];
+  const backgroundValue = resetBackground ? preferredBackground : backgroundSelect.value || preferredBackground;
+  const species = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]);
+  const backgrounds = customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]);
+  speciesSelect.innerHTML = species.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
+  backgroundSelect.innerHTML = backgrounds.map(item =>
+    `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.name === preferredBackground ? " · recommended" : ""}</option>`
+  ).join("");
+  speciesSelect.value = species.some(item => item.name === speciesValue) ? speciesValue : "Human";
+  backgroundSelect.value = backgrounds.some(item => item.name === backgroundValue) ? backgroundValue : backgrounds[0]?.name || "";
+  $("#quick-species-description").textContent = speciesDescription(speciesSelect.value) || "Your species grants traits such as movement, senses, and special abilities.";
+  $("#quick-background-description").textContent = `${backgroundDescription(backgroundSelect.value) || "Your background grants starting skills and origin benefits."}${backgroundSelect.value === preferredBackground ? " Recommended for this class." : ""}`;
+  renderQuickSummary();
+}
+
+function renderQuickSummary() {
+  const summary = $("#quick-summary");
+  if (!summary || !$("#quick-species")?.value || !$("#quick-background")?.value) return;
+  const character = buildQuickCharacter(true);
+  const stats = derived(character);
+  const spellNames = character.spells.map(spell => spell.name);
+  summary.innerHTML = `
+    <div class="quick-summary-title"><span>${RULES.classes[quickClass].icon}</span><div><small>LEVEL 1 ${edition === "2024" ? "5.5e" : "5e"}</small><h3>${escapeHtml(character.species)} ${escapeHtml(quickClass)}</h3><p>${escapeHtml(character.background)} background</p></div></div>
+    <div class="quick-summary-stats">
+      <span><small>AC</small><strong>${stats.ac}</strong></span>
+      <span><small>HP</small><strong>${stats.hp}</strong></span>
+      <span><small>Best ability</small><strong>${QUICK_BUILD_PROFILES[quickClass].abilities[0]} ${character[QUICK_BUILD_PROFILES[quickClass].abilities[0]]}</strong></span>
+    </div>
+    <div class="quick-summary-section"><strong>Automatic ability scores</strong><p>${ABILITIES.map(ability => `${ability} ${character[ability]}`).join(" · ")}</p></div>
+    <div class="quick-summary-section"><strong>Trained skills</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
+    ${spellNames.length ? `<div class="quick-summary-section"><strong>Starting spells</strong><p>${escapeHtml(spellNames.join(", "))}</p></div>` : ""}
+    <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 6).map(item => `${item.quantity > 1 ? `${item.quantity}× ` : ""}${item.name}`).join(", ")}</p></div>
+    <p class="quick-summary-note">Every choice remains editable after creation.</p>`;
+}
+
+function setQuickStep(step) {
+  quickStep = Math.max(1, Math.min(3, step));
+  $$("[data-quick-panel]").forEach(panel => panel.classList.toggle("active", Number(panel.dataset.quickPanel) === quickStep));
+  $$("[data-quick-step]").forEach(button => {
+    const buttonStep = Number(button.dataset.quickStep);
+    button.classList.toggle("active", buttonStep === quickStep);
+    button.classList.toggle("complete", buttonStep < quickStep);
+  });
+  $("#quick-back").style.visibility = quickStep === 1 ? "hidden" : "visible";
+  $("#quick-next").classList.toggle("hidden", quickStep === 3);
+  $("#quick-step-count").textContent = `Step ${quickStep} of 3`;
+  if (quickStep === 2) renderQuickOrigin();
+  if (quickStep === 3) {
+    if (!$("#quick-name").value) generateQuickName(true);
+    renderQuickSummary();
+  }
+}
+
+function initializeQuickBuilder() {
+  quickStep = 1;
+  quickClass = RULES.classes[quickClass] ? quickClass : "Fighter";
+  renderQuickClasses();
+  renderQuickOrigin(true);
+  setQuickStep(1);
+}
+
+function showCreationMethod(method) {
+  const choosing = method === "choose";
+  const quick = method === "quick";
+  const standard = method === "standard";
+  $("#creation-methods").classList.toggle("hidden", !choosing);
+  $("#quick-builder").classList.toggle("hidden", !quick);
+  $("#standard-builder").classList.toggle("hidden", !standard);
+  $("#builder-eyebrow").textContent = choosing ? "CHARACTER CREATOR" : quick ? "BEGINNER QUICK BUILD" : "FULL CHARACTER CREATOR";
+  $("#builder-title").textContent = choosing ? "Build your adventurer" : quick ? "Create a hero in minutes" : "Build every detail";
+  $("#builder-description").textContent = choosing
+    ? "Choose a fast guided build or take full control."
+    : quick ? "Level 1, smart defaults, and no rules expertise required." : "Every choice updates your sheet as you go.";
+  if (quick) initializeQuickBuilder();
+  if (standard) setStep(currentStep);
+}
+
+function generateQuickName(writeToField = true) {
+  const species = $("#quick-species")?.value || "Human";
+  const pool = QUICK_NAMES[species] || ["Arden", "Kael", "Mira", "Rowan", "Tamsin", "Vale"];
+  const name = pool[Math.floor(Math.random() * pool.length)];
+  if (writeToField && $("#quick-name")) $("#quick-name").value = name;
+  return name;
+}
+
+function surpriseQuickBuild() {
+  const classes = Object.keys(RULES.classes);
+  quickClass = classes[Math.floor(Math.random() * classes.length)];
+  renderQuickClasses();
+  renderQuickOrigin(true);
+  const speciesOptions = [...$("#quick-species").options];
+  if (speciesOptions.length) $("#quick-species").value = speciesOptions[Math.floor(Math.random() * speciesOptions.length)].value;
+  generateQuickName(true);
+  renderQuickOrigin();
+  setQuickStep(3);
+}
+
+function createQuickCharacter() {
+  const character = buildQuickCharacter();
+  if (!character.name.trim()) {
+    $("#quick-name").focus();
+    toast("Give your hero a name");
+    return;
+  }
+  clearCharacterDeletion(character.id);
+  characters.unshift(character);
+  activeCharacterId = character.id;
+  persistCharacters();
+  renderCards();
+  renderSheet();
+  navigate("sheet");
+  toast(`${character.name} is ready to adventure`);
 }
 
 function customizationEntries(catalog, fallback, legacyFallback = []) {
@@ -1472,6 +1903,7 @@ function startNewCharacter() {
   populateRules();
   resetPortrait();
   setStep(1);
+  showCreationMethod("choose");
   updatePreview();
 }
 
@@ -1943,6 +2375,7 @@ function editCharacter(id) {
   currentOriginFeat = c.originFeat || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
   selectedAsi = c.asi ? JSON.parse(JSON.stringify(c.asi)) : {};
+  showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
   $("#builder-title").textContent = `Edit ${c.name}`;
   $("#builder-description").textContent = "Adjust any saved detail directly. Use Level Up for guided progression.";
@@ -2544,6 +2977,23 @@ function initDice() {
 
 function initEvents() {
   document.addEventListener("click", event => {
+    const creationMethod = event.target.closest("[data-creation-method]");
+    if (creationMethod) {
+      showCreationMethod(creationMethod.dataset.creationMethod);
+      return;
+    }
+    const quickClassButton = event.target.closest("[data-quick-class]");
+    if (quickClassButton) {
+      quickClass = quickClassButton.dataset.quickClass;
+      renderQuickClasses();
+      renderQuickOrigin(true);
+      return;
+    }
+    const quickStepButton = event.target.closest("[data-quick-step]");
+    if (quickStepButton) {
+      setQuickStep(Number(quickStepButton.dataset.quickStep));
+      return;
+    }
     const helpChipEl = event.target.closest(".help-chip");
     if (helpChipEl) { event.preventDefault(); showHelpPopover(helpChipEl); return; }
     if (!event.target.closest(".help-popover")) hideHelpPopover();
@@ -2805,7 +3255,16 @@ function initEvents() {
   }
   $$(".edition-toggle button").forEach(button => button.addEventListener("click", () => {
     edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
+    if (!$("#quick-builder").classList.contains("hidden")) initializeQuickBuilder();
   }));
+  $("#quick-next").addEventListener("click", () => setQuickStep(quickStep + 1));
+  $("#quick-back").addEventListener("click", () => setQuickStep(quickStep - 1));
+  $("#quick-surprise").addEventListener("click", surpriseQuickBuild);
+  $("#quick-name-generator").addEventListener("click", () => { generateQuickName(true); renderQuickSummary(); });
+  $("#quick-create").addEventListener("click", createQuickCharacter);
+  $("#quick-species").addEventListener("change", renderQuickOrigin);
+  $("#quick-background").addEventListener("change", renderQuickOrigin);
+  $("#quick-name").addEventListener("input", renderQuickSummary);
   $("#standard-array").addEventListener("click", () => { [15,14,13,12,10,8].forEach((v, i) => form.elements[ABILITIES[i]].value = v); updatePreview(); });
   form.addEventListener("submit", event => {
     event.preventDefault();

@@ -90,7 +90,77 @@
           </div>
         </div>
 
-        <div class="builder-layout">
+        <section class="creation-methods" id="creation-methods">
+          <div class="creation-method-heading">
+            <span class="eyebrow">CHOOSE YOUR PATH</span>
+            <h2>How would you like to build?</h2>
+            <p>You can change everything later. Nothing chosen here locks your character in.</p>
+          </div>
+          <div class="creation-method-grid">
+            <button type="button" class="creation-method recommended" data-creation-method="quick">
+              <span class="method-badge">Recommended for new players</span>
+              <span class="method-icon">✦</span>
+              <strong>Quick Build</strong>
+              <small>Choose a class, origin, and name. Smart defaults create a complete level-1 character.</small>
+              <em>Start quick build →</em>
+            </button>
+            <button type="button" class="creation-method" data-creation-method="standard">
+              <span class="method-badge">Full control</span>
+              <span class="method-icon">◇</span>
+              <strong>Full Builder</strong>
+              <small>Choose every proficiency, ability score, spell, feat, and starting option yourself.</small>
+              <em>Open full builder →</em>
+            </button>
+          </div>
+        </section>
+
+        <section class="quick-builder hidden" id="quick-builder">
+          <div class="quick-builder-head">
+            <button type="button" class="text-button" data-creation-method="choose">← Creation methods</button>
+            <div><span class="eyebrow">QUICK BUILD · LEVEL 1</span><h2>Ready, set, start your story</h2><p>Make the inspiring choices. We will handle the rule-heavy ones.</p></div>
+            <button type="button" class="button ghost small" id="quick-surprise">Surprise me</button>
+          </div>
+          <div class="quick-progress" aria-label="Quick build progress">
+            <button type="button" class="active" data-quick-step="1"><span>1</span> Class</button>
+            <button type="button" data-quick-step="2"><span>2</span> Origin</button>
+            <button type="button" data-quick-step="3"><span>3</span> Hero</button>
+          </div>
+
+          <div class="quick-step active" data-quick-panel="1">
+            <div class="quick-step-copy"><span>01</span><div><h3>What sounds fun?</h3><p>Pick the kind of hero you want to play. The short descriptions focus on how each class feels at the table.</p></div></div>
+            <div class="quick-class-grid" id="quick-class-grid"></div>
+          </div>
+
+          <div class="quick-step" data-quick-panel="2">
+            <div class="quick-step-copy"><span>02</span><div><h3>Where did your hero begin?</h3><p>Species describes your fantastic ancestry. Background describes the life you lived before adventuring.</p></div></div>
+            <div class="quick-origin-grid">
+              <label>Species<select id="quick-species"></select><small id="quick-species-description"></small></label>
+              <label>Background<select id="quick-background"></select><small id="quick-background-description"></small></label>
+            </div>
+            <article class="quick-tip"><strong>Why is a background recommended?</strong><p>The recommendation supports your class’s important abilities and provides useful starting skills. You can freely choose another.</p></article>
+          </div>
+
+          <div class="quick-step" data-quick-panel="3">
+            <div class="quick-step-copy"><span>03</span><div><h3>Meet your new hero</h3><p>Name them, review the automatic choices, and start playing. The full editor remains available from the sheet.</p></div></div>
+            <div class="quick-finish-grid">
+              <div class="quick-identity">
+                <label>Character name<input id="quick-name" maxlength="40" placeholder="Enter a name or generate one"></label>
+                <button type="button" class="button ghost small" id="quick-name-generator">Generate a name</button>
+                <label>Player name <small>optional</small><input id="quick-player" maxlength="40" placeholder="Your name"></label>
+                <button type="button" class="button primary" id="quick-create">Create ready-to-play character</button>
+              </div>
+              <article class="quick-summary" id="quick-summary" aria-live="polite"></article>
+            </div>
+          </div>
+
+          <div class="quick-footer">
+            <button type="button" class="button ghost" id="quick-back">Back</button>
+            <span id="quick-step-count">Step 1 of 3</span>
+            <button type="button" class="button primary" id="quick-next">Continue</button>
+          </div>
+        </section>
+
+        <div class="builder-layout hidden" id="standard-builder">
           <form class="builder-card" id="character-form">
             <div class="step-tabs">
               <button type="button" class="active" data-step="1"><span>1</span> Class</button>
