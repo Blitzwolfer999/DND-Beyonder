@@ -1,4 +1,4 @@
-name: Deploy Arcana Forge to GitHub Pages
+name: Deploy DND Beyonder to GitHub Pages
 
 on:
   push:

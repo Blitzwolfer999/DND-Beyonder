@@ -3344,7 +3344,7 @@ function initEvents() {
   $("#vault-search").addEventListener("input", event => renderCards(event.target.value));
   $("#export-data").addEventListener("click", () => {
     const blob = new Blob([JSON.stringify({ version: 1, characters }, null, 2)], { type: "application/json" });
-    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "arcana-forge-vault.json"; link.click(); URL.revokeObjectURL(link.href);
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "dnd-beyonder-vault.json"; link.click(); URL.revokeObjectURL(link.href);
   });
   $("#import-data").addEventListener("change", event => {
     const file = event.target.files[0]; if (!file) return;
