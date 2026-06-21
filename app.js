@@ -3466,7 +3466,10 @@ async function handleAccountSubmit(event) {
     ? await cloudClient.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { data: { display_name: displayName } }
+        options: {
+          data: { display_name: displayName },
+          emailRedirectTo: new URL(".", window.location.href).href
+        }
       })
     : await cloudClient.auth.signInWithPassword({ email: values.email, password: values.password });
   $("#account-submit").disabled = false;
