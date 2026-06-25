@@ -216,6 +216,7 @@ let edition = "2014";
 let currentStep = 1;
 let selectedClass = "Fighter";
 let selectedDie = 20;
+let selectedRollMode = "normal";
 let selectedSpellLevel = 0;
 let selectedFeatNames = new Set();
 let selectedFeatAbilities = {};
@@ -3095,13 +3096,28 @@ function resetCanvasFromPortrait() {
   image.src = portraitData;
 }
 
-function roll(sides = selectedDie, count = 1, mod = 0, label = "") {
-  const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
-  const total = rolls.reduce((a, b) => a + b, 0) + Number(mod);
-  const detail = `${count}d${sides}${Number(mod) ? signed(Number(mod)) : ""} [${rolls.join(", ")}]`;
-  const entry = { total, detail, label: label || "Custom roll", time: Date.now() };
+function roll(sides = selectedDie, count = 1, mod = 0, label = "", mode = selectedRollMode) {
+  sides = Math.max(2, Number(sides || 20));
+  count = Math.max(1, Number(count || 1));
+  mod = Number(mod || 0);
+  mode = mode || "normal";
+  let rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+  let chosen = rolls.reduce((sum, value) => sum + value, 0);
+  let modeLabel = "";
+  if (mode === "advantage" || mode === "disadvantage") {
+    rolls = [Math.floor(Math.random() * sides) + 1, Math.floor(Math.random() * sides) + 1];
+    chosen = mode === "advantage" ? Math.max(...rolls) : Math.min(...rolls);
+    count = 1;
+    modeLabel = mode === "advantage" ? " (advantage)" : " (disadvantage)";
+  }
+  const total = chosen + mod;
+  const detail = mode === "normal"
+    ? `${count}d${sides}${mod ? signed(mod) : ""} [${rolls.join(", ")}]`
+    : `2d${sides}${mod ? signed(mod) : ""} [${rolls.join(", ")} → ${chosen}]`;
+  const entry = { total, detail, label: (label || "Custom roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
   $("#dice-result strong").textContent = total; $("#dice-result p").textContent = `${entry.label} · ${detail}`;
+  showRollOverlay({ label: label || `d${sides} roll`, modifier: mod, d20s: rolls, chosen, total, mode, sides, count });
   return total;
 }
 
@@ -3137,9 +3153,10 @@ function rollOnSheet(label, modifier, mode) {
 function showRollOverlay(r) {
   const overlay = $("#roll-overlay");
   if (!overlay) return;
-  currentRollContext = { label: r.label, modifier: r.modifier };
+  const sides = Number(r.sides || 20);
+  currentRollContext = { label: r.label, modifier: r.modifier, sides };
   $("#roll-overlay-label").textContent = r.label;
-  const parts = [r.d20s.length > 1 ? `rolled ${r.d20s.join(" & ")} → ${r.chosen}` : "d20"];
+  const parts = [r.d20s.length > 1 ? `rolled ${r.d20s.join(" & ")} → ${r.chosen}` : `d${sides}`];
   if (r.modifier) parts.push(signed(r.modifier));
   if (r.mode === "advantage") parts.push("· advantage");
   else if (r.mode === "disadvantage") parts.push("· disadvantage");
@@ -3152,12 +3169,12 @@ function showRollOverlay(r) {
   clearInterval(rollOverlayTimer);
   let ticks = 0;
   rollOverlayTimer = setInterval(() => {
-    num.textContent = Math.floor(Math.random() * 20) + 1;
+    num.textContent = Math.floor(Math.random() * sides) + 1;
     if (++ticks > 14) {
       clearInterval(rollOverlayTimer);
       num.textContent = r.chosen;
       totalEl.textContent = r.total;
-      if (r.chosen === 20) overlay.classList.add("crit");
+      if (sides === 20 && r.chosen === 20) overlay.classList.add("crit");
       else if (r.chosen === 1) overlay.classList.add("fumble");
     }
   }, 45);
@@ -3560,12 +3577,19 @@ function initEvents() {
   $("#dice-buttons").addEventListener("click", event => {
     const die = event.target.closest("[data-die]"); if (!die) return; selectedDie = Number(die.dataset.die); $$(".die").forEach(d => d.classList.toggle("active", d === die));
   });
-  $("#roll-selected").addEventListener("click", () => roll(selectedDie, Number($("#dice-count").value), Number($("#dice-mod").value)));
+  $("#dice-mode")?.addEventListener("click", event => {
+    const mode = event.target.closest("[data-dice-mode]");
+    if (!mode) return;
+    selectedRollMode = mode.dataset.diceMode || "normal";
+    $$("[data-dice-mode]", $("#dice-mode")).forEach(button => button.classList.toggle("active", button === mode));
+    $("#dice-count").disabled = selectedRollMode !== "normal";
+  });
+  $("#roll-selected").addEventListener("click", () => roll(selectedDie, Number($("#dice-count").value), Number($("#dice-mod").value), `d${selectedDie} roll`, selectedRollMode));
   $("#quick-roll").addEventListener("click", () => rollOnSheet("Quick d20", 0, "normal"));
   $("#roll-overlay-close")?.addEventListener("click", () => { const ov = $("#roll-overlay"); if (ov) ov.hidden = true; });
   $("#roll-overlay")?.addEventListener("click", event => {
     const adv = event.target.closest("[data-roll-mode]");
-    if (adv && currentRollContext) rollOnSheet(currentRollContext.label, currentRollContext.modifier, adv.dataset.rollMode);
+    if (adv && currentRollContext) roll(currentRollContext.sides || 20, 1, currentRollContext.modifier, currentRollContext.label, adv.dataset.rollMode);
   });
   $("#clear-history").addEventListener("click", () => { rollHistory = []; saveJson(ROLL_KEY, []); renderRolls(); });
   $("#vault-search").addEventListener("input", event => renderCards(event.target.value));

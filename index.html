@@ -293,6 +293,11 @@
           <div class="dice-panel">
             <div class="dice-result" id="dice-result"><small>LAST ROLL</small><strong>—</strong><p>Choose a die to begin</p></div>
             <div class="dice-row" id="dice-buttons"></div>
+            <div class="dice-mode" id="dice-mode" aria-label="Roll mode">
+              <button type="button" class="active" data-dice-mode="normal">Normal</button>
+              <button type="button" data-dice-mode="advantage">Advantage</button>
+              <button type="button" data-dice-mode="disadvantage">Disadvantage</button>
+            </div>
             <div class="roll-controls">
               <label>Dice<input id="dice-count" type="number" min="1" max="20" value="1"></label>
               <label>Modifier<input id="dice-mod" type="number" min="-99" max="99" value="0"></label>
