@@ -3116,9 +3116,33 @@ function roll(sides = selectedDie, count = 1, mod = 0, label = "", mode = select
     : `2d${sides}${mod ? signed(mod) : ""} [${rolls.join(", ")} → ${chosen}]`;
   const entry = { total, detail, label: (label || "Custom roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
-  $("#dice-result strong").textContent = total; $("#dice-result p").textContent = `${entry.label} · ${detail}`;
+  animateDiceResult({ total, sides, label: entry.label, detail });
   showRollOverlay({ label: label || `d${sides} roll`, modifier: mod, d20s: rolls, chosen, total, mode, sides, count });
   return total;
+}
+
+function animateDiceResult({ total, sides, label, detail }) {
+  const panel = $("#dice-result");
+  const number = $("#dice-result strong");
+  const copy = $("#dice-result p");
+  if (!panel || !number || !copy) return;
+  panel.classList.remove("rolling");
+  void panel.offsetWidth;
+  panel.classList.add("rolling");
+  copy.textContent = "Rolling...";
+  let ticks = 0;
+  clearInterval(animateDiceResult.timer);
+  animateDiceResult.timer = setInterval(() => {
+    number.textContent = Math.floor(Math.random() * Math.max(2, Number(sides || 20))) + 1;
+    if (++ticks > 16) {
+      clearInterval(animateDiceResult.timer);
+      number.textContent = total;
+      copy.textContent = `${label} · ${detail}`;
+      panel.classList.remove("rolling");
+      panel.classList.add("landed");
+      setTimeout(() => panel.classList.remove("landed"), 900);
+    }
+  }, 42);
 }
 
 function renderRolls() {
