@@ -306,7 +306,7 @@ function saveCampaignCache() {
   if (cloudUser) saveJson(`${CAMPAIGN_KEY}.${cloudUser.id}`, campaigns);
 }
 function campaignSetupMessage() {
-  return "Campaign tables are not set up yet. Run supabase-schema.sql in the Supabase SQL Editor, then refresh DND Beyonder.";
+  return "Campaign tables are not set up yet. Run supabase-campaign-schema.sql in the Supabase SQL Editor, then refresh DND Beyonder.";
 }
 function isMissingCampaignSchema(error) {
   const message = String(error?.message || error?.details || "").toLowerCase();
