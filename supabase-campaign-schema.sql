@@ -1,6 +1,39 @@
 -- DND Beyonder campaign setup
--- Run this in the Supabase SQL Editor after the base character cloud schema exists.
--- It creates campaign invite tables and lets campaign DMs read/update shared sheets.
+-- Run this in the Supabase SQL Editor for the project used by cloud-config.js.
+-- It creates the base character table if needed, then creates campaign invite tables
+-- and lets campaign DMs read/update shared sheets.
+
+create table if not exists public.characters (
+  id text not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  data jsonb not null,
+  is_deleted boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+alter table public.characters
+add column if not exists is_deleted boolean not null default false;
+
+alter table public.characters enable row level security;
+
+drop policy if exists "Users can insert their characters" on public.characters;
+create policy "Users can insert their characters"
+on public.characters for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete their characters" on public.characters;
+create policy "Users can delete their characters"
+on public.characters for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create index if not exists characters_user_id_idx
+on public.characters (user_id);
+
+create index if not exists characters_user_updated_idx
+on public.characters (user_id, updated_at desc);
 
 create table if not exists public.campaigns (
   id uuid primary key default gen_random_uuid(),
