@@ -12,6 +12,13 @@ add column if not exists is_deleted boolean not null default false;
 
 alter table public.characters enable row level security;
 
+drop policy if exists "Users can read their characters" on public.characters;
+drop policy if exists "Users can read owned or campaign characters" on public.characters;
+drop policy if exists "Users can insert their characters" on public.characters;
+drop policy if exists "Users can update their characters" on public.characters;
+drop policy if exists "Users and campaign DMs can update characters" on public.characters;
+drop policy if exists "Users can delete their characters" on public.characters;
+
 create policy "Users can read their characters"
 on public.characters for select
 to authenticated

@@ -305,6 +305,20 @@ function saveCampaignCache() {
   saveJson(CAMPAIGN_KEY, campaigns);
   if (cloudUser) saveJson(`${CAMPAIGN_KEY}.${cloudUser.id}`, campaigns);
 }
+function campaignSetupMessage() {
+  return "Campaign tables are not set up yet. Run supabase-schema.sql in the Supabase SQL Editor, then refresh DND Beyonder.";
+}
+function isMissingCampaignSchema(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return message.includes("could not find the table")
+    || message.includes("schema cache")
+    || (message.includes("relation") && message.includes("campaign"));
+}
+function reportCampaignError(error, fallbackMessage, showToast = true) {
+  const message = isMissingCampaignSchema(error) ? campaignSetupMessage() : `${fallbackMessage}: ${error.message}`;
+  setCloudStatus(message, true);
+  if (showToast) toast(message);
+}
 function persistCharacters() {
   saveJson(STORAGE_KEY, characters);
   if (cloudUser) saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters);
@@ -397,9 +411,9 @@ async function loadCampaigns() {
     cloudClient.from("campaign_members").select("campaign_id, user_id, role, display_name, joined_at"),
     cloudClient.from("campaign_characters").select("campaign_id, owner_user_id, character_id, nickname, added_at")
   ]);
-  if (campaignResult.error) { setCloudStatus(`Could not load campaigns: ${campaignResult.error.message}`, true); return; }
-  if (memberResult.error) { setCloudStatus(`Could not load campaign members: ${memberResult.error.message}`, true); return; }
-  if (characterResult.error) { setCloudStatus(`Could not load campaign characters: ${characterResult.error.message}`, true); return; }
+  if (campaignResult.error) { reportCampaignError(campaignResult.error, "Could not load campaigns", false); return; }
+  if (memberResult.error) { reportCampaignError(memberResult.error, "Could not load campaign members", false); return; }
+  if (characterResult.error) { reportCampaignError(characterResult.error, "Could not load campaign characters", false); return; }
   campaignMemberships = memberResult.data || [];
   const myCampaignIds = new Set(campaignMemberships.filter(member => member.user_id === cloudUser.id).map(member => member.campaign_id));
   campaigns = (campaignResult.data || [])
@@ -421,7 +435,7 @@ async function createCampaign(name, description) {
     invite_code: inviteCode,
     updated_at: new Date().toISOString()
   }).select("id, owner_id, name, description, invite_code, updated_at").single();
-  if (error) { toast(`Campaign create failed: ${error.message}`); return; }
+  if (error) { reportCampaignError(error, "Campaign create failed"); return; }
   await cloudClient.from("campaign_members").upsert({
     campaign_id: data.id,
     user_id: cloudUser.id,
@@ -436,7 +450,12 @@ async function joinCampaign(inviteCode) {
   if (!cloudUser || !cloudClient) { toast("Sign in to join a campaign"); return; }
   const code = inviteCode.trim().toUpperCase();
   const { data, error } = await cloudClient.from("campaigns").select("id, name").eq("invite_code", code).single();
-  if (error || !data) { toast("Invite code not found"); return; }
+  if (error) {
+    if (isMissingCampaignSchema(error)) reportCampaignError(error, "Could not join campaign");
+    else toast("Invite code not found");
+    return;
+  }
+  if (!data) { toast("Invite code not found"); return; }
   const { error: joinError } = await cloudClient.from("campaign_members").upsert({
     campaign_id: data.id,
     user_id: cloudUser.id,
@@ -460,7 +479,7 @@ async function shareCharacterWithCampaign(campaignId, characterId) {
     character_id: character.id,
     nickname: character.name || ""
   }, { onConflict: "campaign_id,owner_user_id,character_id" });
-  if (error) { toast(`Could not share character: ${error.message}`); return; }
+  if (error) { reportCampaignError(error, "Could not share character"); return; }
   await loadCampaigns();
   toast(`${character.name} joined the campaign`);
 }
@@ -471,7 +490,7 @@ async function removeCampaignCharacter(campaignId, ownerUserId, characterId) {
     .eq("campaign_id", campaignId)
     .eq("owner_user_id", ownerUserId)
     .eq("character_id", characterId);
-  if (error) { toast(`Could not remove character: ${error.message}`); return; }
+  if (error) { reportCampaignError(error, "Could not remove character"); return; }
   await loadCampaigns();
   toast("Character removed from campaign");
 }
