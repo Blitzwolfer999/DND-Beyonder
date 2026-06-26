@@ -211,6 +211,7 @@ const PROFILE_KEY = "arcanaForge.profile.v1";
 const ROLL_KEY = "arcanaForge.rolls.v1";
 const CLOUD_OWNER_KEY = "arcanaForge.cloudOwner.v1";
 const DELETED_KEY = "arcanaForge.deletedCharacters.v1";
+const CAMPAIGN_KEY = "arcanaForge.campaigns.v1";
 
 let edition = "2014";
 let currentStep = 1;
@@ -238,6 +239,10 @@ let cloudClient = null;
 let cloudUser = null;
 let cloudSyncTimer = null;
 let characters = readJson(STORAGE_KEY, []);
+let campaigns = readJson(CAMPAIGN_KEY, []);
+let campaignMemberships = [];
+let campaignCharacters = [];
+let activeCampaignId = "";
 let deletedCharacters = readJson(DELETED_KEY, {});
 let rollHistory = readJson(ROLL_KEY, []);
 localStorage.removeItem("arcanaForge.ownedContent.v1");
@@ -274,6 +279,32 @@ function cloudConfigured() {
   const config = window.ARCANA_CLOUD_CONFIG || {};
   return Boolean(config.supabaseUrl && config.supabasePublishableKey && window.supabase?.createClient);
 }
+function characterOwnerId(character) {
+  return character?.cloudOwnerId || character?.owner_user_id || cloudUser?.id || "";
+}
+function isOwnCharacter(character) {
+  return !cloudUser || !character?.cloudOwnerId || character.cloudOwnerId === cloudUser.id;
+}
+function canControlCharacter(character) {
+  return isOwnCharacter(character) || character?._campaignRole === "dm";
+}
+function ownCharacters() {
+  return characters.filter(character => !isDemoCharacter(character) && isOwnCharacter(character));
+}
+function campaignMember(campaignId, userId = cloudUser?.id) {
+  return campaignMemberships.find(member => member.campaign_id === campaignId && member.user_id === userId);
+}
+function campaignRole(campaignId) {
+  return campaignMember(campaignId)?.role || "";
+}
+function generateInviteCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+}
+function saveCampaignCache() {
+  saveJson(CAMPAIGN_KEY, campaigns);
+  if (cloudUser) saveJson(`${CAMPAIGN_KEY}.${cloudUser.id}`, campaigns);
+}
 function persistCharacters() {
   saveJson(STORAGE_KEY, characters);
   if (cloudUser) saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters);
@@ -284,11 +315,13 @@ function persistCharacters() {
 async function syncCharactersToCloud() {
   if (!cloudUser || !cloudClient) return;
   const activeRows = characters
-    .filter(character => !isDemoCharacter(character) && characterTimestamp(character) > deletionTimestamp(character.id))
+    .filter(character => !isDemoCharacter(character)
+      && characterTimestamp(character) > deletionTimestamp(character.id)
+      && (isOwnCharacter(character) || character._campaignRole === "dm"))
     .map(character => ({
     id: character.id,
-    user_id: cloudUser.id,
-    data: character,
+    user_id: characterOwnerId(character),
+    data: { ...character, cloudOwnerId: characterOwnerId(character), _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
     is_deleted: false,
     updated_at: new Date(character.updatedAt || Date.now()).toISOString()
   }));
@@ -309,26 +342,42 @@ async function syncCharactersToCloud() {
 }
 async function loadCloudCharacters() {
   if (!cloudUser || !cloudClient) return;
-  const { data, error } = await cloudClient.from("characters").select("id, data, updated_at, is_deleted").eq("user_id", cloudUser.id);
+  const { data, error } = await cloudClient.from("characters").select("id, user_id, data, updated_at, is_deleted");
   if (error) { setCloudStatus(`Could not load cloud vault: ${error.message}`, true); return; }
-  const merged = new Map(characters.filter(character => !isDemoCharacter(character)).map(character => [character.id, character]));
+  const sharedLookup = new Map(campaignCharacters.map(link => [`${link.owner_user_id}:${link.character_id}`, link]));
+  const merged = new Map(characters
+    .filter(character => !isDemoCharacter(character) && isOwnCharacter(character))
+    .map(character => [`${characterOwnerId(character)}:${character.id}`, character]));
   (data || []).forEach(row => {
     const remoteTimestamp = Date.parse(row.updated_at) || Number(row.data?.updatedAt || 0);
+    const rowKey = `${row.user_id}:${row.id}`;
+    const shared = sharedLookup.get(rowKey);
+    const campaignId = shared?.campaign_id || "";
+    const role = campaignId ? campaignRole(campaignId) : "";
+    const isOwn = row.user_id === cloudUser.id;
+    if (!isOwn && role !== "dm") return;
     if (row.is_deleted) {
-      const localTimestamp = characterTimestamp(merged.get(row.id));
+      const localTimestamp = characterTimestamp(merged.get(rowKey));
       if (remoteTimestamp >= localTimestamp) {
-        merged.delete(row.id);
-        if (remoteTimestamp > deletionTimestamp(row.id)) deletedCharacters[row.id] = remoteTimestamp;
+        merged.delete(rowKey);
+        if (isOwn && remoteTimestamp > deletionTimestamp(row.id)) deletedCharacters[row.id] = remoteTimestamp;
       } else {
-        delete deletedCharacters[row.id];
+        if (isOwn) delete deletedCharacters[row.id];
       }
       return;
     }
-    const remote = row.data;
-    const local = merged.get(remote.id);
-    if (deletionTimestamp(remote.id) >= remoteTimestamp) return;
-    if (!local || remoteTimestamp >= characterTimestamp(local)) merged.set(remote.id, remote);
-    if (remoteTimestamp > deletionTimestamp(remote.id)) delete deletedCharacters[remote.id];
+    const remote = {
+      ...row.data,
+      id: row.id,
+      cloudOwnerId: row.user_id,
+      _campaignShared: !isOwn,
+      _campaignRole: role || "",
+      _campaignIds: campaignCharacters.filter(link => link.owner_user_id === row.user_id && link.character_id === row.id).map(link => link.campaign_id)
+    };
+    const local = merged.get(rowKey);
+    if (isOwn && deletionTimestamp(remote.id) >= remoteTimestamp) return;
+    if (!local || remoteTimestamp >= characterTimestamp(local)) merged.set(rowKey, remote);
+    if (isOwn && remoteTimestamp > deletionTimestamp(remote.id)) delete deletedCharacters[remote.id];
   });
   characters = [...merged.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
   saveJson(STORAGE_KEY, characters);
@@ -337,6 +386,94 @@ async function loadCloudCharacters() {
   renderCards();
   renderSheet();
   await syncCharactersToCloud();
+}
+async function loadCampaigns() {
+  if (!cloudUser || !cloudClient) {
+    renderCampaigns();
+    return;
+  }
+  const [campaignResult, memberResult, characterResult] = await Promise.all([
+    cloudClient.from("campaigns").select("id, owner_id, name, description, invite_code, updated_at"),
+    cloudClient.from("campaign_members").select("campaign_id, user_id, role, display_name, joined_at"),
+    cloudClient.from("campaign_characters").select("campaign_id, owner_user_id, character_id, nickname, added_at")
+  ]);
+  if (campaignResult.error) { setCloudStatus(`Could not load campaigns: ${campaignResult.error.message}`, true); return; }
+  if (memberResult.error) { setCloudStatus(`Could not load campaign members: ${memberResult.error.message}`, true); return; }
+  if (characterResult.error) { setCloudStatus(`Could not load campaign characters: ${characterResult.error.message}`, true); return; }
+  campaignMemberships = memberResult.data || [];
+  const myCampaignIds = new Set(campaignMemberships.filter(member => member.user_id === cloudUser.id).map(member => member.campaign_id));
+  campaigns = (campaignResult.data || [])
+    .filter(campaign => myCampaignIds.has(campaign.id) || campaign.owner_id === cloudUser.id)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  campaignCharacters = (characterResult.data || []).filter(link => myCampaignIds.has(link.campaign_id));
+  if (!activeCampaignId || !campaigns.some(campaign => campaign.id === activeCampaignId)) activeCampaignId = campaigns[0]?.id || "";
+  saveCampaignCache();
+  renderCampaigns();
+  await loadCloudCharacters();
+}
+async function createCampaign(name, description) {
+  if (!cloudUser || !cloudClient) { toast("Sign in to create a campaign"); return; }
+  const inviteCode = generateInviteCode();
+  const { data, error } = await cloudClient.from("campaigns").insert({
+    owner_id: cloudUser.id,
+    name,
+    description,
+    invite_code: inviteCode,
+    updated_at: new Date().toISOString()
+  }).select("id, owner_id, name, description, invite_code, updated_at").single();
+  if (error) { toast(`Campaign create failed: ${error.message}`); return; }
+  await cloudClient.from("campaign_members").upsert({
+    campaign_id: data.id,
+    user_id: cloudUser.id,
+    role: "dm",
+    display_name: cloudUser.user_metadata?.display_name || cloudUser.email?.split("@")[0] || "DM"
+  }, { onConflict: "campaign_id,user_id" });
+  activeCampaignId = data.id;
+  await loadCampaigns();
+  toast(`${name} created`);
+}
+async function joinCampaign(inviteCode) {
+  if (!cloudUser || !cloudClient) { toast("Sign in to join a campaign"); return; }
+  const code = inviteCode.trim().toUpperCase();
+  const { data, error } = await cloudClient.from("campaigns").select("id, name").eq("invite_code", code).single();
+  if (error || !data) { toast("Invite code not found"); return; }
+  const { error: joinError } = await cloudClient.from("campaign_members").upsert({
+    campaign_id: data.id,
+    user_id: cloudUser.id,
+    role: "player",
+    display_name: cloudUser.user_metadata?.display_name || cloudUser.email?.split("@")[0] || "Player"
+  }, { onConflict: "campaign_id,user_id" });
+  if (joinError) { toast(`Could not join campaign: ${joinError.message}`); return; }
+  activeCampaignId = data.id;
+  await loadCampaigns();
+  toast(`Joined ${data.name}`);
+}
+async function shareCharacterWithCampaign(campaignId, characterId) {
+  const character = characters.find(item => item.id === characterId && isOwnCharacter(item));
+  if (!cloudUser || !cloudClient || !character) return;
+  character.cloudOwnerId = cloudUser.id;
+  character.updatedAt = Date.now();
+  await syncCharactersToCloud();
+  const { error } = await cloudClient.from("campaign_characters").upsert({
+    campaign_id: campaignId,
+    owner_user_id: cloudUser.id,
+    character_id: character.id,
+    nickname: character.name || ""
+  }, { onConflict: "campaign_id,owner_user_id,character_id" });
+  if (error) { toast(`Could not share character: ${error.message}`); return; }
+  await loadCampaigns();
+  toast(`${character.name} joined the campaign`);
+}
+async function removeCampaignCharacter(campaignId, ownerUserId, characterId) {
+  if (!cloudUser || !cloudClient) return;
+  const { error } = await cloudClient.from("campaign_characters")
+    .delete()
+    .eq("campaign_id", campaignId)
+    .eq("owner_user_id", ownerUserId)
+    .eq("character_id", characterId);
+  if (error) { toast(`Could not remove character: ${error.message}`); return; }
+  await loadCampaigns();
+  toast("Character removed from campaign");
 }
 function setCloudStatus(message, isError = false) {
   const status = $("#account-status");
@@ -355,9 +492,11 @@ function prepareUserVault(user) {
   if (!user) return;
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
   const cached = readJson(`${STORAGE_KEY}.${user.id}`, null);
+  const cachedCampaigns = readJson(`${CAMPAIGN_KEY}.${user.id}`, null);
   const cachedDeletions = readJson(`${DELETED_KEY}.${user.id}`, null);
   if (cached !== null) characters = cached;
   else if (priorOwner && priorOwner !== user.id) characters = [];
+  campaigns = cachedCampaigns || [];
   deletedCharacters = cachedDeletions || {};
   localStorage.setItem(CLOUD_OWNER_KEY, user.id);
   saveJson(STORAGE_KEY, characters);
@@ -1989,9 +2128,10 @@ function setStep(step) {
 function navigate(view) {
   $$(".view").forEach(x => x.classList.toggle("active", x.id === `${view}-view`));
   $$(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === view));
-  $("#page-title").textContent = ({ dashboard: "Hall", builder: "Create", sheet: "Character Sheet", dice: "Dice Tray", vault: "Vault" })[view];
+  $("#page-title").textContent = ({ dashboard: "Hall", builder: "Create", sheet: "Character Sheet", dice: "Dice Tray", vault: "Vault", campaigns: "Campaigns" })[view];
   $(".topnav")?.classList.remove("open");
   if (view === "vault" || view === "dashboard") renderCards();
+  if (view === "campaigns") renderCampaigns();
   if (view === "sheet") renderSheet();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -2022,14 +2162,16 @@ function startNewCharacter() {
 
 function characterCard(character, withActions = false) {
   const subclass = classBreakdown(character).map(entry => classSubclassName(character, entry.name)).filter(Boolean).join(" / ") || primaryClassName(character);
+  const canControl = canControlCharacter(character);
+  const canDelete = isOwnCharacter(character);
   return `<article class="character-card" data-character-id="${character.id}">
     <div class="art">${character.portrait ? `<img src="${character.portrait}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}
-      ${withActions ? `<div class="card-actions"><button data-level-up="${character.id}" title="Level up">↑</button><button data-edit="${character.id}" title="Edit">✎</button><button data-delete="${character.id}" title="Delete">×</button></div>` : ""}
+      ${withActions ? `<div class="card-actions">${canControl ? `<button data-level-up="${character.id}" title="Level up">↑</button><button data-edit="${character.id}" title="Edit">✎</button>` : ""}${canDelete ? `<button data-delete="${character.id}" title="Delete">×</button>` : ""}</div>` : ""}
     </div>
     <div class="card-copy">
       <div class="card-meta"><span>${character.edition === "2024" ? "5.5e · 2024" : "5e · 2014"}</span><strong>Level ${characterTotalLevel(character)}</strong></div>
       <h3>${escapeHtml(character.name)}</h3>
-      <p>${escapeHtml(character.species)} ${escapeHtml(classSummary(character))} · ${escapeHtml(subclass)}</p>
+      <p>${character._campaignShared ? "Campaign sheet · " : ""}${escapeHtml(character.species)} ${escapeHtml(classSummary(character))} · ${escapeHtml(subclass)}</p>
       <span class="card-open">Open character <b>→</b></span>
     </div>
   </article>`;
@@ -2041,6 +2183,79 @@ function renderCards(filter = "") {
     `<button class="character-card new-card" data-go="builder"><div><span>＋</span><h3>Forge a new hero</h3><p>Begin a fresh adventure</p></div></button>`;
   $("#vault-characters").innerHTML = matches.length ? matches.map(c => characterCard(c, true)).join("") :
     `<div class="empty-state"><span>✦</span><h2>Your vault is waiting</h2><p>Create your first character to see them here.</p></div>`;
+}
+
+function renderCampaigns() {
+  const warning = $("#campaign-cloud-warning");
+  if (!$("#campaign-list") || !$("#campaign-detail")) return;
+  const signedIn = Boolean(cloudUser && cloudClient);
+  warning?.classList.toggle("hidden", signedIn);
+  $("#create-campaign-form")?.classList.toggle("hidden", !signedIn);
+  $("#join-campaign-form")?.classList.toggle("hidden", !signedIn);
+  if (!signedIn) {
+    $("#campaign-list").innerHTML = `<p>Sign in to see campaigns.</p>`;
+    $("#campaign-detail").innerHTML = `<div class="empty-state"><span>⚑</span><h2>No account connected</h2><p>Campaigns need cloud sync so DMs and players can share sheets.</p></div>`;
+    return;
+  }
+  $("#campaign-list").innerHTML = campaigns.length ? campaigns.map(campaign => {
+    const role = campaignRole(campaign.id) || (campaign.owner_id === cloudUser.id ? "dm" : "player");
+    const count = campaignCharacters.filter(link => link.campaign_id === campaign.id).length;
+    return `<button type="button" class="campaign-card ${campaign.id === activeCampaignId ? "active" : ""}" data-campaign-select="${campaign.id}">
+      <small>${role === "dm" ? "Dungeon Master" : "Player"}</small>
+      <strong>${escapeHtml(campaign.name)}</strong>
+      <span>${count} shared character${count === 1 ? "" : "s"}</span>
+    </button>`;
+  }).join("") : `<p>No campaigns yet. Create one as DM or join with an invite code.</p>`;
+  const campaign = campaigns.find(item => item.id === activeCampaignId);
+  if (!campaign) {
+    $("#campaign-detail").innerHTML = `<div class="empty-state"><span>⚑</span><h2>No campaign selected</h2><p>Create or join a campaign to begin.</p></div>`;
+    return;
+  }
+  const role = campaignRole(campaign.id) || (campaign.owner_id === cloudUser.id ? "dm" : "player");
+  const isDm = role === "dm";
+  const members = campaignMemberships.filter(member => member.campaign_id === campaign.id);
+  const links = campaignCharacters.filter(link => link.campaign_id === campaign.id);
+  const shareOptions = ownCharacters()
+    .filter(character => !links.some(link => link.owner_user_id === cloudUser.id && link.character_id === character.id))
+    .map(character => `<option value="${escapeHtml(character.id)}">${escapeHtml(character.name)} · ${escapeHtml(classSummary(character))}</option>`)
+    .join("");
+  const characterRows = links.map(link => {
+    const character = characters.find(item => item.id === link.character_id && characterOwnerId(item) === link.owner_user_id);
+    const owner = members.find(member => member.user_id === link.owner_user_id);
+    const ownerLabel = owner?.display_name || (link.owner_user_id === cloudUser.id ? "You" : "Player");
+    const canOpen = Boolean(character);
+    const canRemove = isDm || link.owner_user_id === cloudUser.id;
+    return `<div class="campaign-character-row">
+      <div><strong>${escapeHtml(character?.name || link.nickname || "Shared character")}</strong><br><small>${escapeHtml(ownerLabel)}${character ? ` · ${escapeHtml(classSummary(character))}` : " · sync pending"}</small></div>
+      <div class="item-actions">
+        ${canOpen ? `<button type="button" data-campaign-open-character="${escapeHtml(character.id)}" data-owner="${escapeHtml(link.owner_user_id)}">Open</button>` : ""}
+        ${canRemove ? `<button type="button" data-campaign-remove-character="${escapeHtml(link.character_id)}" data-owner="${escapeHtml(link.owner_user_id)}" data-campaign="${escapeHtml(campaign.id)}">Remove</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+  $("#campaign-detail").innerHTML = `
+    <div class="campaign-detail-head">
+      <div>
+        <span class="eyebrow">${isDm ? "DM VIEW" : "PLAYER VIEW"}</span>
+        <h2>${escapeHtml(campaign.name)}</h2>
+        <p>${escapeHtml(campaign.description || "No campaign notes yet.")}</p>
+      </div>
+      ${isDm ? `<div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button></div>` : ""}
+    </div>
+    <div class="campaign-grid">
+      <section class="campaign-panel">
+        <h3>Members</h3>
+        ${members.map(member => `<div class="campaign-member"><div><strong>${escapeHtml(member.display_name || "Adventurer")}</strong><br><small>${member.user_id === cloudUser.id ? "You" : member.user_id}</small></div><span class="tag">${member.role === "dm" ? "DM" : "Player"}</span></div>`).join("") || "<p>No members yet.</p>"}
+      </section>
+      <section class="campaign-panel">
+        <h3>Shared characters</h3>
+        ${characterRows || "<p>No character sheets have been shared yet.</p>"}
+        <form class="campaign-share-form" data-campaign-share="${escapeHtml(campaign.id)}">
+          <select name="characterId" ${shareOptions ? "" : "disabled"}>${shareOptions || `<option>No unshared characters</option>`}</select>
+          <button class="button primary small" type="submit" ${shareOptions ? "" : "disabled"}>Share sheet</button>
+        </form>
+      </section>
+    </div>`;
 }
 
 function valueByLevel(level, rows) {
@@ -2385,6 +2600,7 @@ function renderSheet() {
   if (!c) { $("#sheet-empty").classList.remove("hidden"); $("#character-sheet").classList.add("hidden"); return; }
   activeCharacterId = c.id;
   const d = derived(c);
+  const canControl = canControlCharacter(c);
   const classEntries = classBreakdown(c);
   const primaryClass = primaryClassName(c);
   const cls = RULES.classes[primaryClass];
@@ -2451,7 +2667,7 @@ function renderSheet() {
   const sheet = $("#character-sheet"); sheet.classList.remove("hidden");
   sheet.innerHTML = `<div class="sheet-header">
     <div class="sheet-portrait">${c.portrait ? `<img src="${c.portrait}" alt="">` : escapeHtml(c.name.charAt(0))}</div>
-    <div><span class="eyebrow">${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}</div>
+    <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
     <div class="sheet-core">
       <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></button>
       <button><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong></button>
@@ -2460,9 +2676,9 @@ function renderSheet() {
       <button data-sheet-section-jump="overview"><small>PASSIVE PERCEPTION</small><strong>${d.passive}</strong></button>
     </div>
     <div class="sheet-header-actions">
-      <button class="button ghost" data-edit="${c.id}">Edit character</button>
+      ${canControl ? `<button class="button ghost" data-edit="${c.id}">Edit character</button>
       <button class="button ghost" data-delevel="${c.id}" ${characterTotalLevel(c) <= 1 ? "disabled" : ""}>${characterTotalLevel(c) <= 1 ? "Minimum level" : "Delevel"}</button>
-      <button class="button primary" data-level-up="${c.id}" ${characterTotalLevel(c) >= 20 ? "disabled" : ""}>${characterTotalLevel(c) >= 20 ? "Maximum level" : "Level up"}</button>
+      <button class="button primary" data-level-up="${c.id}" ${characterTotalLevel(c) >= 20 ? "disabled" : ""}>${characterTotalLevel(c) >= 20 ? "Maximum level" : "Level up"}</button>` : `<span class="tag">View only</span>`}
     </div>
   </div>
   <div class="session-toolbar">
@@ -2563,6 +2779,7 @@ function renderSheet() {
 
 function editCharacter(id) {
   const c = characters.find(x => x.id === id); if (!c) return;
+  if (!canControlCharacter(c)) { toast("Only the owner or campaign DM can edit this sheet"); return; }
   activeCharacterId = id; edition = c.edition || "2014"; selectedClass = c.className || "Fighter";
   currentOriginFeat = c.originFeat || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
@@ -2834,6 +3051,7 @@ function updateLevelFeatAbilityOptions(character) {
 function openLevelUp(id, targetClass = "") {
   const character = characters.find(item => item.id === id);
   if (!character) return;
+  if (!canControlCharacter(character)) { toast("Only the owner or campaign DM can level this sheet"); return; }
   if (characterTotalLevel(character) >= 20) { toast("This character is already level 20"); return; }
   levelingCharacterId = id;
   const currentClasses = classBreakdown(character);
@@ -2914,6 +3132,7 @@ function closeConfirm() { $("#confirm-modal")?.classList.add("hidden"); pendingC
 function delevelCharacter(id) {
   const character = characters.find(item => item.id === id);
   if (!character || characterTotalLevel(character) <= 1) return;
+  if (!canControlCharacter(character)) { toast("Only the owner or campaign DM can delevel this sheet"); return; }
   confirmAction({
     title: "Delevel character?",
     message: `Return ${character.name} from level ${character.level} to level ${character.level - 1}? Choices gained at the current level will be rolled back.`,
@@ -3373,6 +3592,33 @@ function initEvents() {
       }
       return;
     }
+    const campaignSelect = event.target.closest("[data-campaign-select]");
+    if (campaignSelect) {
+      activeCampaignId = campaignSelect.dataset.campaignSelect;
+      renderCampaigns();
+      return;
+    }
+    const copyInvite = event.target.closest("[data-copy-invite]");
+    if (copyInvite) {
+      navigator.clipboard?.writeText(copyInvite.dataset.copyInvite);
+      toast("Invite code copied");
+      return;
+    }
+    const campaignOpen = event.target.closest("[data-campaign-open-character]");
+    if (campaignOpen) {
+      const ownerId = campaignOpen.dataset.owner;
+      const character = characters.find(item => item.id === campaignOpen.dataset.campaignOpenCharacter && characterOwnerId(item) === ownerId);
+      if (character) {
+        activeCharacterId = character.id;
+        navigate("sheet");
+      }
+      return;
+    }
+    const campaignRemove = event.target.closest("[data-campaign-remove-character]");
+    if (campaignRemove) {
+      removeCampaignCharacter(campaignRemove.dataset.campaign, campaignRemove.dataset.owner, campaignRemove.dataset.campaignRemoveCharacter);
+      return;
+    }
     const nav = event.target.closest("[data-view]"); if (nav) { if (nav.dataset.view === "builder") startNewCharacter(); navigate(nav.dataset.view); }
     const go = event.target.closest("[data-go]"); if (go) { if (go.dataset.go === "builder") startNewCharacter(); navigate(go.dataset.go); }
     const link = event.target.closest("[data-view-link]"); if (link) { event.preventDefault(); navigate(link.dataset.viewLink); }
@@ -3389,6 +3635,8 @@ function initEvents() {
     const del = event.target.closest("[data-delete]");
     if (del) {
       const deleteId = del.dataset.delete;
+      const deleting = characters.find(character => character.id === deleteId);
+      if (deleting && !isOwnCharacter(deleting)) { toast("Remove shared sheets from the campaign instead of deleting them"); return; }
       confirmAction({
         title: "Delete character?",
         message: "This removes the character from your vault on every synchronized device.",
@@ -3498,6 +3746,30 @@ function initEvents() {
     $("#item-search").value = "";
     renderItemTemplates();
     toast(`${name} added to inventory`);
+  });
+  $("#create-campaign-form")?.addEventListener("submit", event => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    createCampaign(String(values.name || "").trim(), String(values.description || "").trim());
+    event.currentTarget.reset();
+  });
+  $("#join-campaign-form")?.addEventListener("submit", event => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    joinCampaign(String(values.inviteCode || ""));
+    event.currentTarget.reset();
+  });
+  $("#campaign-detail")?.addEventListener("submit", event => {
+    const formEl = event.target.closest("[data-campaign-share]");
+    if (!formEl) return;
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(formEl));
+    shareCharacterWithCampaign(formEl.dataset.campaignShare, values.characterId);
+  });
+  $("#refresh-campaigns")?.addEventListener("click", loadCampaigns);
+  $("#campaign-sign-in")?.addEventListener("click", () => {
+    updateAccount();
+    $("#account-modal").classList.remove("hidden");
   });
   $("#next-step").addEventListener("click", () => setStep(currentStep + 1));
   $("#prev-step").addEventListener("click", () => setStep(currentStep - 1));
@@ -3653,19 +3925,25 @@ function initEvents() {
   $("#account-form").addEventListener("submit", handleAccountSubmit);
   $("#sync-now").addEventListener("click", async () => {
     $("#sync-now").disabled = true;
-    await loadCloudCharacters();
+    await loadCampaigns();
     $("#sync-now").disabled = false;
   });
   $("#sign-out").addEventListener("click", async () => {
     if (cloudClient) await cloudClient.auth.signOut();
     cloudUser = null;
     characters = [];
+    campaigns = [];
+    campaignMemberships = [];
+    campaignCharacters = [];
+    activeCampaignId = "";
     deletedCharacters = {};
     activeCharacterId = null;
     saveJson(STORAGE_KEY, characters);
+    saveJson(CAMPAIGN_KEY, campaigns);
     saveJson(DELETED_KEY, deletedCharacters);
     renderCards();
     renderSheet();
+    renderCampaigns();
     updateAccount();
     setCloudStatus("Signed out. This browser still has a local copy of the vault.");
     toast("Signed out");
@@ -3764,7 +4042,7 @@ async function handleAccountSubmit(event) {
   cloudUser = result.data.user;
   prepareUserVault(cloudUser);
   updateAccount();
-  await loadCloudCharacters();
+  await loadCampaigns();
   $("#account-modal").classList.add("hidden");
   toast(`Welcome, ${displayName}`);
 }
@@ -3801,20 +4079,20 @@ async function initCloud() {
   cloudUser = data.session?.user || null;
   if (cloudUser) prepareUserVault(cloudUser);
   updateAccount();
-  if (cloudUser) await loadCloudCharacters();
+  if (cloudUser) await loadCampaigns();
   cloudClient.auth.onAuthStateChange((_event, session) => {
     const nextUser = session?.user || null;
     const changed = nextUser?.id !== cloudUser?.id;
     cloudUser = nextUser;
     if (cloudUser) prepareUserVault(cloudUser);
     updateAccount();
-    if (changed && cloudUser) setTimeout(loadCloudCharacters, 0);
+    if (changed && cloudUser) setTimeout(loadCampaigns, 0);
   });
   window.addEventListener("online", () => {
-    if (cloudUser) loadCloudCharacters();
+    if (cloudUser) loadCampaigns();
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && cloudUser) loadCloudCharacters();
+    if (!document.hidden && cloudUser) loadCampaigns();
   });
 }
 

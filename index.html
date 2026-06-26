@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=dice-animate-2">
+  <link rel="stylesheet" href="styles.css?v=campaigns-1">
 </head>
 <body>
   <div class="app-shell">
@@ -22,6 +22,7 @@
         <button class="nav-item active" data-view="dashboard"><span>⌂</span> Hall</button>
         <button class="nav-item" data-view="builder"><span>✦</span> Create</button>
         <button class="nav-item" data-view="vault"><span>⌑</span> Vault</button>
+        <button class="nav-item" data-view="campaigns"><span>⚑</span> Campaigns</button>
         <button class="nav-item" data-view="dice"><span>◇</span> Dice</button>
       </nav>
       <div class="top-actions">
@@ -321,6 +322,37 @@
         <div class="character-grid vault-grid" id="vault-characters"></div>
       </section>
 
+      <section class="view" id="campaigns-view">
+        <div class="page-head">
+          <div><span class="eyebrow">CAMPAIGN HUB</span><h1>Gather the party</h1><p>Create a campaign, invite players, and manage shared character sheets from one table.</p></div>
+          <button class="button ghost small" id="refresh-campaigns">Refresh campaigns</button>
+        </div>
+        <div id="campaign-cloud-warning" class="campaign-warning hidden">
+          <strong>Sign in required</strong>
+          <p>Campaigns use your DND Beyonder account so invites and shared sheets work across devices.</p>
+          <button class="button primary small" id="campaign-sign-in">Sign in or create account</button>
+        </div>
+        <div class="campaign-tools">
+          <form class="campaign-tool" id="create-campaign-form">
+            <span class="eyebrow">DM TOOLS</span>
+            <h2>Create campaign</h2>
+            <label>Campaign name<input name="name" maxlength="60" required placeholder="Storm over Ashvale"></label>
+            <label>Notes<textarea name="description" rows="3" placeholder="Schedule, tone, table notes..."></textarea></label>
+            <button class="button primary" type="submit">Create campaign</button>
+          </form>
+          <form class="campaign-tool" id="join-campaign-form">
+            <span class="eyebrow">PLAYER INVITE</span>
+            <h2>Join campaign</h2>
+            <label>Invite code<input name="inviteCode" maxlength="16" required placeholder="ABC123"></label>
+            <button class="button primary" type="submit">Join with code</button>
+          </form>
+        </div>
+        <div class="campaign-layout">
+          <aside class="campaign-list" id="campaign-list"></aside>
+          <section class="campaign-detail" id="campaign-detail"></section>
+        </div>
+      </section>
+
       <footer class="legal-footer">
         <p>This work includes material taken from the System Reference Document 5.1 (“SRD 5.1”) by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.</p>
         <p>This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.</p>
@@ -446,6 +478,6 @@
   <script src="subclass-features.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js"></script>
-  <script src="app.js?v=dice-animate-2"></script>
+  <script src="app.js?v=campaigns-1"></script>
 </body>
 </html>
