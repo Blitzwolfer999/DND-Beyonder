@@ -2,6 +2,9 @@
 -- Run this in the Supabase SQL Editor for the project used by cloud-config.js.
 -- It creates the base character table if needed, then creates campaign invite tables
 -- and lets campaign DMs read/update shared sheets.
+-- Important: paste/run the entire file. If only highlighted lines are run,
+-- Supabase may start in the middle of a create table statement and throw a
+-- syntax error near a column name such as "display_name".
 
 create table if not exists public.characters (
   id text not null,
