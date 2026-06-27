@@ -328,18 +328,30 @@ function persistCharacters() {
 }
 async function syncCharactersToCloud() {
   if (!cloudUser || !cloudClient) return;
-  const activeRows = characters
+  const ownRows = characters
     .filter(character => !isDemoCharacter(character)
       && characterTimestamp(character) > deletionTimestamp(character.id)
-      && (isOwnCharacter(character) || character._campaignRole === "dm"))
+      && isOwnCharacter(character))
     .map(character => ({
     id: character.id,
-    user_id: characterOwnerId(character),
-    data: { ...character, cloudOwnerId: characterOwnerId(character), _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
+    user_id: cloudUser.id,
+    data: { ...character, cloudOwnerId: cloudUser.id, _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
     is_deleted: false,
     updated_at: new Date(character.updatedAt || Date.now()).toISOString()
   }));
-  const activeIds = new Set(activeRows.map(row => row.id));
+  const sharedRows = characters
+    .filter(character => !isDemoCharacter(character)
+      && characterTimestamp(character) > deletionTimestamp(character.id)
+      && !isOwnCharacter(character)
+      && character._campaignRole === "dm")
+    .map(character => ({
+      id: character.id,
+      user_id: characterOwnerId(character),
+      data: { ...character, cloudOwnerId: characterOwnerId(character), _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
+      is_deleted: false,
+      updated_at: new Date(character.updatedAt || Date.now()).toISOString()
+    }));
+  const activeIds = new Set(ownRows.map(row => row.id));
   const deletedRows = Object.entries(deletedCharacters).filter(([id]) => !activeIds.has(id)).map(([id, timestamp]) => ({
     id,
     user_id: cloudUser.id,
@@ -347,10 +359,17 @@ async function syncCharactersToCloud() {
     is_deleted: true,
     updated_at: new Date(timestamp).toISOString()
   }));
-  const rows = [...activeRows, ...deletedRows];
-  if (rows.length) {
-    const { error } = await cloudClient.from("characters").upsert(rows, { onConflict: "user_id,id" });
+  const ownSyncRows = [...ownRows, ...deletedRows];
+  if (ownSyncRows.length) {
+    const { error } = await cloudClient.from("characters").upsert(ownSyncRows, { onConflict: "user_id,id" });
     if (error) { setCloudStatus(`Cloud sync failed: ${error.message}`, true); return; }
+  }
+  for (const row of sharedRows) {
+    const { error } = await cloudClient.from("characters")
+      .update({ data: row.data, is_deleted: false, updated_at: row.updated_at })
+      .eq("user_id", row.user_id)
+      .eq("id", row.id);
+    if (error) { setCloudStatus(`Campaign sheet sync failed: ${error.message}`, true); return; }
   }
   setCloudStatus(`Cloud vault synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
 }
