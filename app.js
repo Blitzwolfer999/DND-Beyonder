@@ -424,6 +424,7 @@ async function loadCampaigns() {
   saveCampaignCache();
   renderCampaigns();
   await loadCloudCharacters();
+  renderCampaigns();
 }
 async function createCampaign(name, description) {
   if (!cloudUser || !cloudClient) { toast("Sign in to create a campaign"); return; }
