@@ -314,6 +314,9 @@ function canControlCharacter(character) {
 function ownCharacters() {
   return characters.filter(character => !isDemoCharacter(character) && isOwnCharacter(character));
 }
+function dmCampaignCharacters() {
+  return characters.filter(character => !isDemoCharacter(character) && !isOwnCharacter(character) && character._campaignRole === "dm");
+}
 function campaignMember(campaignId, userId = cloudUser?.id) {
   return campaignMemberships.find(member => member.campaign_id === campaignId && member.user_id === userId);
 }
@@ -2603,11 +2606,21 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
 }
 
 function renderCards(filter = "") {
-  const matches = characters.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
-  $("#recent-characters").innerHTML = matches.slice(0, 2).map(c => characterCard(c)).join("") +
-    `<button class="character-card new-card" data-go="builder"><div><span>＋</span><h3>Forge a new hero</h3><p>Begin a fresh adventure</p></div></button>`;
-  $("#vault-characters").innerHTML = matches.length ? matches.map(c => characterCard(c, true)).join("") :
-    `<div class="empty-state"><span>✦</span><h2>Your vault is waiting</h2><p>Create your first character to see them here.</p></div>`;
+  const query = filter.toLowerCase();
+  const ownMatches = ownCharacters().filter(c => c.name.toLowerCase().includes(query));
+  const dmMatches = dmCampaignCharacters().filter(c => c.name.toLowerCase().includes(query));
+  const recentMatches = [...ownMatches, ...dmMatches];
+  $("#recent-characters").innerHTML = recentMatches.slice(0, 2).map(c => characterCard(c)).join("") +
+    `<button class="character-card new-card" data-go="builder"><div><span>+</span><h3>Forge a new hero</h3><p>Begin a fresh adventure</p></div></button>`;
+  $("#vault-characters").innerHTML = ownMatches.length ? ownMatches.map(c => characterCard(c, true)).join("") :
+    `<div class="empty-state"><span>*</span><h2>Your vault is waiting</h2><p>Create your first character to see them here.</p></div>`;
+  const dmSection = $("#dm-campaign-vault-section");
+  const dmGrid = $("#vault-dm-characters");
+  if (dmSection && dmGrid) {
+    dmSection.classList.toggle("hidden", !cloudUser && !dmMatches.length);
+    dmGrid.innerHTML = dmMatches.length ? dmMatches.map(c => characterCard(c, true)).join("") :
+      `<div class="empty-state"><span>DM</span><h2>No DM campaign sheets</h2><p>When players share sheets in a campaign you DM, they will appear here for quick access.</p></div>`;
+  }
 }
 
 function renderCampaigns() {
@@ -2624,7 +2637,7 @@ function renderCampaigns() {
   }
   $("#campaign-list").innerHTML = campaigns.length ? campaigns.map(campaign => {
     const role = campaignRole(campaign.id) || (campaign.owner_id === cloudUser.id ? "dm" : "player");
-    const count = campaignCharacters.filter(link => link.campaign_id === campaign.id).length;
+    const count = campaignCharacters.filter(link => link.campaign_id === campaign.id && (role === "dm" || link.owner_user_id === cloudUser.id)).length;
     const mapCount = campaignMaps.filter(map => map.campaign_id === campaign.id).length;
     return `<button type="button" class="campaign-card ${campaign.id === activeCampaignId ? "active" : ""}" data-campaign-select="${campaign.id}">
       <small>${role === "dm" ? "Dungeon Master" : "Player"}</small>
@@ -2640,9 +2653,10 @@ function renderCampaigns() {
   const role = campaignRole(campaign.id) || (campaign.owner_id === cloudUser.id ? "dm" : "player");
   const isDm = role === "dm";
   const members = campaignMemberships.filter(member => member.campaign_id === campaign.id);
-  const links = campaignCharacters.filter(link => link.campaign_id === campaign.id);
+  const allLinks = campaignCharacters.filter(link => link.campaign_id === campaign.id);
+  const links = allLinks.filter(link => isDm || link.owner_user_id === cloudUser.id);
   const shareOptions = ownCharacters()
-    .filter(character => !links.some(link => link.owner_user_id === cloudUser.id && link.character_id === character.id))
+    .filter(character => !allLinks.some(link => link.owner_user_id === cloudUser.id && link.character_id === character.id))
     .map(character => `<option value="${escapeHtml(character.id)}">${escapeHtml(character.name)} · ${escapeHtml(classSummary(character))}</option>`)
     .join("");
   const linkedCharacters = links.map(link => {

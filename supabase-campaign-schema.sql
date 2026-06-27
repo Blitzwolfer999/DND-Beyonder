@@ -94,6 +94,7 @@ using (
     where cc.owner_user_id = public.characters.user_id
       and cc.character_id = public.characters.id
       and cm.user_id = (select auth.uid())
+      and cm.role = 'dm'
   )
 );
 
@@ -188,14 +189,17 @@ using (user_id = (select auth.uid()))
 with check (user_id = (select auth.uid()));
 
 drop policy if exists "Members can read campaign characters" on public.campaign_characters;
-create policy "Members can read campaign characters"
+drop policy if exists "Owners and DMs can read campaign characters" on public.campaign_characters;
+create policy "Owners and DMs can read campaign characters"
 on public.campaign_characters for select
 to authenticated
 using (
-  exists (
+  owner_user_id = (select auth.uid())
+  or exists (
     select 1 from public.campaign_members cm
     where cm.campaign_id = public.campaign_characters.campaign_id
       and cm.user_id = (select auth.uid())
+      and cm.role = 'dm'
   )
 );
 

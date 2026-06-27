@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=map-editor-1">
+  <link rel="stylesheet" href="styles.css?v=vault-roles-1">
 </head>
 <body>
   <div class="app-shell">
@@ -319,7 +319,14 @@
           <button class="button ghost small" id="export-data">Export vault</button>
           <label class="button ghost small">Import vault<input id="import-data" type="file" accept=".json" hidden></label>
         </div>
-        <div class="character-grid vault-grid" id="vault-characters"></div>
+        <section class="vault-section">
+          <div class="section-heading"><div><span class="eyebrow">YOUR VAULT</span><h2>Your characters</h2></div></div>
+          <div class="character-grid vault-grid" id="vault-characters"></div>
+        </section>
+        <section class="vault-section" id="dm-campaign-vault-section">
+          <div class="section-heading"><div><span class="eyebrow">DM ACCESS</span><h2>Campaign characters you DM</h2></div></div>
+          <div class="character-grid vault-grid" id="vault-dm-characters"></div>
+        </section>
       </section>
 
       <section class="view" id="campaigns-view">
@@ -478,6 +485,6 @@
   <script src="subclass-features.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js?v=campaigns-4"></script>
-  <script src="app.js?v=map-editor-1"></script>
+  <script src="app.js?v=vault-roles-1"></script>
 </body>
 </html>
