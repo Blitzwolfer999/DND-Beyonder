@@ -520,8 +520,33 @@ textarea { resize: vertical; }
 .campaign-member:last-child, .campaign-character-row:last-child { border-bottom: 0; }
 .campaign-character-row small, .campaign-member small { color: var(--muted); }
 .campaign-share-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 12px; }
+.campaign-map-panel { margin-bottom: 16px; background: #f7f1e6; }
+.campaign-map-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.campaign-map-tabs button { min-height: 32px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--ink); cursor: pointer; font-weight: 800; }
+.campaign-map-tabs button.active { border-color: var(--gold-dark); color: #fff; background: var(--gold-dark); }
+.map-create, .map-settings { margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fffdf8; }
+.map-create summary, .map-settings summary { cursor: pointer; color: var(--gold-dark); font-weight: 900; }
+.map-create form, .map-settings form { display: grid; gap: 10px; margin-top: 12px; }
+.map-form-grid { display: grid; grid-template-columns: 2fr repeat(3, minmax(82px, 1fr)); gap: 10px; }
+.map-control-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.campaign-map-workspace { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 14px; }
+.map-token-list { display: grid; gap: 8px; max-height: 540px; overflow: auto; }
+.map-token-card { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 12px; background: #fff; text-align: left; cursor: pointer; }
+.map-token-card:disabled { opacity: .62; cursor: not-allowed; }
+.map-token-card.active { border-color: var(--red); background: #fff5f2; }
+.map-token-card span { grid-row: span 2; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--token); font: 800 15px Cinzel, serif; box-shadow: inset 0 0 0 2px #fff8; }
+.map-token-card strong, .map-token-card small { display: block; }
+.map-token-card small { color: var(--muted); font-size: 11px; }
+.battle-map-shell { max-width: 100%; overflow: auto; padding: 10px; border: 1px solid #d3c5b2; border-radius: 14px; background: #24211d; box-shadow: inset 0 0 0 1px #0004; }
+.battle-map-board { position: relative; width: calc(var(--cols) * var(--cell)); height: calc(var(--rows) * var(--cell)); overflow: hidden; border: 1px solid #7c6c58; background: #3a332c; cursor: crosshair; }
+.battle-map-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.battle-map-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #d6c7b4; background: radial-gradient(circle, #4a4036, #2a2520); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.battle-map-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.32) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.32) 1px, transparent 1px); background-size: var(--cell) var(--cell); pointer-events: none; }
+.map-token { position: absolute; left: calc(var(--x) * var(--cell) + 4px); top: calc(var(--y) * var(--cell) + 4px); z-index: 2; width: calc(var(--cell) - 8px); height: calc(var(--cell) - 8px); display: grid; place-items: center; border: 2px solid #fff8; border-radius: 50%; color: #fff; background: var(--token); box-shadow: 0 3px 10px #0008, inset 0 0 0 2px #0002; cursor: pointer; font: 900 16px Cinzel, serif; text-shadow: 0 1px 2px #000; }
+.map-token.selected { outline: 3px solid var(--gold); outline-offset: 2px; transform: scale(1.06); }
+.map-token:disabled { cursor: not-allowed; opacity: .72; }
 @media (max-width: 900px) {
-  .campaign-tools, .campaign-layout, .campaign-grid { grid-template-columns: 1fr; }
+  .campaign-tools, .campaign-layout, .campaign-grid, .campaign-map-workspace, .map-form-grid { grid-template-columns: 1fr; }
   .campaign-warning { align-items: flex-start; flex-direction: column; }
 }
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; padding: 20px; display: grid; place-items: center; background: rgba(14,13,11,.72); }

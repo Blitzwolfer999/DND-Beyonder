@@ -65,9 +65,19 @@ create table if not exists public.campaign_characters (
   primary key (campaign_id, owner_user_id, character_id)
 );
 
+create table if not exists public.campaign_maps (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id uuid not null references public.campaigns(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.campaigns enable row level security;
 alter table public.campaign_members enable row level security;
 alter table public.campaign_characters enable row level security;
+alter table public.campaign_maps enable row level security;
 
 -- Replace character read/update policies so campaign DMs can access shared sheets.
 drop policy if exists "Users can read their characters" on public.characters;
@@ -216,6 +226,64 @@ using (
   )
 );
 
+drop policy if exists "Campaign members can read maps" on public.campaign_maps;
+create policy "Campaign members can read maps"
+on public.campaign_maps for select
+to authenticated
+using (
+  exists (
+    select 1 from public.campaign_members cm
+    where cm.campaign_id = public.campaign_maps.campaign_id
+      and cm.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Campaign DMs can create maps" on public.campaign_maps;
+create policy "Campaign DMs can create maps"
+on public.campaign_maps for insert
+to authenticated
+with check (
+  owner_id = (select auth.uid())
+  and exists (
+    select 1 from public.campaign_members cm
+    where cm.campaign_id = public.campaign_maps.campaign_id
+      and cm.user_id = (select auth.uid())
+      and cm.role = 'dm'
+  )
+);
+
+drop policy if exists "Campaign members can update maps" on public.campaign_maps;
+create policy "Campaign members can update maps"
+on public.campaign_maps for update
+to authenticated
+using (
+  exists (
+    select 1 from public.campaign_members cm
+    where cm.campaign_id = public.campaign_maps.campaign_id
+      and cm.user_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1 from public.campaign_members cm
+    where cm.campaign_id = public.campaign_maps.campaign_id
+      and cm.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Campaign DMs can delete maps" on public.campaign_maps;
+create policy "Campaign DMs can delete maps"
+on public.campaign_maps for delete
+to authenticated
+using (
+  exists (
+    select 1 from public.campaign_members cm
+    where cm.campaign_id = public.campaign_maps.campaign_id
+      and cm.user_id = (select auth.uid())
+      and cm.role = 'dm'
+  )
+);
+
 create index if not exists campaigns_invite_code_idx
 on public.campaigns (invite_code);
 
@@ -224,3 +292,6 @@ on public.campaign_members (user_id);
 
 create index if not exists campaign_characters_owner_idx
 on public.campaign_characters (owner_user_id, character_id);
+
+create index if not exists campaign_maps_campaign_idx
+on public.campaign_maps (campaign_id, updated_at desc);

@@ -212,6 +212,7 @@ const ROLL_KEY = "arcanaForge.rolls.v1";
 const CLOUD_OWNER_KEY = "arcanaForge.cloudOwner.v1";
 const DELETED_KEY = "arcanaForge.deletedCharacters.v1";
 const CAMPAIGN_KEY = "arcanaForge.campaigns.v1";
+const CAMPAIGN_MAP_KEY = "arcanaForge.campaignMaps.v1";
 
 let edition = "2014";
 let currentStep = 1;
@@ -242,7 +243,12 @@ let characters = readJson(STORAGE_KEY, []);
 let campaigns = readJson(CAMPAIGN_KEY, []);
 let campaignMemberships = [];
 let campaignCharacters = [];
+let campaignMaps = readJson(CAMPAIGN_MAP_KEY, []);
 let activeCampaignId = "";
+let activeMapId = "";
+let selectedMapToken = null;
+let campaignMapImageDraft = "";
+let campaignLiveTimer = null;
 let deletedCharacters = readJson(DELETED_KEY, {});
 let rollHistory = readJson(ROLL_KEY, []);
 localStorage.removeItem("arcanaForge.ownedContent.v1");
@@ -303,7 +309,9 @@ function generateInviteCode() {
 }
 function saveCampaignCache() {
   saveJson(CAMPAIGN_KEY, campaigns);
+  saveJson(CAMPAIGN_MAP_KEY, campaignMaps);
   if (cloudUser) saveJson(`${CAMPAIGN_KEY}.${cloudUser.id}`, campaigns);
+  if (cloudUser) saveJson(`${CAMPAIGN_MAP_KEY}.${cloudUser.id}`, campaignMaps);
 }
 function campaignSetupMessage() {
   return "Campaign tables are not set up yet. Run supabase-campaign-schema.sql in the Supabase SQL Editor, then refresh DND Beyonder.";
@@ -318,6 +326,148 @@ function reportCampaignError(error, fallbackMessage, showToast = true) {
   const message = isMissingCampaignSchema(error) ? campaignSetupMessage() : `${fallbackMessage}: ${error.message}`;
   setCloudStatus(message, true);
   if (showToast) toast(message);
+}
+function normalizeMapData(data = {}) {
+  return {
+    columns: Math.min(80, Math.max(4, Number(data.columns || 24))),
+    rows: Math.min(80, Math.max(4, Number(data.rows || 16))),
+    gridSize: Math.min(72, Math.max(28, Number(data.gridSize || 44))),
+    background: String(data.background || ""),
+    backgroundFit: data.backgroundFit || "cover",
+    tokens: Array.isArray(data.tokens) ? data.tokens : []
+  };
+}
+function campaignMapById(mapId) {
+  return campaignMaps.find(map => map.id === mapId);
+}
+function mapsForCampaign(campaignId) {
+  return campaignMaps.filter(map => map.campaign_id === campaignId).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+function activeMapForCampaign(campaignId) {
+  const maps = mapsForCampaign(campaignId);
+  if (!maps.length) return null;
+  if (!activeMapId || !maps.some(map => map.id === activeMapId)) activeMapId = maps[0].id;
+  return maps.find(map => map.id === activeMapId) || maps[0];
+}
+function canEditCampaign(campaignId) {
+  return campaignRole(campaignId) === "dm";
+}
+function canMoveMapToken(token, campaignId) {
+  return canEditCampaign(campaignId) || token.ownerUserId === cloudUser?.id;
+}
+function mapTokenId(ownerUserId, characterId) {
+  return `${ownerUserId}:${characterId}`;
+}
+function characterForMapToken(token) {
+  return characters.find(character => character.id === token.characterId && characterOwnerId(character) === token.ownerUserId);
+}
+function tokenColor(name = "") {
+  const palette = ["#8f2f2f", "#2f5f8f", "#3f7a55", "#8f6b2f", "#693b8f", "#8f4f2f", "#2f7f82", "#6d7330"];
+  const total = [...String(name)].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return palette[total % palette.length];
+}
+function tokensForCampaignMap(map, links) {
+  const data = normalizeMapData(map?.data);
+  const existing = new Map(data.tokens.map(token => [token.id || mapTokenId(token.ownerUserId, token.characterId), token]));
+  return links.map((link, index) => {
+    const character = characters.find(item => item.id === link.character_id && characterOwnerId(item) === link.owner_user_id);
+    const id = mapTokenId(link.owner_user_id, link.character_id);
+    const prior = existing.get(id) || {};
+    const name = character?.name || link.nickname || "Hero";
+    return {
+      id,
+      ownerUserId: link.owner_user_id,
+      characterId: link.character_id,
+      name,
+      color: prior.color || tokenColor(name),
+      x: Math.min(data.columns - 1, Math.max(0, Number(prior.x ?? (index % Math.max(1, data.columns))))),
+      y: Math.min(data.rows - 1, Math.max(0, Number(prior.y ?? Math.floor(index / Math.max(1, data.columns))))),
+      hidden: Boolean(prior.hidden)
+    };
+  });
+}
+async function saveCampaignMap(map, message = "Map updated") {
+  if (!cloudUser || !cloudClient || !map) return;
+  map.data = normalizeMapData(map.data);
+  map.updated_at = new Date().toISOString();
+  const { error } = await cloudClient.from("campaign_maps")
+    .update({ name: map.name, data: map.data, updated_at: map.updated_at })
+    .eq("id", map.id);
+  if (error) { reportCampaignError(error, "Could not save map"); return; }
+  campaignMaps = campaignMaps.map(item => item.id === map.id ? map : item);
+  saveCampaignCache();
+  renderCampaigns();
+  if (message) toast(message);
+}
+async function createCampaignMap(campaignId, values) {
+  if (!cloudUser || !cloudClient) { toast("Sign in to create a map"); return; }
+  if (!canEditCampaign(campaignId)) { toast("Only the DM can create maps"); return; }
+  const name = String(values.name || "").trim() || "New Encounter Map";
+  const data = normalizeMapData({
+    columns: values.columns,
+    rows: values.rows,
+    gridSize: values.gridSize,
+    background: campaignMapImageDraft || String(values.background || "").trim()
+  });
+  const { data: inserted, error } = await cloudClient.from("campaign_maps").insert({
+    campaign_id: campaignId,
+    owner_id: cloudUser.id,
+    name,
+    data,
+    updated_at: new Date().toISOString()
+  }).select("id, campaign_id, owner_id, name, data, updated_at").single();
+  if (error) { reportCampaignError(error, "Could not create map"); return; }
+  campaignMapImageDraft = "";
+  activeMapId = inserted.id;
+  campaignMaps = [...campaignMaps.filter(map => map.id !== inserted.id), inserted];
+  saveCampaignCache();
+  renderCampaigns();
+  toast(`${name} created`);
+}
+async function updateCampaignMapSettings(mapId, values) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit map settings"); return; }
+  map.name = String(values.name || "").trim() || map.name || "Encounter Map";
+  map.data = normalizeMapData({
+    ...map.data,
+    columns: values.columns,
+    rows: values.rows,
+    gridSize: values.gridSize,
+    background: campaignMapImageDraft || String(values.background || "").trim() || map.data?.background || ""
+  });
+  campaignMapImageDraft = "";
+  await saveCampaignMap(map, "Map settings saved");
+}
+async function deleteCampaignMap(mapId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can delete maps"); return; }
+  const { error } = await cloudClient.from("campaign_maps").delete().eq("id", mapId);
+  if (error) { reportCampaignError(error, "Could not delete map"); return; }
+  campaignMaps = campaignMaps.filter(item => item.id !== mapId);
+  if (activeMapId === mapId) activeMapId = "";
+  saveCampaignCache();
+  renderCampaigns();
+  toast("Map deleted");
+}
+async function ensureCampaignMapTokens(mapId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can add tokens"); return; }
+  const links = campaignCharacters.filter(link => link.campaign_id === map.campaign_id);
+  map.data = normalizeMapData(map.data);
+  map.data.tokens = tokensForCampaignMap(map, links);
+  await saveCampaignMap(map, "Party tokens added");
+}
+async function moveCampaignMapToken(mapId, tokenId, x, y) {
+  const map = campaignMapById(mapId);
+  if (!map) return;
+  const data = normalizeMapData(map.data);
+  const token = data.tokens.find(item => item.id === tokenId);
+  if (!token) { toast("Choose Add party tokens first"); return; }
+  if (!canMoveMapToken(token, map.campaign_id)) { toast("You can move your own token; the DM can move any token"); return; }
+  token.x = Math.min(data.columns - 1, Math.max(0, x));
+  token.y = Math.min(data.rows - 1, Math.max(0, y));
+  map.data = data;
+  await saveCampaignMap(map, "");
 }
 function persistCharacters() {
   saveJson(STORAGE_KEY, characters);
@@ -425,25 +575,30 @@ async function loadCampaigns() {
     renderCampaigns();
     return;
   }
-  const [campaignResult, memberResult, characterResult] = await Promise.all([
+  const [campaignResult, memberResult, characterResult, mapResult] = await Promise.all([
     cloudClient.from("campaigns").select("id, owner_id, name, description, invite_code, updated_at"),
     cloudClient.from("campaign_members").select("campaign_id, user_id, role, display_name, joined_at"),
-    cloudClient.from("campaign_characters").select("campaign_id, owner_user_id, character_id, nickname, added_at")
+    cloudClient.from("campaign_characters").select("campaign_id, owner_user_id, character_id, nickname, added_at"),
+    cloudClient.from("campaign_maps").select("id, campaign_id, owner_id, name, data, updated_at")
   ]);
   if (campaignResult.error) { reportCampaignError(campaignResult.error, "Could not load campaigns", false); return; }
   if (memberResult.error) { reportCampaignError(memberResult.error, "Could not load campaign members", false); return; }
   if (characterResult.error) { reportCampaignError(characterResult.error, "Could not load campaign characters", false); return; }
+  if (mapResult.error && !isMissingCampaignSchema(mapResult.error)) { reportCampaignError(mapResult.error, "Could not load campaign maps", false); return; }
   campaignMemberships = memberResult.data || [];
   const myCampaignIds = new Set(campaignMemberships.filter(member => member.user_id === cloudUser.id).map(member => member.campaign_id));
   campaigns = (campaignResult.data || [])
     .filter(campaign => myCampaignIds.has(campaign.id) || campaign.owner_id === cloudUser.id)
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
   campaignCharacters = (characterResult.data || []).filter(link => myCampaignIds.has(link.campaign_id));
+  campaignMaps = mapResult.error ? [] : (mapResult.data || []).filter(map => myCampaignIds.has(map.campaign_id));
   if (!activeCampaignId || !campaigns.some(campaign => campaign.id === activeCampaignId)) activeCampaignId = campaigns[0]?.id || "";
+  if (activeMapId && !campaignMaps.some(map => map.id === activeMapId)) activeMapId = "";
   saveCampaignCache();
   renderCampaigns();
   await loadCloudCharacters();
   renderCampaigns();
+  if ($("#campaigns-view")?.classList.contains("active")) startCampaignLiveSync(true);
 }
 async function createCampaign(name, description) {
   if (!cloudUser || !cloudClient) { toast("Sign in to create a campaign"); return; }
@@ -532,10 +687,12 @@ function prepareUserVault(user) {
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
   const cached = readJson(`${STORAGE_KEY}.${user.id}`, null);
   const cachedCampaigns = readJson(`${CAMPAIGN_KEY}.${user.id}`, null);
+  const cachedCampaignMaps = readJson(`${CAMPAIGN_MAP_KEY}.${user.id}`, null);
   const cachedDeletions = readJson(`${DELETED_KEY}.${user.id}`, null);
   if (cached !== null) characters = cached;
   else if (priorOwner && priorOwner !== user.id) characters = [];
   campaigns = cachedCampaigns || [];
+  campaignMaps = cachedCampaignMaps || [];
   deletedCharacters = cachedDeletions || {};
   localStorage.setItem(CLOUD_OWNER_KEY, user.id);
   saveJson(STORAGE_KEY, characters);
@@ -2172,7 +2329,19 @@ function navigate(view) {
   if (view === "vault" || view === "dashboard") renderCards();
   if (view === "campaigns") renderCampaigns();
   if (view === "sheet") renderSheet();
+  startCampaignLiveSync(view === "campaigns");
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function startCampaignLiveSync(active) {
+  if (campaignLiveTimer) {
+    clearInterval(campaignLiveTimer);
+    campaignLiveTimer = null;
+  }
+  if (!active || !cloudUser || !cloudClient) return;
+  campaignLiveTimer = setInterval(() => {
+    if (!document.hidden && $("#campaigns-view")?.classList.contains("active")) loadCampaigns();
+  }, 7000);
 }
 
 function startNewCharacter() {
@@ -2263,6 +2432,86 @@ function campaignPartyCard(character, link, ownerLabel, isDm, campaignId) {
   </article>`;
 }
 
+function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
+  const maps = mapsForCampaign(campaign.id);
+  const activeMap = activeMapForCampaign(campaign.id);
+  const mapTabs = maps.map(map => `<button type="button" class="${map.id === activeMap?.id ? "active" : ""}" data-campaign-map-select="${escapeHtml(map.id)}">${escapeHtml(map.name)}</button>`).join("");
+  const createForm = isDm ? `<details class="map-create">
+    <summary>Create or upload a map</summary>
+    <form data-campaign-map-create="${escapeHtml(campaign.id)}">
+      <div class="map-form-grid">
+        <label>Map name<input name="name" maxlength="60" placeholder="Goblin cave ambush"></label>
+        <label>Columns<input name="columns" type="number" min="4" max="80" value="24"></label>
+        <label>Rows<input name="rows" type="number" min="4" max="80" value="16"></label>
+        <label>Grid size<input name="gridSize" type="number" min="28" max="72" value="44"></label>
+      </div>
+      <label>Image URL<input name="background" placeholder="Paste a map image URL, or upload below"></label>
+      <label>Upload map image<input type="file" accept="image/*" data-campaign-map-upload><small class="field-hint" data-map-upload-status>No image selected</small></label>
+      <button class="button primary small" type="submit">Create map</button>
+    </form>
+  </details>` : "";
+  if (!activeMap) {
+    return `<section class="campaign-panel campaign-map-panel">
+      <div class="campaign-panel-head">
+        <div><h3>Encounter maps</h3><p>${isDm ? "Create a grid map, upload art, and place party tokens." : "The DM has not shared a battle map yet."}</p></div>
+      </div>
+      ${createForm || "<p>No active battle map yet.</p>"}
+    </section>`;
+  }
+  const data = normalizeMapData(activeMap.data);
+  const tokenCards = data.tokens.map(token => {
+    const character = characterForMapToken(token);
+    const canMove = canMoveMapToken(token, campaign.id);
+    return `<button type="button" class="map-token-card ${selectedMapToken === token.id ? "active" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"}>
+      <span style="--token:${escapeHtml(token.color)}">${escapeHtml((character?.name || token.name || "?").charAt(0).toUpperCase())}</span>
+      <strong>${escapeHtml(character?.name || token.name || "Token")}</strong>
+      <small>${canMove ? "Click, then choose a square" : "DM controlled"}</small>
+    </button>`;
+  }).join("");
+  const tokenButtons = data.tokens.map(token => {
+    const character = characterForMapToken(token);
+    const canMove = canMoveMapToken(token, campaign.id);
+    const label = character?.name || token.name || "Token";
+    return `<button type="button" class="map-token ${selectedMapToken === token.id ? "selected" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--token:${escapeHtml(token.color)}" title="${escapeHtml(label)}">${escapeHtml(label.charAt(0).toUpperCase())}</button>`;
+  }).join("");
+  const settingsForm = isDm ? `<details class="map-settings">
+    <summary>Map settings</summary>
+    <form data-campaign-map-settings="${escapeHtml(activeMap.id)}">
+      <div class="map-form-grid">
+        <label>Name<input name="name" maxlength="60" value="${escapeHtml(activeMap.name)}"></label>
+        <label>Columns<input name="columns" type="number" min="4" max="80" value="${data.columns}"></label>
+        <label>Rows<input name="rows" type="number" min="4" max="80" value="${data.rows}"></label>
+        <label>Grid size<input name="gridSize" type="number" min="28" max="72" value="${data.gridSize}"></label>
+      </div>
+      <label>Image URL<input name="background" value="${escapeHtml(data.background)}"></label>
+      <label>Replace uploaded image<input type="file" accept="image/*" data-campaign-map-upload><small class="field-hint" data-map-upload-status>No new image selected</small></label>
+      <div class="map-control-row">
+        <button class="button primary small" type="submit">Save settings</button>
+        <button class="button ghost small" type="button" data-campaign-map-delete="${escapeHtml(activeMap.id)}">Delete map</button>
+      </div>
+    </form>
+  </details>` : "";
+  return `<section class="campaign-panel campaign-map-panel">
+    <div class="campaign-panel-head">
+      <div><h3>Encounter maps</h3><p>${isDm ? "Run a gridded battle map. Players can move their own shared character tokens." : "Select your token, then click a square to move it."}</p></div>
+      ${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}
+    </div>
+    <div class="campaign-map-tabs">${mapTabs}</div>
+    ${createForm}
+    ${settingsForm}
+    <div class="campaign-map-workspace">
+      <aside class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</aside>
+      <div class="battle-map-shell">
+        <div class="battle-map-board" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;">
+          ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : `<div class="battle-map-empty">No map art uploaded</div>`}
+          <div class="battle-map-grid" aria-hidden="true"></div>
+          ${tokenButtons}
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
 function renderCards(filter = "") {
   const matches = characters.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
   $("#recent-characters").innerHTML = matches.slice(0, 2).map(c => characterCard(c)).join("") +
@@ -2286,10 +2535,11 @@ function renderCampaigns() {
   $("#campaign-list").innerHTML = campaigns.length ? campaigns.map(campaign => {
     const role = campaignRole(campaign.id) || (campaign.owner_id === cloudUser.id ? "dm" : "player");
     const count = campaignCharacters.filter(link => link.campaign_id === campaign.id).length;
+    const mapCount = campaignMaps.filter(map => map.campaign_id === campaign.id).length;
     return `<button type="button" class="campaign-card ${campaign.id === activeCampaignId ? "active" : ""}" data-campaign-select="${campaign.id}">
       <small>${role === "dm" ? "Dungeon Master" : "Player"}</small>
       <strong>${escapeHtml(campaign.name)}</strong>
-      <span>${count} shared character${count === 1 ? "" : "s"}</span>
+      <span>${count} shared character${count === 1 ? "" : "s"} · ${mapCount} map${mapCount === 1 ? "" : "s"}</span>
     </button>`;
   }).join("") : `<p>No campaigns yet. Create one as DM or join with an invite code.</p>`;
   const campaign = campaigns.find(item => item.id === activeCampaignId);
@@ -2316,6 +2566,7 @@ function renderCampaigns() {
       ? campaignPartyCard(character, link, ownerLabel, isDm, campaign.id)
       : `<article class="campaign-party-card pending"><strong>${escapeHtml(link.nickname || "Shared character")}</strong><p>${escapeHtml(ownerLabel)} · sync pending</p></article>`
   ).join("");
+  const mapPanel = renderCampaignMapPanel(campaign, linkedCharacters, isDm);
   const characterRows = linkedCharacters.map(({ link, character, ownerLabel }) => {
     const canOpen = Boolean(character);
     const canRemove = isDm || link.owner_user_id === cloudUser.id;
@@ -2342,6 +2593,7 @@ function renderCampaigns() {
       </div>
       <div class="campaign-party-grid">${partyCards || "<p>No shared character sheets yet.</p>"}</div>
     </section>
+    ${mapPanel}
     <div class="campaign-grid">
       <section class="campaign-panel">
         <h3>Members</h3>
@@ -3744,6 +3996,48 @@ function initEvents() {
       removeCampaignCharacter(campaignRemove.dataset.campaign, campaignRemove.dataset.owner, campaignRemove.dataset.campaignRemoveCharacter);
       return;
     }
+    const mapSelect = event.target.closest("[data-campaign-map-select]");
+    if (mapSelect) {
+      activeMapId = mapSelect.dataset.campaignMapSelect;
+      selectedMapToken = null;
+      renderCampaigns();
+      return;
+    }
+    const mapAddTokens = event.target.closest("[data-campaign-map-add-tokens]");
+    if (mapAddTokens) {
+      ensureCampaignMapTokens(mapAddTokens.dataset.campaignMapAddTokens);
+      return;
+    }
+    const mapDelete = event.target.closest("[data-campaign-map-delete]");
+    if (mapDelete) {
+      confirmAction({
+        title: "Delete map?",
+        message: "This removes the encounter map for everyone in the campaign.",
+        confirmLabel: "Delete map",
+        danger: true,
+        onConfirm: () => deleteCampaignMap(mapDelete.dataset.campaignMapDelete)
+      });
+      return;
+    }
+    const mapToken = event.target.closest("[data-map-token-select]");
+    if (mapToken) {
+      if (mapToken.disabled) return;
+      selectedMapToken = mapToken.dataset.mapTokenSelect;
+      activeMapId = mapToken.dataset.mapId || activeMapId;
+      renderCampaigns();
+      return;
+    }
+    const mapBoard = event.target.closest("[data-campaign-map-board]");
+    if (mapBoard && selectedMapToken && !event.target.closest("[data-map-token-select]")) {
+      const map = campaignMapById(mapBoard.dataset.campaignMapBoard);
+      if (!map) return;
+      const data = normalizeMapData(map.data);
+      const rect = mapBoard.getBoundingClientRect();
+      const x = Math.floor((event.clientX - rect.left) / data.gridSize);
+      const y = Math.floor((event.clientY - rect.top) / data.gridSize);
+      moveCampaignMapToken(map.id, selectedMapToken, x, y);
+      return;
+    }
     const nav = event.target.closest("[data-view]"); if (nav) { if (nav.dataset.view === "builder") startNewCharacter(); navigate(nav.dataset.view); }
     const go = event.target.closest("[data-go]"); if (go) { if (go.dataset.go === "builder") startNewCharacter(); navigate(go.dataset.go); }
     const link = event.target.closest("[data-view-link]"); if (link) { event.preventDefault(); navigate(link.dataset.viewLink); }
@@ -3886,10 +4180,39 @@ function initEvents() {
   });
   $("#campaign-detail")?.addEventListener("submit", event => {
     const formEl = event.target.closest("[data-campaign-share]");
-    if (!formEl) return;
+    const mapCreate = event.target.closest("[data-campaign-map-create]");
+    const mapSettings = event.target.closest("[data-campaign-map-settings]");
+    if (!formEl && !mapCreate && !mapSettings) return;
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(formEl));
-    shareCharacterWithCampaign(formEl.dataset.campaignShare, values.characterId);
+    const targetForm = formEl || mapCreate || mapSettings;
+    const values = Object.fromEntries(new FormData(targetForm));
+    if (formEl) shareCharacterWithCampaign(formEl.dataset.campaignShare, values.characterId);
+    if (mapCreate) createCampaignMap(mapCreate.dataset.campaignMapCreate, values);
+    if (mapSettings) updateCampaignMapSettings(mapSettings.dataset.campaignMapSettings, values);
+  });
+  $("#campaign-detail")?.addEventListener("change", event => {
+    const upload = event.target.closest("[data-campaign-map-upload]");
+    if (!upload) return;
+    const file = upload.files?.[0];
+    const status = upload.closest("label")?.querySelector("[data-map-upload-status]");
+    if (!file) {
+      campaignMapImageDraft = "";
+      if (status) status.textContent = "No image selected";
+      return;
+    }
+    if (file.size > 2_500_000) {
+      upload.value = "";
+      campaignMapImageDraft = "";
+      if (status) status.textContent = "Image is too large for cloud sync";
+      toast("Use an image under 2.5 MB, or paste an image URL");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      campaignMapImageDraft = String(reader.result || "");
+      if (status) status.textContent = `${file.name} ready`;
+    };
+    reader.readAsDataURL(file);
   });
   $("#refresh-campaigns")?.addEventListener("click", loadCampaigns);
   $("#campaign-sign-in")?.addEventListener("click", () => {
@@ -4060,11 +4383,16 @@ function initEvents() {
     campaigns = [];
     campaignMemberships = [];
     campaignCharacters = [];
+    campaignMaps = [];
     activeCampaignId = "";
+    activeMapId = "";
+    selectedMapToken = null;
+    startCampaignLiveSync(false);
     deletedCharacters = {};
     activeCharacterId = null;
     saveJson(STORAGE_KEY, characters);
     saveJson(CAMPAIGN_KEY, campaigns);
+    saveJson(CAMPAIGN_MAP_KEY, campaignMaps);
     saveJson(DELETED_KEY, deletedCharacters);
     renderCards();
     renderSheet();
