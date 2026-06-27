@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=vault-roles-1">
+  <link rel="stylesheet" href="styles.css?v=dice-physics-1">
 </head>
 <body>
   <div class="app-shell">
@@ -304,6 +304,24 @@
               <label>Modifier<input id="dice-mod" type="number" min="-99" max="99" value="0"></label>
               <button class="button primary" id="roll-selected">Roll</button>
             </div>
+            <div class="dice-settings">
+              <label class="dice-physics-row">
+                <input type="checkbox" id="dice-physics-toggle">
+                <span>Roll dice across the screen (physics)</span>
+              </label>
+              <div class="dice-skin-row">
+                <span class="dice-skin-label">Dice color</span>
+                <div class="dice-skins" id="dice-skins" role="group" aria-label="Dice color">
+                  <button type="button" class="dice-skin active" data-dice-skin="gold" title="Gold" aria-label="Gold"></button>
+                  <button type="button" class="dice-skin" data-dice-skin="crimson" title="Crimson" aria-label="Crimson"></button>
+                  <button type="button" class="dice-skin" data-dice-skin="emerald" title="Emerald" aria-label="Emerald"></button>
+                  <button type="button" class="dice-skin" data-dice-skin="sapphire" title="Sapphire" aria-label="Sapphire"></button>
+                  <button type="button" class="dice-skin" data-dice-skin="amethyst" title="Amethyst" aria-label="Amethyst"></button>
+                  <button type="button" class="dice-skin" data-dice-skin="obsidian" title="Obsidian" aria-label="Obsidian"></button>
+                </div>
+                <button type="button" class="button ghost small" id="dice-test-roll">Test roll</button>
+              </div>
+            </div>
           </div>
           <aside class="roll-history"><div class="section-heading"><h2>Roll history</h2><button id="clear-history" class="text-button">Clear</button></div><ol id="roll-history"></ol></aside>
         </div>
@@ -455,6 +473,17 @@
     </section>
   </div>
 
+  <div class="dice-stage" id="dice-stage" aria-hidden="true" hidden>
+    <div class="dice-stage-die" id="dice-stage-die">
+      <svg class="d20-svg" viewBox="0 0 100 100" aria-hidden="true">
+        <polygon class="d20-edge" points="50,4 92,28 92,72 50,96 8,72 8,28"/>
+        <polygon class="d20-face" points="50,34 74,64 26,64"/>
+        <path class="d20-spoke" d="M50,34 L50,4 M50,34 L92,28 M50,34 L8,28 M74,64 L92,72 M74,64 L50,96 M26,64 L8,72 M26,64 L50,96"/>
+      </svg>
+      <span id="dice-stage-num">20</span>
+    </div>
+  </div>
+
   <div class="roll-overlay" id="roll-overlay" role="status" aria-live="polite" hidden>
     <button type="button" class="roll-overlay-close" id="roll-overlay-close" aria-label="Dismiss">×</button>
     <div class="roll-main">
@@ -485,6 +514,6 @@
   <script src="subclass-features.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js?v=campaigns-4"></script>
-  <script src="app.js?v=vault-roles-1"></script>
+  <script src="app.js?v=dice-physics-1"></script>
 </body>
 </html>

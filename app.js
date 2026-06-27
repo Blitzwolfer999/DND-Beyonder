@@ -3848,8 +3848,66 @@ function rollOnSheet(label, modifier, mode) {
   const entry = { total, detail, label: (label || "Roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
   if ($("#dice-result strong")) { $("#dice-result strong").textContent = total; $("#dice-result p").textContent = `${entry.label} · ${detail}`; }
-  showRollOverlay({ label: label || "Roll", modifier, d20s, chosen, total, mode });
+  const overlayData = { label: label || "Roll", modifier, d20s, chosen, total, mode };
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(chosen, () => showRollOverlay(overlayData));
+  else showRollOverlay(overlayData);
   return total;
+}
+
+function dicePhysicsEnabled() {
+  try { return localStorage.getItem("af-dice-physics") !== "0"; } catch (e) { return true; }
+}
+
+// Original 2D physics dice roll: the d20 drops in and tumbles/bounces off the
+// walls and floor (gravity + restitution + friction), differently each time,
+// before settling on the rolled value.
+let diceRaf = null, diceFadeTimer = null;
+function rollPhysics(finalValue, onSettle) {
+  const stage = $("#dice-stage"), die = $("#dice-stage-die"), num = $("#dice-stage-num");
+  if (!stage || !die || !num) { if (onSettle) onSettle(); return; }
+  cancelAnimationFrame(diceRaf); clearTimeout(diceFadeTimer);
+  die.style.transition = "";
+  stage.hidden = false;
+  stage.classList.remove("landed", "crit", "fumble");
+  const size = 72;
+  const W = stage.clientWidth || window.innerWidth;
+  const H = stage.clientHeight || 260;
+  let x = Math.random() * Math.max(40, W - size - 80) + 30;
+  let y = -size - 8;
+  let vx = (Math.random() - 0.5) * 26;
+  let vy = Math.random() * 3 + 2.5;
+  let rot = Math.random() * 360;
+  let vr = (Math.random() - 0.5) * 60;
+  const g = 1.05, rest = 0.6, fric = 0.82, floor = H - size, wallR = Math.max(0, W - size);
+  let restCount = 0, last = performance.now(), startT = last, tick = 0, settled = false;
+  function step(now) {
+    let dt = (now - last) / 16.67; last = now; if (dt > 2.5) dt = 2.5;
+    vy += g * dt; x += vx * dt; y += vy * dt; rot += vr * dt;
+    if (x < 0) { x = 0; vx = -vx * rest; vr *= -fric; }
+    else if (x > wallR) { x = wallR; vx = -vx * rest; vr *= -fric; }
+    if (y >= floor) {
+      y = floor; vy = -vy * rest; vx *= fric; vr *= fric;
+      if (Math.abs(vy) < 3 && Math.abs(vx) < 1.4) restCount += dt; else restCount = 0;
+    } else restCount = 0;
+    if ((Math.abs(vx) + Math.abs(vy)) > 2.5 && (++tick % 2 === 0)) num.textContent = Math.floor(Math.random() * 20) + 1;
+    die.style.transform = `translate(${x}px, ${y}px) rotate(${rot}deg)`;
+    if ((restCount > 16 || now - startT > 3200) && !settled) {
+      settled = true;
+      num.textContent = finalValue;
+      const upright = Math.round(rot / 360) * 360;
+      die.style.transition = "transform .16s ease-out";
+      die.style.transform = `translate(${x}px, ${floor}px) rotate(${upright}deg)`;
+      stage.classList.add("landed");
+      if (finalValue === 20) stage.classList.add("crit");
+      else if (finalValue === 1) stage.classList.add("fumble");
+      if (onSettle) onSettle();
+      diceFadeTimer = setTimeout(() => { stage.hidden = true; stage.classList.remove("landed", "crit", "fumble"); }, 2200);
+      return;
+    }
+    diceRaf = requestAnimationFrame(step);
+  }
+  diceRaf = requestAnimationFrame(step);
 }
 
 function showRollOverlay(r) {
@@ -4366,6 +4424,30 @@ function initEvents() {
       applyHelp();
     });
   }
+  // --- Dice settings: color "skin" + on-screen physics roll toggle ---
+  (function initDiceSettings() {
+    let skin = "gold";
+    try { skin = localStorage.getItem("af-dice-skin") || "gold"; } catch (e) {}
+    if (skin && skin !== "gold") document.body.setAttribute("data-dice", skin);
+    $$("#dice-skins [data-dice-skin]").forEach(b => b.classList.toggle("active", b.dataset.diceSkin === skin));
+    $("#dice-skins")?.addEventListener("click", event => {
+      const btn = event.target.closest("[data-dice-skin]");
+      if (!btn) return;
+      const value = btn.dataset.diceSkin;
+      if (value === "gold") document.body.removeAttribute("data-dice");
+      else document.body.setAttribute("data-dice", value);
+      try { localStorage.setItem("af-dice-skin", value); } catch (e) {}
+      $$("#dice-skins [data-dice-skin]").forEach(b => b.classList.toggle("active", b === btn));
+    });
+    const physToggle = $("#dice-physics-toggle");
+    if (physToggle) {
+      physToggle.checked = dicePhysicsEnabled();
+      physToggle.addEventListener("change", () => {
+        try { localStorage.setItem("af-dice-physics", physToggle.checked ? "1" : "0"); } catch (e) {}
+      });
+    }
+    $("#dice-test-roll")?.addEventListener("click", () => rollOnSheet("Test roll", 0, "normal"));
+  })();
   $$(".edition-toggle button").forEach(button => button.addEventListener("click", () => {
     edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
     if (!$("#quick-builder").classList.contains("hidden")) initializeQuickBuilder();

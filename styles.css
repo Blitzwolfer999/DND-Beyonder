@@ -1599,10 +1599,10 @@ body { background: var(--paper); }
 .roll-main { display: flex; align-items: center; gap: 14px; }
 .roll-die { position: relative; flex: 0 0 auto; width: 62px; height: 62px; perspective: 460px; }
 .d20-svg { width: 100%; height: 100%; display: block; transform-origin: 50% 52%; }
-.d20-edge { fill: rgba(185, 138, 62, .12); stroke: var(--gold); stroke-width: 3.5; stroke-linejoin: round; }
-.d20-face { fill: rgba(185, 138, 62, .26); stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; }
-.d20-spoke { stroke: rgba(232, 200, 130, .5); stroke-width: 1.4; fill: none; }
-.roll-die #roll-die-num { position: absolute; inset: 0; display: grid; place-items: center; padding-top: 7px; color: #fff8e8; font: 700 19px Cinzel, serif; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
+.d20-edge { fill: var(--dice-fill); stroke: var(--dice-edge); stroke-width: 3.5; stroke-linejoin: round; }
+.d20-face { fill: var(--dice-face); stroke: var(--dice-edge); stroke-width: 2; stroke-linejoin: round; }
+.d20-spoke { stroke: var(--dice-spoke); stroke-width: 1.4; fill: none; }
+.roll-die #roll-die-num { position: absolute; inset: 0; display: grid; place-items: center; padding-top: 7px; color: var(--dice-num); font: 700 19px Cinzel, serif; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
 .roll-die.spin .d20-svg { animation: die-tumble .74s cubic-bezier(.2, .68, .25, 1); }
 @keyframes die-tumble {
   0%   { transform: scale(.45) rotate3d(1, 1, .2, -60deg); opacity: .35; }
@@ -1627,6 +1627,43 @@ body { background: var(--paper); }
 .roll-overlay.fumble { border-color: #c5544e; }
 .roll-overlay.fumble .roll-total { color: #ef918c; }
 @media (max-width: 520px) { .roll-overlay { right: 12px; left: 12px; bottom: 12px; width: auto; } }
+
+/* ===== Dice colors (skins), on-screen physics stage, and settings ===== */
+:root {
+  --dice-edge: #b98a3e;
+  --dice-fill: rgba(185, 138, 62, .12);
+  --dice-face: rgba(185, 138, 62, .26);
+  --dice-spoke: rgba(232, 200, 130, .5);
+  --dice-num: #fff8e8;
+}
+body[data-dice="crimson"]  { --dice-edge: #e0635c; --dice-fill: rgba(224, 99, 92, .14); --dice-face: rgba(224, 99, 92, .30); --dice-spoke: rgba(242, 150, 145, .5); --dice-num: #fff1ef; }
+body[data-dice="emerald"]  { --dice-edge: #4fb079; --dice-fill: rgba(79, 176, 121, .14); --dice-face: rgba(79, 176, 121, .30); --dice-spoke: rgba(150, 224, 178, .5); --dice-num: #effff5; }
+body[data-dice="sapphire"] { --dice-edge: #5b8dd6; --dice-fill: rgba(91, 141, 214, .14); --dice-face: rgba(91, 141, 214, .30); --dice-spoke: rgba(165, 196, 240, .5); --dice-num: #eef4ff; }
+body[data-dice="amethyst"] { --dice-edge: #a978d6; --dice-fill: rgba(169, 120, 214, .14); --dice-face: rgba(169, 120, 214, .30); --dice-spoke: rgba(212, 182, 240, .5); --dice-num: #f7eeff; }
+body[data-dice="obsidian"] { --dice-edge: #9aa3ad; --dice-fill: rgba(154, 163, 173, .16); --dice-face: rgba(108, 118, 128, .42); --dice-spoke: rgba(190, 198, 206, .5); --dice-num: #f4f6f8; }
+
+.dice-stage { position: fixed; top: 0; left: 0; right: 0; height: 264px; z-index: 90; pointer-events: none; overflow: hidden; }
+.dice-stage[hidden] { display: none; }
+.dice-stage-die { position: absolute; top: 0; left: 0; width: 72px; height: 72px; will-change: transform; filter: drop-shadow(0 7px 12px rgba(0, 0, 0, .42)); }
+.dice-stage-die .d20-svg { width: 100%; height: 100%; display: block; }
+.dice-stage-die #dice-stage-num { position: absolute; inset: 0; display: grid; place-items: center; padding-top: 9px; color: var(--dice-num); font: 700 24px Cinzel, serif; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.dice-stage.crit .d20-edge, .dice-stage.crit .d20-face { stroke: #84e3a4; fill: rgba(76, 175, 114, .24); }
+.dice-stage.fumble .d20-edge, .dice-stage.fumble .d20-face { stroke: #ef918c; fill: rgba(197, 84, 78, .24); }
+
+.dice-settings { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.dice-physics-row { display: flex; align-items: center; gap: 9px; font-size: 13px; cursor: pointer; }
+.dice-physics-row input { width: auto; }
+.dice-skin-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dice-skin-label { font-size: 12px; color: var(--muted); }
+.dice-skins { display: flex; gap: 7px; }
+.dice-skin { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid transparent; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
+.dice-skin.active { border-color: var(--ink); }
+.dice-skin[data-dice-skin="gold"] { background: #b98a3e; }
+.dice-skin[data-dice-skin="crimson"] { background: #e0635c; }
+.dice-skin[data-dice-skin="emerald"] { background: #4fb079; }
+.dice-skin[data-dice-skin="sapphire"] { background: #5b8dd6; }
+.dice-skin[data-dice-skin="amethyst"] { background: #a978d6; }
+.dice-skin[data-dice-skin="obsidian"] { background: #6e7780; }
 
 /* ===== Source-grouped choice lists (feats / spells) ===== */
 .choice-group + .choice-group { margin-top: 10px; }
