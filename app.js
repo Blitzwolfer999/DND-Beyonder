@@ -247,7 +247,10 @@ let campaignMaps = readJson(CAMPAIGN_MAP_KEY, []);
 let activeCampaignId = "";
 let activeMapId = "";
 let selectedMapToken = null;
+let selectedMapTool = "token";
+let selectedMapTile = "stone-floor";
 let campaignMapImageDraft = "";
+let campaignTileImageDraft = "";
 let campaignLiveTimer = null;
 let deletedCharacters = readJson(DELETED_KEY, {});
 let rollHistory = readJson(ROLL_KEY, []);
@@ -258,6 +261,20 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const form = $("#character-form");
 const canvas = $("#portrait-canvas");
 const ctx = canvas.getContext("2d");
+const BUILT_IN_MAP_TILES = [
+  { id: "stone-floor", name: "Stone Floor", category: "Dungeon", style: "background:#787064;background-image:linear-gradient(90deg,rgba(0,0,0,.18) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.18) 1px,transparent 1px);background-size:50% 50%;" },
+  { id: "cracked-stone", name: "Cracked Stone", category: "Dungeon", style: "background:#6c665e;background-image:linear-gradient(135deg,transparent 45%,rgba(24,20,18,.36) 46%,transparent 50%),linear-gradient(35deg,transparent 58%,rgba(255,255,255,.12) 59%,transparent 62%);" },
+  { id: "dungeon-wall", name: "Dungeon Wall", category: "Dungeon", style: "background:#3e3935;background-image:linear-gradient(90deg,rgba(255,255,255,.09) 2px,transparent 2px),linear-gradient(rgba(0,0,0,.3) 50%,transparent 50%);background-size:22px 100%,100% 50%;" },
+  { id: "wood-planks", name: "Wood Planks", category: "Town", style: "background:#8b5f37;background-image:linear-gradient(90deg,rgba(50,25,9,.35) 2px,transparent 2px),linear-gradient(rgba(255,230,170,.12),rgba(30,12,5,.18));background-size:16px 100%,100% 100%;" },
+  { id: "cobblestone", name: "Cobblestone", category: "Town", style: "background:#8c877b;background-image:radial-gradient(ellipse at 35% 35%,rgba(255,255,255,.18) 0 18%,transparent 19%),radial-gradient(ellipse at 75% 65%,rgba(0,0,0,.18) 0 22%,transparent 23%);background-size:26px 22px;" },
+  { id: "grass", name: "Grass", category: "Wilderness", style: "background:#4f7a3c;background-image:linear-gradient(115deg,rgba(255,255,255,.08) 12%,transparent 12%),linear-gradient(25deg,rgba(0,0,0,.12) 18%,transparent 18%);background-size:14px 14px;" },
+  { id: "forest", name: "Forest", category: "Wilderness", style: "background:#315b35;background-image:radial-gradient(circle at 35% 35%,#4f8a45 0 18%,transparent 19%),radial-gradient(circle at 72% 68%,#24452b 0 22%,transparent 23%);background-size:30px 30px;" },
+  { id: "dirt", name: "Dirt Path", category: "Wilderness", style: "background:#8a633f;background-image:radial-gradient(circle,rgba(50,25,10,.22) 0 12%,transparent 13%);background-size:18px 18px;" },
+  { id: "sand", name: "Sand", category: "Wilderness", style: "background:#c7ad6b;background-image:radial-gradient(circle,rgba(255,255,255,.18) 0 8%,transparent 9%),radial-gradient(circle,rgba(90,60,20,.18) 0 7%,transparent 8%);background-size:18px 18px,25px 25px;" },
+  { id: "water", name: "Water", category: "Hazard", style: "background:#2f6f94;background-image:linear-gradient(135deg,rgba(255,255,255,.24) 12%,transparent 13%,transparent 50%,rgba(255,255,255,.16) 51%,transparent 52%);background-size:24px 24px;" },
+  { id: "lava", name: "Lava", category: "Hazard", style: "background:#9b2f1e;background-image:radial-gradient(circle at 30% 35%,#ffb13a 0 12%,transparent 13%),linear-gradient(45deg,rgba(0,0,0,.28),transparent);" },
+  { id: "shadow", name: "Shadow", category: "Overlay", style: "background:rgba(18,14,22,.7);background-image:radial-gradient(circle,rgba(255,255,255,.06),transparent 55%);" }
+];
 
 function readJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -334,8 +351,24 @@ function normalizeMapData(data = {}) {
     gridSize: Math.min(72, Math.max(28, Number(data.gridSize || 44))),
     background: String(data.background || ""),
     backgroundFit: data.backgroundFit || "cover",
-    tokens: Array.isArray(data.tokens) ? data.tokens : []
+    tokens: Array.isArray(data.tokens) ? data.tokens : [],
+    tiles: Array.isArray(data.tiles) ? data.tiles : [],
+    customTiles: Array.isArray(data.customTiles) ? data.customTiles : []
   };
+}
+function mapTileDefinition(map, tileId) {
+  const data = normalizeMapData(map?.data);
+  return BUILT_IN_MAP_TILES.find(tile => tile.id === tileId)
+    || data.customTiles.find(tile => tile.id === tileId)
+    || BUILT_IN_MAP_TILES[0];
+}
+function mapTileStyle(map, tileId) {
+  const tile = mapTileDefinition(map, tileId);
+  if (tile.url) {
+    const safeUrl = String(tile.url).replace(/"/g, "%22").replace(/'/g, "%27").replace(/\\/g, "%5C").replace(/\n|\r/g, "");
+    return `background-image:url('${safeUrl}');background-size:cover;background-position:center;`;
+  }
+  return tile.style || BUILT_IN_MAP_TILES[0].style;
 }
 function campaignMapById(mapId) {
   return campaignMaps.find(map => map.id === mapId);
@@ -468,6 +501,31 @@ async function moveCampaignMapToken(mapId, tokenId, x, y) {
   token.y = Math.min(data.rows - 1, Math.max(0, y));
   map.data = data;
   await saveCampaignMap(map, "");
+}
+async function paintCampaignMapTile(mapId, tileId, x, y, mode = "paint") {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit the map"); return; }
+  const data = normalizeMapData(map.data);
+  const boundedX = Math.min(data.columns - 1, Math.max(0, x));
+  const boundedY = Math.min(data.rows - 1, Math.max(0, y));
+  data.tiles = data.tiles.filter(tile => !(Number(tile.x) === boundedX && Number(tile.y) === boundedY));
+  if (mode !== "erase") data.tiles.push({ x: boundedX, y: boundedY, tileId });
+  map.data = data;
+  await saveCampaignMap(map, "");
+}
+async function addCampaignCustomTile(mapId, values) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can add tiles"); return; }
+  const url = campaignTileImageDraft || String(values.tileUrl || "").trim();
+  if (!url) { toast("Upload a tile image or paste an image URL"); return; }
+  const name = String(values.tileName || "").trim() || "Custom Tile";
+  map.data = normalizeMapData(map.data);
+  const customTile = { id: `custom-${Date.now().toString(36)}`, name, category: "Custom", url };
+  map.data.customTiles = [...map.data.customTiles, customTile].slice(-24);
+  campaignTileImageDraft = "";
+  selectedMapTile = customTile.id;
+  selectedMapTool = "paint";
+  await saveCampaignMap(map, `${name} added to tiles`);
 }
 function persistCharacters() {
   saveJson(STORAGE_KEY, characters);
@@ -2459,6 +2517,35 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </section>`;
   }
   const data = normalizeMapData(activeMap.data);
+  const allTiles = [...BUILT_IN_MAP_TILES, ...data.customTiles];
+  if (!allTiles.some(tile => tile.id === selectedMapTile)) selectedMapTile = allTiles[0]?.id || "stone-floor";
+  const toolButtons = isDm ? `<div class="map-editor-tools" aria-label="Map editor tools">
+    <button type="button" class="${selectedMapTool === "token" ? "active" : ""}" data-map-tool="token">Move tokens</button>
+    <button type="button" class="${selectedMapTool === "paint" ? "active" : ""}" data-map-tool="paint">Paint tiles</button>
+    <button type="button" class="${selectedMapTool === "erase" ? "active" : ""}" data-map-tool="erase">Erase tiles</button>
+  </div>` : "";
+  const tilePalette = isDm ? `<div class="map-tile-palette">
+    ${allTiles.map(tile => `<button type="button" class="map-tile-swatch ${selectedMapTile === tile.id ? "active" : ""}" data-map-tile="${escapeHtml(tile.id)}" title="${escapeHtml(tile.name)}">
+      <span style="${mapTileStyle(activeMap, tile.id)}"></span>
+      <small>${escapeHtml(tile.name)}</small>
+    </button>`).join("")}
+  </div>
+  <details class="map-custom-tile">
+    <summary>Upload custom tile stamp</summary>
+    <form data-campaign-tile-create="${escapeHtml(activeMap.id)}">
+      <div class="map-form-grid custom">
+        <label>Tile name<input name="tileName" maxlength="40" placeholder="Torchlight, rug, bridge..."></label>
+        <label>Tile image URL<input name="tileUrl" placeholder="Paste a small image URL"></label>
+      </div>
+      <label>Upload tile image<input type="file" accept="image/*" data-campaign-tile-upload><small class="field-hint" data-tile-upload-status>No tile selected</small></label>
+      <button class="button primary small" type="submit">Add tile</button>
+    </form>
+  </details>` : "";
+  const paintedTiles = data.tiles.map(tile => {
+    const x = Math.min(data.columns - 1, Math.max(0, Number(tile.x || 0)));
+    const y = Math.min(data.rows - 1, Math.max(0, Number(tile.y || 0)));
+    return `<div class="map-cell-tile" style="--x:${x};--y:${y};${mapTileStyle(activeMap, tile.tileId)}"></div>`;
+  }).join("");
   const tokenCards = data.tokens.map(token => {
     const character = characterForMapToken(token);
     const canMove = canMoveMapToken(token, campaign.id);
@@ -2499,11 +2586,14 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     <div class="campaign-map-tabs">${mapTabs}</div>
     ${createForm}
     ${settingsForm}
+    ${toolButtons}
+    ${tilePalette}
     <div class="campaign-map-workspace">
       <aside class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</aside>
       <div class="battle-map-shell">
         <div class="battle-map-board" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;">
           ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : `<div class="battle-map-empty">No map art uploaded</div>`}
+          <div class="battle-map-tiles">${paintedTiles}</div>
           <div class="battle-map-grid" aria-hidden="true"></div>
           ${tokenButtons}
         </div>
@@ -4019,23 +4109,39 @@ function initEvents() {
       });
       return;
     }
+    const mapTool = event.target.closest("[data-map-tool]");
+    if (mapTool) {
+      selectedMapTool = mapTool.dataset.mapTool || "token";
+      renderCampaigns();
+      return;
+    }
+    const mapTile = event.target.closest("[data-map-tile]");
+    if (mapTile) {
+      selectedMapTile = mapTile.dataset.mapTile || selectedMapTile;
+      selectedMapTool = "paint";
+      renderCampaigns();
+      return;
+    }
     const mapToken = event.target.closest("[data-map-token-select]");
     if (mapToken) {
       if (mapToken.disabled) return;
       selectedMapToken = mapToken.dataset.mapTokenSelect;
       activeMapId = mapToken.dataset.mapId || activeMapId;
+      selectedMapTool = "token";
       renderCampaigns();
       return;
     }
     const mapBoard = event.target.closest("[data-campaign-map-board]");
-    if (mapBoard && selectedMapToken && !event.target.closest("[data-map-token-select]")) {
+    if (mapBoard && !event.target.closest("[data-map-token-select]")) {
       const map = campaignMapById(mapBoard.dataset.campaignMapBoard);
       if (!map) return;
       const data = normalizeMapData(map.data);
       const rect = mapBoard.getBoundingClientRect();
       const x = Math.floor((event.clientX - rect.left) / data.gridSize);
       const y = Math.floor((event.clientY - rect.top) / data.gridSize);
-      moveCampaignMapToken(map.id, selectedMapToken, x, y);
+      if (canEditCampaign(map.campaign_id) && selectedMapTool === "paint") paintCampaignMapTile(map.id, selectedMapTile, x, y, "paint");
+      else if (canEditCampaign(map.campaign_id) && selectedMapTool === "erase") paintCampaignMapTile(map.id, selectedMapTile, x, y, "erase");
+      else if (selectedMapToken) moveCampaignMapToken(map.id, selectedMapToken, x, y);
       return;
     }
     const nav = event.target.closest("[data-view]"); if (nav) { if (nav.dataset.view === "builder") startNewCharacter(); navigate(nav.dataset.view); }
@@ -4182,34 +4288,40 @@ function initEvents() {
     const formEl = event.target.closest("[data-campaign-share]");
     const mapCreate = event.target.closest("[data-campaign-map-create]");
     const mapSettings = event.target.closest("[data-campaign-map-settings]");
-    if (!formEl && !mapCreate && !mapSettings) return;
+    const tileCreate = event.target.closest("[data-campaign-tile-create]");
+    if (!formEl && !mapCreate && !mapSettings && !tileCreate) return;
     event.preventDefault();
-    const targetForm = formEl || mapCreate || mapSettings;
+    const targetForm = formEl || mapCreate || mapSettings || tileCreate;
     const values = Object.fromEntries(new FormData(targetForm));
     if (formEl) shareCharacterWithCampaign(formEl.dataset.campaignShare, values.characterId);
     if (mapCreate) createCampaignMap(mapCreate.dataset.campaignMapCreate, values);
     if (mapSettings) updateCampaignMapSettings(mapSettings.dataset.campaignMapSettings, values);
+    if (tileCreate) addCampaignCustomTile(tileCreate.dataset.campaignTileCreate, values);
   });
   $("#campaign-detail")?.addEventListener("change", event => {
-    const upload = event.target.closest("[data-campaign-map-upload]");
+    const tileUpload = event.target.closest("[data-campaign-tile-upload]");
+    const upload = event.target.closest("[data-campaign-map-upload]") || tileUpload;
     if (!upload) return;
     const file = upload.files?.[0];
-    const status = upload.closest("label")?.querySelector("[data-map-upload-status]");
+    const status = upload.closest("label")?.querySelector(tileUpload ? "[data-tile-upload-status]" : "[data-map-upload-status]");
     if (!file) {
-      campaignMapImageDraft = "";
+      if (tileUpload) campaignTileImageDraft = "";
+      else campaignMapImageDraft = "";
       if (status) status.textContent = "No image selected";
       return;
     }
     if (file.size > 2_500_000) {
       upload.value = "";
-      campaignMapImageDraft = "";
+      if (tileUpload) campaignTileImageDraft = "";
+      else campaignMapImageDraft = "";
       if (status) status.textContent = "Image is too large for cloud sync";
       toast("Use an image under 2.5 MB, or paste an image URL");
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      campaignMapImageDraft = String(reader.result || "");
+      if (tileUpload) campaignTileImageDraft = String(reader.result || "");
+      else campaignMapImageDraft = String(reader.result || "");
       if (status) status.textContent = `${file.name} ready`;
     };
     reader.readAsDataURL(file);
