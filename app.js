@@ -2197,6 +2197,53 @@ function characterCard(character, withActions = false) {
   </article>`;
 }
 
+function campaignPartyCard(character, link, ownerLabel, isDm, campaignId) {
+  const d = derived(character);
+  const maximumHp = d.hp;
+  const currentHp = Math.max(0, Math.min(maximumHp, Number(character.currentHp ?? maximumHp)));
+  const temporaryHp = Math.max(0, Number(character.temporaryHp || 0));
+  const resources = resourceDefinitions(character).slice(0, 3);
+  const resourceLine = resources.length
+    ? resources.map(resource => `${resource.name}: ${resource.max - resourceUsed(character, resource)}/${resource.max}`).join(" | ")
+    : "No tracked resources";
+  const rollButton = (label, modifier, mode = "normal") =>
+    `<button type="button" data-campaign-roll="${escapeHtml(character.id)}" data-owner="${escapeHtml(link.owner_user_id)}" data-roll-label="${escapeHtml(label)}" data-modifier="${modifier}" data-roll-mode="${mode}">${escapeHtml(label)}</button>`;
+  return `<article class="campaign-party-card">
+    <div class="campaign-party-head">
+      <div class="mini-portrait">${character.portrait ? `<img src="${character.portrait}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}</div>
+      <div>
+        <small>${escapeHtml(ownerLabel)}</small>
+        <strong>${escapeHtml(character.name)}</strong>
+        <span>${escapeHtml(classSummary(character))}</span>
+      </div>
+    </div>
+    <div class="campaign-stat-grid">
+      <span><small>AC</small><strong>${d.ac}</strong></span>
+      <span><small>HP</small><strong>${currentHp}/${maximumHp}</strong>${temporaryHp ? `<em>+${temporaryHp}</em>` : ""}</span>
+      <span><small>PP</small><strong>${d.passive}</strong></span>
+      <span><small>Init</small><strong>${signed(d.initiative)}</strong></span>
+    </div>
+    <p class="campaign-resource-line">${escapeHtml(resourceLine)}</p>
+    <div class="campaign-roll-row">
+      ${rollButton("Initiative", d.initiative, d.initiativeAdvantage ? "advantage" : "normal")}
+      ${rollButton("Perception", skillModifier(character, "Perception"))}
+      ${rollButton("Stealth", skillModifier(character, "Stealth"))}
+    </div>
+    ${isDm ? `<div class="session-hp campaign-hp" data-session-character="${escapeHtml(character.id)}">
+      <label>HP<input type="number" min="1" max="999" value="1" data-hp-amount></label>
+      <button type="button" class="session-action damage" data-hp-action="damage" data-character="${escapeHtml(character.id)}">Damage</button>
+      <button type="button" class="session-action heal" data-hp-action="heal" data-character="${escapeHtml(character.id)}">Heal</button>
+      <button type="button" class="session-action temp" data-hp-action="temp" data-character="${escapeHtml(character.id)}">Temp</button>
+    </div>
+    <div class="campaign-card-actions">
+      <button type="button" data-campaign-open-character="${escapeHtml(character.id)}" data-owner="${escapeHtml(link.owner_user_id)}">Open sheet</button>
+      <button type="button" data-inventory-open="${escapeHtml(character.id)}">Add items</button>
+      <button type="button" data-rest="short" data-character="${escapeHtml(character.id)}">Short rest</button>
+      <button type="button" data-rest="long" data-character="${escapeHtml(character.id)}">Long rest</button>
+    </div>` : `<div class="campaign-card-actions"><button type="button" data-campaign-open-character="${escapeHtml(character.id)}" data-owner="${escapeHtml(link.owner_user_id)}">Open sheet</button></div>`}
+  </article>`;
+}
+
 function renderCards(filter = "") {
   const matches = characters.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
   $("#recent-characters").innerHTML = matches.slice(0, 2).map(c => characterCard(c)).join("") +
@@ -2239,10 +2286,18 @@ function renderCampaigns() {
     .filter(character => !links.some(link => link.owner_user_id === cloudUser.id && link.character_id === character.id))
     .map(character => `<option value="${escapeHtml(character.id)}">${escapeHtml(character.name)} · ${escapeHtml(classSummary(character))}</option>`)
     .join("");
-  const characterRows = links.map(link => {
+  const linkedCharacters = links.map(link => {
     const character = characters.find(item => item.id === link.character_id && characterOwnerId(item) === link.owner_user_id);
     const owner = members.find(member => member.user_id === link.owner_user_id);
     const ownerLabel = owner?.display_name || (link.owner_user_id === cloudUser.id ? "You" : "Player");
+    return { link, character, ownerLabel };
+  });
+  const partyCards = linkedCharacters.map(({ link, character, ownerLabel }) =>
+    character
+      ? campaignPartyCard(character, link, ownerLabel, isDm, campaign.id)
+      : `<article class="campaign-party-card pending"><strong>${escapeHtml(link.nickname || "Shared character")}</strong><p>${escapeHtml(ownerLabel)} · sync pending</p></article>`
+  ).join("");
+  const characterRows = linkedCharacters.map(({ link, character, ownerLabel }) => {
     const canOpen = Boolean(character);
     const canRemove = isDm || link.owner_user_id === cloudUser.id;
     return `<div class="campaign-character-row">
@@ -2260,8 +2315,14 @@ function renderCampaigns() {
         <h2>${escapeHtml(campaign.name)}</h2>
         <p>${escapeHtml(campaign.description || "No campaign notes yet.")}</p>
       </div>
-      ${isDm ? `<div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button></div>` : ""}
+      ${isDm ? `<div class="campaign-dm-actions"><div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button></div><button type="button" class="button primary small" data-campaign-roll-party="${escapeHtml(campaign.id)}">Roll party initiative</button></div>` : ""}
     </div>
+    <section class="campaign-panel campaign-party-panel">
+      <div class="campaign-panel-head">
+        <div><h3>${isDm ? "DM table" : "Party sheets"}</h3><p>${isDm ? "Open sheets, roll checks, adjust HP, rest, and manage equipment from one screen." : "Open the sheets shared with this campaign."}</p></div>
+      </div>
+      <div class="campaign-party-grid">${partyCards || "<p>No shared character sheets yet.</p>"}</div>
+    </section>
     <div class="campaign-grid">
       <section class="campaign-panel">
         <h3>Members</h3>
@@ -2570,6 +2631,7 @@ function applyItemTemplate(index) {
 function openInventory(characterId) {
   const character = characters.find(item => item.id === characterId);
   if (!character) return;
+  if (!canControlCharacter(character)) { toast("Only the owner or campaign DM can manage this inventory"); return; }
   inventoryCharacterId = characterId;
   const currency = characterCurrency(character);
   Object.entries(currency).forEach(([coin, value]) => { $(`#currency-${coin}`).value = value; });
@@ -2589,12 +2651,14 @@ function saveInventoryCharacter(character) {
   character.updatedAt = Date.now();
   persistCharacters();
   renderSheet();
+  renderCampaigns();
 }
 
 function saveSessionCharacter(character) {
   character.updatedAt = Date.now();
   persistCharacters();
   renderSheet();
+  renderCampaigns();
 }
 
 function renderDeathSaves(character) {
@@ -3452,6 +3516,7 @@ function saveResourceUsage(character, resourceId, used) {
   character.updatedAt = Date.now();
   persistCharacters();
   renderSheet();
+  renderCampaigns();
 }
 
 function applyCharacterRest(character, restType) {
@@ -3473,6 +3538,7 @@ function applyCharacterRest(character, restType) {
   character.updatedAt = Date.now();
   persistCharacters();
   renderSheet();
+  renderCampaigns();
   toast(`${restType === "short" ? "Short" : "Long"} rest resources restored`);
 }
 
@@ -3622,6 +3688,26 @@ function initEvents() {
     if (copyInvite) {
       navigator.clipboard?.writeText(copyInvite.dataset.copyInvite);
       toast("Invite code copied");
+      return;
+    }
+    const partyRoll = event.target.closest("[data-campaign-roll-party]");
+    if (partyRoll) {
+      const links = campaignCharacters.filter(link => link.campaign_id === partyRoll.dataset.campaignRollParty);
+      const rolled = links
+        .map(link => characters.find(item => item.id === link.character_id && characterOwnerId(item) === link.owner_user_id))
+        .filter(Boolean);
+      rolled.forEach(character => {
+        const stats = derived(character);
+        rollOnSheet(`${character.name} Initiative`, stats.initiative, stats.initiativeAdvantage ? "advantage" : "normal");
+      });
+      toast(rolled.length ? `Rolled initiative for ${rolled.length} character${rolled.length === 1 ? "" : "s"}` : "No synced character sheets to roll");
+      return;
+    }
+    const campaignRoll = event.target.closest("[data-campaign-roll]");
+    if (campaignRoll) {
+      const character = characters.find(item => item.id === campaignRoll.dataset.campaignRoll && characterOwnerId(item) === campaignRoll.dataset.owner);
+      if (!character) { toast("That shared sheet is still syncing"); return; }
+      rollOnSheet(`${character.name} ${campaignRoll.dataset.rollLabel || "Roll"}`, Number(campaignRoll.dataset.modifier || 0), campaignRoll.dataset.rollMode || "normal");
       return;
     }
     const campaignOpen = event.target.closest("[data-campaign-open-character]");
