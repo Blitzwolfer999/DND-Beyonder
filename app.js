@@ -2605,11 +2605,72 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   </section>`;
 }
 
+function renderCampaignWorkbench(campaign, isDm, visibleLinks, allLinks, maps) {
+  const sharedCount = visibleLinks.length;
+  const totalShared = allLinks.length;
+  const mapCount = maps.length;
+  if (isDm) {
+    return `<section class="campaign-workbench dm">
+      <article>
+        <small>DM Control</small>
+        <strong>${totalShared} shared sheet${totalShared === 1 ? "" : "s"}</strong>
+        <p>Open sheets, roll checks, edit HP, rest resources, and manage inventory from this campaign.</p>
+        <button type="button" class="button ghost small" data-go="vault">Open DM vault</button>
+      </article>
+      <article>
+        <small>Invite</small>
+        <strong>${escapeHtml(campaign.invite_code)}</strong>
+        <p>Give this code to players so they can join, then have them share their character sheet.</p>
+        <button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button>
+      </article>
+      <article>
+        <small>Encounter</small>
+        <strong>${mapCount} map${mapCount === 1 ? "" : "s"}</strong>
+        <p>Create a battle map, add party tokens, paint tiles, and run movement from one screen.</p>
+        <button type="button" class="button ghost small" data-campaign-focus="maps">Open maps</button>
+      </article>
+    </section>`;
+  }
+  return `<section class="campaign-workbench player">
+    <article>
+      <small>Your Access</small>
+      <strong>${sharedCount} shared sheet${sharedCount === 1 ? "" : "s"}</strong>
+      <p>You can open and manage your own shared character sheet. Other players' sheets stay private.</p>
+      <button type="button" class="button ghost small" data-campaign-focus="share">Share a sheet</button>
+    </article>
+    <article>
+      <small>Battle Map</small>
+      <strong>${mapCount ? "Map ready" : "No map yet"}</strong>
+      <p>When the DM starts a map, select your token and click a square to move.</p>
+      <button type="button" class="button ghost small" data-campaign-focus="maps">Open map area</button>
+    </article>
+    <article>
+      <small>Privacy</small>
+      <strong>Player-safe view</strong>
+      <p>Players only see their own shared sheet. The DM can see campaign sheets for table management.</p>
+    </article>
+  </section>`;
+}
+
 function renderCards(filter = "") {
   const query = filter.toLowerCase();
   const ownMatches = ownCharacters().filter(c => c.name.toLowerCase().includes(query));
   const dmMatches = dmCampaignCharacters().filter(c => c.name.toLowerCase().includes(query));
   const recentMatches = [...ownMatches, ...dmMatches];
+  const dmCampaignCount = campaigns.filter(campaign => campaignRole(campaign.id) === "dm" || campaign.owner_id === cloudUser?.id).length;
+  const playerCampaignCount = campaigns.filter(campaign => campaignRole(campaign.id) === "player").length;
+  const summary = $("#vault-role-summary");
+  if (summary) {
+    summary.innerHTML = `<article>
+      <span>Your characters</span><strong>${ownMatches.length}</strong><small>Private sheets you own and control.</small>
+    </article>
+    <article>
+      <span>DM campaign sheets</span><strong>${dmMatches.length}</strong><small>Player sheets visible because you DM the campaign.</small>
+    </article>
+    <article>
+      <span>Campaign roles</span><strong>${dmCampaignCount} DM / ${playerCampaignCount} Player</strong><small>Player views only reveal your own shared sheet.</small>
+    </article>`;
+  }
   $("#recent-characters").innerHTML = recentMatches.slice(0, 2).map(c => characterCard(c)).join("") +
     `<button class="character-card new-card" data-go="builder"><div><span>+</span><h3>Forge a new hero</h3><p>Begin a fresh adventure</p></div></button>`;
   $("#vault-characters").innerHTML = ownMatches.length ? ownMatches.map(c => characterCard(c, true)).join("") :
@@ -2655,6 +2716,7 @@ function renderCampaigns() {
   const members = campaignMemberships.filter(member => member.campaign_id === campaign.id);
   const allLinks = campaignCharacters.filter(link => link.campaign_id === campaign.id);
   const links = allLinks.filter(link => isDm || link.owner_user_id === cloudUser.id);
+  const campaignMapsForView = mapsForCampaign(campaign.id);
   const shareOptions = ownCharacters()
     .filter(character => !allLinks.some(link => link.owner_user_id === cloudUser.id && link.character_id === character.id))
     .map(character => `<option value="${escapeHtml(character.id)}">${escapeHtml(character.name)} · ${escapeHtml(classSummary(character))}</option>`)
@@ -2671,6 +2733,7 @@ function renderCampaigns() {
       : `<article class="campaign-party-card pending"><strong>${escapeHtml(link.nickname || "Shared character")}</strong><p>${escapeHtml(ownerLabel)} · sync pending</p></article>`
   ).join("");
   const mapPanel = renderCampaignMapPanel(campaign, linkedCharacters, isDm);
+  const workbench = renderCampaignWorkbench(campaign, isDm, links, allLinks, campaignMapsForView);
   const characterRows = linkedCharacters.map(({ link, character, ownerLabel }) => {
     const canOpen = Boolean(character);
     const canRemove = isDm || link.owner_user_id === cloudUser.id;
@@ -2691,6 +2754,7 @@ function renderCampaigns() {
       </div>
       ${isDm ? `<div class="campaign-dm-actions"><div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button></div><button type="button" class="button primary small" data-campaign-roll-party="${escapeHtml(campaign.id)}">Roll party initiative</button></div>` : ""}
     </div>
+    ${workbench}
     <section class="campaign-panel campaign-party-panel">
       <div class="campaign-panel-head">
         <div><h3>${isDm ? "DM table" : "Party sheets"}</h3><p>${isDm ? "Open sheets, roll checks, adjust HP, rest, and manage equipment from one screen." : "Open the sheets shared with this campaign."}</p></div>
@@ -2705,6 +2769,7 @@ function renderCampaigns() {
       </section>
       <section class="campaign-panel">
         <h3>Shared characters</h3>
+        <p class="campaign-privacy-note">${isDm ? "DM view: all shared sheets in this campaign are visible here." : "Player view: only your own shared sheet appears here."}</p>
         ${characterRows || "<p>No character sheets have been shared yet.</p>"}
         <form class="campaign-share-form" data-campaign-share="${escapeHtml(campaign.id)}">
           <select name="characterId" ${shareOptions ? "" : "disabled"}>${shareOptions || `<option>No unshared characters</option>`}</select>
@@ -4156,6 +4221,14 @@ function initEvents() {
     const campaignRemove = event.target.closest("[data-campaign-remove-character]");
     if (campaignRemove) {
       removeCampaignCharacter(campaignRemove.dataset.campaign, campaignRemove.dataset.owner, campaignRemove.dataset.campaignRemoveCharacter);
+      return;
+    }
+    const campaignFocus = event.target.closest("[data-campaign-focus]");
+    if (campaignFocus) {
+      const target = campaignFocus.dataset.campaignFocus === "maps"
+        ? $(".campaign-map-panel")
+        : $(".campaign-share-form");
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     const mapSelect = event.target.closest("[data-campaign-map-select]");

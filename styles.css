@@ -472,6 +472,11 @@ textarea { resize: vertical; }
 .roll-history strong { color: var(--gold-dark); }
 .vault-toolbar { margin-bottom: 20px; display: flex; gap: 10px; }
 .vault-toolbar input { max-width: 420px; margin-right: auto; }
+.vault-role-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+.vault-role-summary article { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fffdf8; }
+.vault-role-summary span, .campaign-workbench small { display: block; color: var(--gold-dark); font-size: 11px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.vault-role-summary strong { display: block; margin: 5px 0; color: var(--ink); font: 800 24px Cinzel, serif; }
+.vault-role-summary small { color: var(--muted); line-height: 1.4; }
 .vault-section { margin-top: 22px; }
 .vault-section + .vault-section { padding-top: 24px; border-top: 1px solid var(--line); }
 .campaign-warning { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; padding: 18px; border: 1px solid #dfb46b; border-radius: 14px; background: #fff7e8; }
@@ -492,6 +497,13 @@ textarea { resize: vertical; }
 .campaign-detail-head h2 { margin: 0 0 6px; }
 .campaign-dm-actions { display: grid; gap: 10px; justify-items: end; }
 .invite-code { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed var(--gold-dark); border-radius: 10px; background: #fff8e8; font-weight: 800; color: var(--gold-dark); }
+.campaign-workbench { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.campaign-workbench article { display: grid; gap: 8px; align-content: start; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.campaign-workbench.dm article { border-top: 3px solid var(--red); }
+.campaign-workbench.player article { border-top: 3px solid var(--green); }
+.campaign-workbench strong { color: var(--ink); font: 800 20px Cinzel, serif; }
+.campaign-workbench p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.campaign-workbench .button { justify-self: start; }
 .campaign-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .campaign-panel { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fbfcfe; }
 .campaign-panel h3 { margin-top: 0; }
@@ -521,6 +533,7 @@ textarea { resize: vertical; }
 .campaign-member, .campaign-character-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .campaign-member:last-child, .campaign-character-row:last-child { border-bottom: 0; }
 .campaign-character-row small, .campaign-member small { color: var(--muted); }
+.campaign-privacy-note { margin: -4px 0 10px; color: var(--muted); font-size: 12px; }
 .campaign-share-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 12px; }
 .campaign-map-panel { margin-bottom: 16px; background: #f7f1e6; }
 .campaign-map-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
@@ -562,7 +575,7 @@ textarea { resize: vertical; }
 .map-token.selected { outline: 3px solid var(--gold); outline-offset: 2px; transform: scale(1.06); }
 .map-token:disabled { cursor: not-allowed; opacity: .72; }
 @media (max-width: 900px) {
-  .campaign-tools, .campaign-layout, .campaign-grid, .campaign-map-workspace, .map-form-grid { grid-template-columns: 1fr; }
+  .campaign-tools, .campaign-layout, .campaign-grid, .campaign-map-workspace, .map-form-grid, .campaign-workbench, .vault-role-summary { grid-template-columns: 1fr; }
   .campaign-warning { align-items: flex-start; flex-direction: column; }
 }
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; padding: 20px; display: grid; place-items: center; background: rgba(14,13,11,.72); }
