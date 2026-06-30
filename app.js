@@ -342,6 +342,12 @@ function isMissingCampaignSchema(error) {
     || message.includes("schema cache")
     || (message.includes("relation") && message.includes("campaign"));
 }
+function isMissingSecurityRpc(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return message.includes("could not find the function")
+    || (message.includes("function") && message.includes("does not exist"))
+    || (message.includes("schema cache") && message.includes("function"));
+}
 function reportCampaignError(error, fallbackMessage, showToast = true) {
   const message = isMissingCampaignSchema(error) ? campaignSetupMessage() : `${fallbackMessage}: ${error.message}`;
   setCloudStatus(message, true);
@@ -500,6 +506,30 @@ async function moveCampaignMapToken(mapId, tokenId, x, y) {
   const token = data.tokens.find(item => item.id === tokenId);
   if (!token) { toast("Choose Add party tokens first"); return; }
   if (!canMoveMapToken(token, map.campaign_id)) { toast("You can move your own token; the DM can move any token"); return; }
+  if (!canEditCampaign(map.campaign_id)) {
+    const { data: updatedMap, error } = await cloudClient.rpc("move_campaign_map_token", {
+      p_map_id: map.id,
+      p_token_id: tokenId,
+      p_x: x,
+      p_y: y
+    });
+    if (error && !isMissingSecurityRpc(error)) { toast(`Could not move token: ${error.message}`); return; }
+    if (error && isMissingSecurityRpc(error)) {
+      token.x = Math.min(data.columns - 1, Math.max(0, x));
+      token.y = Math.min(data.rows - 1, Math.max(0, y));
+      map.data = data;
+      await saveCampaignMap(map, "");
+      return;
+    }
+    if (updatedMap?.id) {
+      campaignMaps = campaignMaps.map(item => item.id === updatedMap.id ? updatedMap : item);
+      saveCampaignCache();
+      renderCampaigns();
+    } else {
+      await loadCampaigns();
+    }
+    return;
+  }
   token.x = Math.min(data.columns - 1, Math.max(0, x));
   token.y = Math.min(data.rows - 1, Math.max(0, y));
   map.data = data;
@@ -685,23 +715,36 @@ async function createCampaign(name, description) {
 async function joinCampaign(inviteCode) {
   if (!cloudUser || !cloudClient) { toast("Sign in to join a campaign"); return; }
   const code = inviteCode.trim().toUpperCase();
-  const { data, error } = await cloudClient.from("campaigns").select("id, name").eq("invite_code", code).single();
+  const displayName = cloudUser.user_metadata?.display_name || cloudUser.email?.split("@")[0] || "Player";
+  const { data, error } = await cloudClient.rpc("join_campaign_by_invite", {
+    p_invite_code: code,
+    p_display_name: displayName
+  });
   if (error) {
+    if (isMissingSecurityRpc(error)) {
+      const fallback = await cloudClient.from("campaigns").select("id, name").eq("invite_code", code).single();
+      if (fallback.error || !fallback.data) { toast("Invite code not found"); return; }
+      const { error: joinError } = await cloudClient.from("campaign_members").upsert({
+        campaign_id: fallback.data.id,
+        user_id: cloudUser.id,
+        role: "player",
+        display_name: displayName
+      }, { onConflict: "campaign_id,user_id" });
+      if (joinError) { toast(`Could not join campaign: ${joinError.message}`); return; }
+      activeCampaignId = fallback.data.id;
+      await loadCampaigns();
+      toast(`Joined ${fallback.data.name}`);
+      return;
+    }
     if (isMissingCampaignSchema(error)) reportCampaignError(error, "Could not join campaign");
     else toast("Invite code not found");
     return;
   }
-  if (!data) { toast("Invite code not found"); return; }
-  const { error: joinError } = await cloudClient.from("campaign_members").upsert({
-    campaign_id: data.id,
-    user_id: cloudUser.id,
-    role: "player",
-    display_name: cloudUser.user_metadata?.display_name || cloudUser.email?.split("@")[0] || "Player"
-  }, { onConflict: "campaign_id,user_id" });
-  if (joinError) { toast(`Could not join campaign: ${joinError.message}`); return; }
-  activeCampaignId = data.id;
+  const joined = Array.isArray(data) ? data[0] : data;
+  if (!joined?.id) { toast("Invite code not found"); return; }
+  activeCampaignId = joined.id;
   await loadCampaigns();
-  toast(`Joined ${data.name}`);
+  toast(`Joined ${joined.name}`);
 }
 async function shareCharacterWithCampaign(campaignId, characterId) {
   const character = characters.find(item => item.id === characterId && isOwnCharacter(item));
