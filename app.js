@@ -408,6 +408,16 @@ function tokenColor(name = "") {
   const total = [...String(name)].reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return palette[total % palette.length];
 }
+function mapTokenSize(token) {
+  return Math.min(4, Math.max(1, Math.round(Number(token?.size || 1))));
+}
+function clampMapTokenPosition(data, token, x, y) {
+  const size = mapTokenSize(token);
+  return {
+    x: Math.min(Math.max(0, data.columns - size), Math.max(0, Number(x))),
+    y: Math.min(Math.max(0, data.rows - size), Math.max(0, Number(y)))
+  };
+}
 function tokensForCampaignMap(map, links) {
   const data = normalizeMapData(map?.data);
   const existing = new Map(data.tokens.map(token => [token.id || mapTokenId(token.ownerUserId, token.characterId), token]));
@@ -416,16 +426,19 @@ function tokensForCampaignMap(map, links) {
     const id = mapTokenId(link.owner_user_id, link.character_id);
     const prior = existing.get(id) || {};
     const name = character?.name || link.nickname || "Hero";
-    return {
+    const token = {
       id,
       ownerUserId: link.owner_user_id,
       characterId: link.character_id,
       name,
+      portrait: character?.portrait || prior.portrait || "",
+      size: mapTokenSize(prior),
       color: prior.color || tokenColor(name),
       x: Math.min(data.columns - 1, Math.max(0, Number(prior.x ?? (index % Math.max(1, data.columns))))),
       y: Math.min(data.rows - 1, Math.max(0, Number(prior.y ?? Math.floor(index / Math.max(1, data.columns))))),
       hidden: Boolean(prior.hidden)
     };
+    return { ...token, ...clampMapTokenPosition(data, token, token.x, token.y) };
   });
 }
 async function saveCampaignMap(map, message = "Map updated") {
@@ -506,17 +519,18 @@ async function moveCampaignMapToken(mapId, tokenId, x, y) {
   const token = data.tokens.find(item => item.id === tokenId);
   if (!token) { toast("Choose Add party tokens first"); return; }
   if (!canMoveMapToken(token, map.campaign_id)) { toast("You can move your own token; the DM can move any token"); return; }
+  const position = clampMapTokenPosition(data, token, x, y);
   if (!canEditCampaign(map.campaign_id)) {
     const { data: updatedMap, error } = await cloudClient.rpc("move_campaign_map_token", {
       p_map_id: map.id,
       p_token_id: tokenId,
-      p_x: x,
-      p_y: y
+      p_x: position.x,
+      p_y: position.y
     });
     if (error && !isMissingSecurityRpc(error)) { toast(`Could not move token: ${error.message}`); return; }
     if (error && isMissingSecurityRpc(error)) {
-      token.x = Math.min(data.columns - 1, Math.max(0, x));
-      token.y = Math.min(data.rows - 1, Math.max(0, y));
+      token.x = position.x;
+      token.y = position.y;
       map.data = data;
       await saveCampaignMap(map, "");
       return;
@@ -530,8 +544,41 @@ async function moveCampaignMapToken(mapId, tokenId, x, y) {
     }
     return;
   }
-  token.x = Math.min(data.columns - 1, Math.max(0, x));
-  token.y = Math.min(data.rows - 1, Math.max(0, y));
+  token.x = position.x;
+  token.y = position.y;
+  map.data = data;
+  await saveCampaignMap(map, "");
+}
+async function resizeCampaignMapToken(mapId, tokenId, delta) {
+  const map = campaignMapById(mapId);
+  if (!map) return;
+  const data = normalizeMapData(map.data);
+  const token = data.tokens.find(item => item.id === tokenId);
+  if (!token) { toast("Choose Add party tokens first"); return; }
+  if (!canMoveMapToken(token, map.campaign_id)) { toast("You can resize your own token; the DM can resize any token"); return; }
+  const nextSize = Math.min(4, Math.max(1, mapTokenSize(token) + Number(delta || 0)));
+  token.size = nextSize;
+  const position = clampMapTokenPosition(data, token, token.x, token.y);
+  token.x = position.x;
+  token.y = position.y;
+  if (!canEditCampaign(map.campaign_id)) {
+    const { data: updatedMap, error } = await cloudClient.rpc("resize_campaign_map_token", {
+      p_map_id: map.id,
+      p_token_id: tokenId,
+      p_size: nextSize
+    });
+    if (error && !isMissingSecurityRpc(error)) { toast(`Could not resize token: ${error.message}`); return; }
+    if (!error && updatedMap?.id) {
+      campaignMaps = campaignMaps.map(item => item.id === updatedMap.id ? updatedMap : item);
+      saveCampaignCache();
+      renderCampaigns();
+      return;
+    }
+    if (!error) {
+      await loadCampaigns();
+      return;
+    }
+  }
   map.data = data;
   await saveCampaignMap(map, "");
 }
@@ -2477,7 +2524,7 @@ function characterCard(character, withActions = false) {
   const canControl = canControlCharacter(character);
   const canDelete = isOwnCharacter(character);
   return `<article class="character-card" data-character-id="${character.id}">
-    <div class="art">${character.portrait ? `<img src="${character.portrait}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}
+    <div class="art">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}
       ${withActions ? `<div class="card-actions">${canControl ? `<button data-level-up="${character.id}" title="Level up">↑</button><button data-edit="${character.id}" title="Edit">✎</button>` : ""}${canDelete ? `<button data-delete="${character.id}" title="Delete">×</button>` : ""}</div>` : ""}
     </div>
     <div class="card-copy">
@@ -2502,7 +2549,7 @@ function campaignPartyCard(character, link, ownerLabel, isDm, campaignId) {
     `<button type="button" data-campaign-roll="${escapeHtml(character.id)}" data-owner="${escapeHtml(link.owner_user_id)}" data-roll-label="${escapeHtml(label)}" data-modifier="${modifier}" data-roll-mode="${mode}">${escapeHtml(label)}</button>`;
   return `<article class="campaign-party-card">
     <div class="campaign-party-head">
-      <div class="mini-portrait">${character.portrait ? `<img src="${character.portrait}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}</div>
+      <div class="mini-portrait">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}</div>
       <div>
         <small>${escapeHtml(ownerLabel)}</small>
         <strong>${escapeHtml(character.name)}</strong>
@@ -2595,17 +2642,31 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const tokenCards = data.tokens.map(token => {
     const character = characterForMapToken(token);
     const canMove = canMoveMapToken(token, campaign.id);
-    return `<button type="button" class="map-token-card ${selectedMapToken === token.id ? "active" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"}>
-      <span style="--token:${escapeHtml(token.color)}">${escapeHtml((character?.name || token.name || "?").charAt(0).toUpperCase())}</span>
-      <strong>${escapeHtml(character?.name || token.name || "Token")}</strong>
-      <small>${canMove ? "Click, then choose a square" : "DM controlled"}</small>
-    </button>`;
+    const label = character?.name || token.name || "Token";
+    const portrait = character?.portrait || token.portrait || "";
+    const size = mapTokenSize(token);
+    return `<article class="map-token-card ${selectedMapToken === token.id ? "active" : ""}">
+      <button type="button" class="map-token-pick" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"}>
+        <span class="map-token-avatar" style="--token:${escapeHtml(token.color)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</span>
+        <strong>${escapeHtml(label)}</strong>
+        <small>${canMove ? "Click, then choose a square" : "DM controlled"}</small>
+      </button>
+      <div class="map-token-size-row">
+        <small>Token size: ${size}x${size}</small>
+        <span>
+          <button type="button" data-map-token-size="-1" data-token-id="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove && size > 1 ? "" : "disabled"}>-</button>
+          <button type="button" data-map-token-size="1" data-token-id="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove && size < 4 ? "" : "disabled"}>+</button>
+        </span>
+      </div>
+    </article>`;
   }).join("");
   const tokenButtons = data.tokens.map(token => {
     const character = characterForMapToken(token);
     const canMove = canMoveMapToken(token, campaign.id);
     const label = character?.name || token.name || "Token";
-    return `<button type="button" class="map-token ${selectedMapToken === token.id ? "selected" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--token:${escapeHtml(token.color)}" title="${escapeHtml(label)}">${escapeHtml(label.charAt(0).toUpperCase())}</button>`;
+    const portrait = character?.portrait || token.portrait || "";
+    const size = mapTokenSize(token);
+    return `<button type="button" class="map-token ${selectedMapToken === token.id ? "selected" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--size:${size};--token:${escapeHtml(token.color)}" title="${escapeHtml(`${label} (${size}x${size})`)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</button>`;
   }).join("");
   const settingsForm = isDm ? `<details class="map-settings">
     <summary>Map settings</summary>
@@ -3233,7 +3294,7 @@ function renderSheet() {
   $("#sheet-empty").classList.add("hidden");
   const sheet = $("#character-sheet"); sheet.classList.remove("hidden");
   sheet.innerHTML = `<div class="sheet-header">
-    <div class="sheet-portrait">${c.portrait ? `<img src="${c.portrait}" alt="">` : escapeHtml(c.name.charAt(0))}</div>
+    <div class="sheet-portrait">${c.portrait ? `<img src="${escapeHtml(c.portrait)}" alt="">` : escapeHtml(c.name.charAt(0))}</div>
     <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
     <div class="sheet-core">
       <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></button>
@@ -4308,6 +4369,15 @@ function initEvents() {
       selectedMapTile = mapTile.dataset.mapTile || selectedMapTile;
       selectedMapTool = "paint";
       renderCampaigns();
+      return;
+    }
+    const mapTokenSizeButton = event.target.closest("[data-map-token-size]");
+    if (mapTokenSizeButton) {
+      if (mapTokenSizeButton.disabled) return;
+      selectedMapToken = mapTokenSizeButton.dataset.tokenId;
+      activeMapId = mapTokenSizeButton.dataset.mapId || activeMapId;
+      selectedMapTool = "token";
+      resizeCampaignMapToken(mapTokenSizeButton.dataset.mapId, mapTokenSizeButton.dataset.tokenId, Number(mapTokenSizeButton.dataset.mapTokenSize || 0));
       return;
     }
     const mapToken = event.target.closest("[data-map-token-select]");

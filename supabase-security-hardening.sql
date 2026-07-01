@@ -85,6 +85,7 @@ declare
   token_count integer;
   columns integer;
   rows integer;
+  token_size integer;
 begin
   if (select auth.uid()) is null then
     raise exception 'Sign in required';
@@ -127,8 +128,89 @@ begin
 
   columns := greatest(4, least(80, coalesce((map_data->>'columns')::integer, 24)));
   rows := greatest(4, least(80, coalesce((map_data->>'rows')::integer, 16)));
-  next_token := jsonb_set(token, '{x}', to_jsonb(greatest(0, least(columns - 1, p_x))), true);
-  next_token := jsonb_set(next_token, '{y}', to_jsonb(greatest(0, least(rows - 1, p_y))), true);
+  token_size := greatest(1, least(4, coalesce((token->>'size')::integer, 1)));
+  next_token := jsonb_set(token, '{x}', to_jsonb(greatest(0, least(columns - token_size, p_x))), true);
+  next_token := jsonb_set(next_token, '{y}', to_jsonb(greatest(0, least(rows - token_size, p_y))), true);
+  tokens := jsonb_set(tokens, array[token_index::text], next_token, false);
+  map_data := jsonb_set(map_data, '{tokens}', tokens, true);
+
+  update public.campaign_maps
+  set data = map_data,
+      updated_at = now()
+  where id = target_map.id
+  returning * into target_map;
+
+  return target_map;
+end;
+$$;
+
+create or replace function public.resize_campaign_map_token(p_map_id uuid, p_token_id text, p_size integer)
+returns public.campaign_maps
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_map public.campaign_maps;
+  map_data jsonb;
+  tokens jsonb;
+  token jsonb;
+  next_token jsonb;
+  token_index integer;
+  token_count integer;
+  columns integer;
+  rows integer;
+  next_size integer;
+  next_x integer;
+  next_y integer;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Sign in required';
+  end if;
+
+  select *
+  into target_map
+  from public.campaign_maps
+  where id = p_map_id;
+
+  if target_map.id is null then
+    raise exception 'Map not found';
+  end if;
+
+  if not public.is_campaign_member(target_map.campaign_id) then
+    raise exception 'Not a campaign member';
+  end if;
+
+  map_data := coalesce(target_map.data, '{}'::jsonb);
+  tokens := coalesce(map_data->'tokens', '[]'::jsonb);
+  token_count := jsonb_array_length(tokens);
+  token_index := null;
+
+  for i in 0..greatest(token_count - 1, 0) loop
+    token := tokens->i;
+    if token->>'id' = p_token_id then
+      token_index := i;
+      exit;
+    end if;
+  end loop;
+
+  if token_index is null then
+    raise exception 'Token not found';
+  end if;
+
+  if not public.is_campaign_dm(target_map.campaign_id)
+    and token->>'ownerUserId' <> (select auth.uid())::text then
+    raise exception 'You can only resize your own token';
+  end if;
+
+  columns := greatest(4, least(80, coalesce((map_data->>'columns')::integer, 24)));
+  rows := greatest(4, least(80, coalesce((map_data->>'rows')::integer, 16)));
+  next_size := greatest(1, least(4, p_size));
+  next_x := greatest(0, least(columns - next_size, coalesce((token->>'x')::integer, 0)));
+  next_y := greatest(0, least(rows - next_size, coalesce((token->>'y')::integer, 0)));
+  next_token := jsonb_set(token, '{size}', to_jsonb(next_size), true);
+  next_token := jsonb_set(next_token, '{x}', to_jsonb(next_x), true);
+  next_token := jsonb_set(next_token, '{y}', to_jsonb(next_y), true);
   tokens := jsonb_set(tokens, array[token_index::text], next_token, false);
   map_data := jsonb_set(map_data, '{tokens}', tokens, true);
 
@@ -146,10 +228,12 @@ revoke all on function public.is_campaign_member(uuid) from public;
 revoke all on function public.is_campaign_dm(uuid) from public;
 revoke all on function public.join_campaign_by_invite(text, text) from public;
 revoke all on function public.move_campaign_map_token(uuid, text, integer, integer) from public;
+revoke all on function public.resize_campaign_map_token(uuid, text, integer) from public;
 grant execute on function public.is_campaign_member(uuid) to authenticated;
 grant execute on function public.is_campaign_dm(uuid) to authenticated;
 grant execute on function public.join_campaign_by_invite(text, text) to authenticated;
 grant execute on function public.move_campaign_map_token(uuid, text, integer, integer) to authenticated;
+grant execute on function public.resize_campaign_map_token(uuid, text, integer) to authenticated;
 
 drop policy if exists "Authenticated users can find campaign invite codes" on public.campaigns;
 drop policy if exists "Campaign members can read campaigns" on public.campaigns;
