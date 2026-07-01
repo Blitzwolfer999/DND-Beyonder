@@ -3993,15 +3993,15 @@ function roll(sides = selectedDie, count = 1, mod = 0, label = "", mode = select
     : `2d${sides}${mod ? signed(mod) : ""} [${rolls.join(", ")} → ${chosen}]`;
   const entry = { total, detail, label: (label || "Custom roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
-  animateDiceResult({ total, sides, label: entry.label, detail });
+  animateDiceResult({ rollValue: chosen, total, sides, label: entry.label, detail });
   const overlayData = { label: label || `d${sides} roll`, modifier: mod, rolls, d20s: rolls, chosen, faceValue: chosen, total, mode, sides, count };
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(chosen, () => showRollOverlay(overlayData), sides);
+  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(chosen, () => showRollOverlay({ ...overlayData, settled: true }), sides);
   else showRollOverlay(overlayData);
   return total;
 }
 
-function animateDiceResult({ total, sides, label, detail }) {
+function animateDiceResult({ rollValue, total, sides, label, detail }) {
   const panel = $("#dice-result");
   const number = $("#dice-result strong");
   const copy = $("#dice-result p");
@@ -4016,8 +4016,8 @@ function animateDiceResult({ total, sides, label, detail }) {
     number.textContent = Math.floor(Math.random() * Math.max(2, Number(sides || 20))) + 1;
     if (++ticks > 16) {
       clearInterval(animateDiceResult.timer);
-      number.textContent = total;
-      copy.textContent = `${label} · ${detail}`;
+      number.textContent = rollValue;
+      copy.textContent = `${label} - raw ${rollValue}${total !== rollValue ? ` - total ${total}` : ""} - ${detail}`;
       panel.classList.remove("rolling");
       panel.classList.add("landed");
       setTimeout(() => panel.classList.remove("landed"), 900);
@@ -4049,10 +4049,13 @@ function rollOnSheet(label, modifier, mode) {
   const detail = `1d20${modifier ? signed(modifier) : ""} [${d20s.join(", ")}${mode !== "normal" ? " → " + chosen : ""}]`;
   const entry = { total, detail, label: (label || "Roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
-  if ($("#dice-result strong")) { $("#dice-result strong").textContent = total; $("#dice-result p").textContent = `${entry.label} · ${detail}`; }
+  if ($("#dice-result strong")) {
+    $("#dice-result strong").textContent = chosen;
+    $("#dice-result p").textContent = `${entry.label} - raw ${chosen}${total !== chosen ? ` - total ${total}` : ""} - ${detail}`;
+  }
   const overlayData = { label: label || "Roll", modifier, rolls: d20s, d20s, chosen, faceValue: chosen, total, mode, sides: 20, count: 1 };
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(chosen, () => showRollOverlay(overlayData), 20);
+  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(chosen, () => showRollOverlay({ ...overlayData, settled: true }), 20);
   else showRollOverlay(overlayData);
   return total;
 }
@@ -4135,6 +4138,16 @@ function showRollOverlay(r) {
   die.classList.remove("spin"); void die.offsetWidth; die.classList.add("spin");
   totalEl.textContent = "";
   clearInterval(rollOverlayTimer);
+  if (r.settled) {
+    die.classList.remove("spin");
+    num.textContent = faceValue;
+    totalEl.textContent = r.total;
+    if (sides === 20 && faceValue === 20 && (r.mode !== "normal" || Number(r.count || 1) === 1)) overlay.classList.add("crit");
+    else if (faceValue === 1) overlay.classList.add("fumble");
+    clearTimeout(rollOverlayHideTimer);
+    rollOverlayHideTimer = setTimeout(() => { overlay.hidden = true; }, 8000);
+    return;
+  }
   let ticks = 0;
   rollOverlayTimer = setInterval(() => {
     num.textContent = Math.floor(Math.random() * animationMax) + 1;
