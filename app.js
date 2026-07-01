@@ -261,6 +261,8 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const form = $("#character-form");
 const canvas = $("#portrait-canvas");
 const ctx = canvas.getContext("2d");
+const PORTRAIT_EXPORT_SIZE = 256;
+const PORTRAIT_EXPORT_QUALITY = 0.74;
 const BUILT_IN_MAP_TILES = [
   { id: "stone-floor", name: "Stone Floor", category: "Dungeon", style: "background:#787064;background-image:linear-gradient(90deg,rgba(0,0,0,.18) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.18) 1px,transparent 1px);background-size:50% 50%;" },
   { id: "cracked-stone", name: "Cracked Stone", category: "Dungeon", style: "background:#6c665e;background-image:linear-gradient(135deg,transparent 45%,rgba(24,20,18,.36) 46%,transparent 50%),linear-gradient(35deg,transparent 58%,rgba(255,255,255,.12) 59%,transparent 62%);" },
@@ -279,7 +281,15 @@ const BUILT_IN_MAP_TILES = [
 function readJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
-function saveJson(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+function saveJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.warn(`Could not save ${key}`, error);
+    return false;
+  }
+}
 function characterTimestamp(character) { return Number(character?.updatedAt || 0); }
 function deletionTimestamp(id) { return Number(deletedCharacters[id] || 0); }
 function persistDeletedCharacters() {
@@ -608,11 +618,13 @@ async function addCampaignCustomTile(mapId, values) {
   await saveCampaignMap(map, `${name} added to tiles`);
 }
 function persistCharacters() {
-  saveJson(STORAGE_KEY, characters);
-  if (cloudUser) saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters);
-  if (!cloudUser || !cloudClient) return;
-  clearTimeout(cloudSyncTimer);
-  cloudSyncTimer = setTimeout(syncCharactersToCloud, 350);
+  const savedMain = saveJson(STORAGE_KEY, characters);
+  const savedUser = cloudUser ? saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters) : true;
+  if (cloudUser && cloudClient) {
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer = setTimeout(syncCharactersToCloud, 350);
+  }
+  return savedMain && savedUser;
 }
 async function syncCharactersToCloud() {
   if (!cloudUser || !cloudClient) return;
@@ -1120,6 +1132,24 @@ function resetPortrait() {
   ctx.beginPath(); ctx.arc(210, 170, 70, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(80, 410); ctx.quadraticCurveTo(210, 230, 340, 410); ctx.stroke();
   portraitData = "";
+  updatePreview();
+}
+function drawImageCover(targetCtx, image, width, height) {
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  targetCtx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+function portraitFromCanvas() {
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = PORTRAIT_EXPORT_SIZE;
+  exportCanvas.height = PORTRAIT_EXPORT_SIZE;
+  const exportCtx = exportCanvas.getContext("2d");
+  exportCtx.drawImage(canvas, 0, 0, PORTRAIT_EXPORT_SIZE, PORTRAIT_EXPORT_SIZE);
+  return exportCanvas.toDataURL("image/jpeg", PORTRAIT_EXPORT_QUALITY);
+}
+function setPortraitFromCanvas() {
+  portraitData = portraitFromCanvas();
   updatePreview();
 }
 
@@ -2075,7 +2105,7 @@ function formData() {
   const data = Object.fromEntries(new FormData(form));
   data.edition = edition;
   data.className = selectedClass;
-  data.portrait = portraitData;
+  data.portrait = portraitData ? portraitFromCanvas() : "";
   selectedValues("feats", form).forEach(name => selectedFeatNames.add(name));
   selectedValues("spells", form).forEach(name => selectedSpellNames.add(name));
   $$("select[data-feat-ability]").forEach(select => { selectedFeatAbilities[select.dataset.featAbility] = select.value; });
@@ -4683,7 +4713,12 @@ function initEvents() {
     data.updatedAt = Date.now();
     const index = characters.findIndex(c => c.id === data.id);
     if (index >= 0) characters[index] = { ...characters[index], ...data }; else characters.unshift(data);
-    activeCharacterId = data.id; persistCharacters(); renderCards(); renderSheet(); toast(`${data.name} saved to the vault`); navigate("sheet");
+    activeCharacterId = data.id;
+    const saved = persistCharacters();
+    renderCards();
+    renderSheet();
+    toast(saved ? `${data.name} saved to the vault` : "Character updated on this page, but browser storage is full. Remove old exports/images or sign in before refreshing.");
+    navigate("sheet");
   });
   $("#portrait-upload").addEventListener("change", event => {
     const file = event.target.files[0]; if (!file) return;
@@ -4693,9 +4728,8 @@ function initEvents() {
       const image = new Image();
       image.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        portraitData = canvas.toDataURL("image/jpeg", .82);
-        updatePreview();
+        drawImageCover(ctx, image, canvas.width, canvas.height);
+        setPortraitFromCanvas();
       };
       image.src = reader.result;
     };
@@ -4709,7 +4743,7 @@ function initEvents() {
     return { x: (source.clientX - rect.left) * canvas.width / rect.width, y: (source.clientY - rect.top) * canvas.height / rect.height };
   };
   const startDraw = event => { if (!drawEnabled) return; drawing = true; const p = point(event); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-  const moveDraw = event => { if (!drawing || !drawEnabled) return; event.preventDefault(); const p = point(event); ctx.strokeStyle = "#342a22"; ctx.lineWidth = 8; ctx.lineCap = "round"; ctx.lineTo(p.x, p.y); ctx.stroke(); portraitData = canvas.toDataURL("image/jpeg", .82); updatePreview(); };
+  const moveDraw = event => { if (!drawing || !drawEnabled) return; event.preventDefault(); const p = point(event); ctx.strokeStyle = "#342a22"; ctx.lineWidth = 8; ctx.lineCap = "round"; ctx.lineTo(p.x, p.y); ctx.stroke(); setPortraitFromCanvas(); };
   const endDraw = () => { drawing = false; };
   canvas.addEventListener("pointerdown", startDraw); canvas.addEventListener("pointermove", moveDraw); window.addEventListener("pointerup", endDraw);
   $("#dice-buttons").addEventListener("click", event => {
