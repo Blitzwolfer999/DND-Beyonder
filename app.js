@@ -451,16 +451,37 @@ function tokensForCampaignMap(map, links) {
     return { ...token, ...clampMapTokenPosition(data, token, token.x, token.y) };
   });
 }
-async function saveCampaignMap(map, message = "Map updated") {
+function updateCampaignMapCache(map) {
+  if (!map?.id) return;
+  campaignMaps = [...campaignMaps.filter(item => item.id !== map.id), map];
+  saveCampaignCache();
+}
+async function fetchCampaignMap(mapId) {
+  if (!cloudUser || !cloudClient || !mapId) return null;
+  const { data, error } = await cloudClient.from("campaign_maps")
+    .select("id, campaign_id, owner_id, name, data, updated_at")
+    .eq("id", mapId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
+}
+async function saveCampaignMap(map, message = "Map updated", options = {}) {
   if (!cloudUser || !cloudClient || !map) return;
-  map.data = normalizeMapData(map.data);
+  const latest = options.preserveTokens ? await fetchCampaignMap(map.id) : null;
+  const nextData = normalizeMapData(map.data);
+  if (latest?.data) {
+    nextData.tokens = normalizeMapData(latest.data).tokens.map(token => {
+      const normalizedToken = { ...token, size: mapTokenSize(token) };
+      return { ...normalizedToken, ...clampMapTokenPosition(nextData, normalizedToken, normalizedToken.x, normalizedToken.y) };
+    });
+  }
+  map.data = nextData;
   map.updated_at = new Date().toISOString();
   const { error } = await cloudClient.from("campaign_maps")
     .update({ name: map.name, data: map.data, updated_at: map.updated_at })
     .eq("id", map.id);
   if (error) { reportCampaignError(error, "Could not save map"); return; }
-  campaignMaps = campaignMaps.map(item => item.id === map.id ? map : item);
-  saveCampaignCache();
+  updateCampaignMapCache(map);
   renderCampaigns();
   if (message) toast(message);
 }
@@ -501,7 +522,7 @@ async function updateCampaignMapSettings(mapId, values) {
     background: campaignMapImageDraft || String(values.background || "").trim() || map.data?.background || ""
   });
   campaignMapImageDraft = "";
-  await saveCampaignMap(map, "Map settings saved");
+  await saveCampaignMap(map, "Map settings saved", { preserveTokens: true });
 }
 async function deleteCampaignMap(mapId) {
   const map = campaignMapById(mapId);
@@ -518,11 +539,18 @@ async function ensureCampaignMapTokens(mapId) {
   const map = campaignMapById(mapId);
   if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can add tokens"); return; }
   const links = campaignCharacters.filter(link => link.campaign_id === map.campaign_id);
-  map.data = normalizeMapData(map.data);
+  const latest = await fetchCampaignMap(map.id);
+  if (latest) {
+    map.name = latest.name;
+    map.data = normalizeMapData(latest.data);
+  } else {
+    map.data = normalizeMapData(map.data);
+  }
   map.data.tokens = tokensForCampaignMap(map, links);
   await saveCampaignMap(map, "Party tokens added");
 }
 async function moveCampaignMapToken(mapId, tokenId, x, y) {
+  if (!cloudUser || !cloudClient) { toast("Sign in to move campaign map tokens"); return; }
   const map = campaignMapById(mapId);
   if (!map) return;
   const data = normalizeMapData(map.data);
@@ -530,36 +558,43 @@ async function moveCampaignMapToken(mapId, tokenId, x, y) {
   if (!token) { toast("Choose Add party tokens first"); return; }
   if (!canMoveMapToken(token, map.campaign_id)) { toast("You can move your own token; the DM can move any token"); return; }
   const position = clampMapTokenPosition(data, token, x, y);
-  if (!canEditCampaign(map.campaign_id)) {
-    const { data: updatedMap, error } = await cloudClient.rpc("move_campaign_map_token", {
-      p_map_id: map.id,
-      p_token_id: tokenId,
-      p_x: position.x,
-      p_y: position.y
-    });
-    if (error && !isMissingSecurityRpc(error)) { toast(`Could not move token: ${error.message}`); return; }
-    if (error && isMissingSecurityRpc(error)) {
-      token.x = position.x;
-      token.y = position.y;
-      map.data = data;
-      await saveCampaignMap(map, "");
-      return;
-    }
+  const { data: updatedMap, error } = await cloudClient.rpc("move_campaign_map_token", {
+    p_map_id: map.id,
+    p_token_id: tokenId,
+    p_x: position.x,
+    p_y: position.y
+  });
+  if (error && !isMissingSecurityRpc(error)) { toast(`Could not move token: ${error.message}`); return; }
+  if (!error) {
     if (updatedMap?.id) {
-      campaignMaps = campaignMaps.map(item => item.id === updatedMap.id ? updatedMap : item);
-      saveCampaignCache();
+      updateCampaignMapCache(updatedMap);
       renderCampaigns();
     } else {
       await loadCampaigns();
     }
     return;
   }
-  token.x = position.x;
-  token.y = position.y;
-  map.data = data;
+  if (!canEditCampaign(map.campaign_id)) {
+    toast("Map movement needs the latest campaign SQL. Run supabase-security-hardening.sql, then refresh.");
+    return;
+  }
+  const latest = await fetchCampaignMap(map.id);
+  const fallbackData = normalizeMapData(latest?.data || map.data);
+  const fallbackToken = fallbackData.tokens.find(item => item.id === tokenId);
+  if (fallbackToken) {
+    fallbackToken.x = position.x;
+    fallbackToken.y = position.y;
+  } else {
+    token.x = position.x;
+    token.y = position.y;
+    fallbackData.tokens.push(token);
+  }
+  if (latest?.name) map.name = latest.name;
+  map.data = fallbackData;
   await saveCampaignMap(map, "");
 }
 async function resizeCampaignMapToken(mapId, tokenId, delta) {
+  if (!cloudUser || !cloudClient) { toast("Sign in to resize campaign map tokens"); return; }
   const map = campaignMapById(mapId);
   if (!map) return;
   const data = normalizeMapData(map.data);
@@ -571,25 +606,38 @@ async function resizeCampaignMapToken(mapId, tokenId, delta) {
   const position = clampMapTokenPosition(data, token, token.x, token.y);
   token.x = position.x;
   token.y = position.y;
-  if (!canEditCampaign(map.campaign_id)) {
-    const { data: updatedMap, error } = await cloudClient.rpc("resize_campaign_map_token", {
-      p_map_id: map.id,
-      p_token_id: tokenId,
-      p_size: nextSize
-    });
-    if (error && !isMissingSecurityRpc(error)) { toast(`Could not resize token: ${error.message}`); return; }
-    if (!error && updatedMap?.id) {
-      campaignMaps = campaignMaps.map(item => item.id === updatedMap.id ? updatedMap : item);
-      saveCampaignCache();
-      renderCampaigns();
-      return;
-    }
-    if (!error) {
-      await loadCampaigns();
-      return;
-    }
+  const { data: updatedMap, error } = await cloudClient.rpc("resize_campaign_map_token", {
+    p_map_id: map.id,
+    p_token_id: tokenId,
+    p_size: nextSize
+  });
+  if (error && !isMissingSecurityRpc(error)) { toast(`Could not resize token: ${error.message}`); return; }
+  if (!error && updatedMap?.id) {
+    updateCampaignMapCache(updatedMap);
+    renderCampaigns();
+    return;
   }
-  map.data = data;
+  if (!error) {
+    await loadCampaigns();
+    return;
+  }
+  if (!canEditCampaign(map.campaign_id)) {
+    toast("Map token sizing needs the latest campaign SQL. Run supabase-security-hardening.sql, then refresh.");
+    return;
+  }
+  const latest = await fetchCampaignMap(map.id);
+  const fallbackData = normalizeMapData(latest?.data || map.data);
+  const fallbackToken = fallbackData.tokens.find(item => item.id === tokenId);
+  if (fallbackToken) {
+    fallbackToken.size = nextSize;
+    const fallbackPosition = clampMapTokenPosition(fallbackData, fallbackToken, fallbackToken.x, fallbackToken.y);
+    fallbackToken.x = fallbackPosition.x;
+    fallbackToken.y = fallbackPosition.y;
+  } else {
+    fallbackData.tokens.push(token);
+  }
+  if (latest?.name) map.name = latest.name;
+  map.data = fallbackData;
   await saveCampaignMap(map, "");
 }
 async function paintCampaignMapTile(mapId, tileId, x, y, mode = "paint") {
@@ -601,7 +649,7 @@ async function paintCampaignMapTile(mapId, tileId, x, y, mode = "paint") {
   data.tiles = data.tiles.filter(tile => !(Number(tile.x) === boundedX && Number(tile.y) === boundedY));
   if (mode !== "erase") data.tiles.push({ x: boundedX, y: boundedY, tileId });
   map.data = data;
-  await saveCampaignMap(map, "");
+  await saveCampaignMap(map, "", { preserveTokens: true });
 }
 async function addCampaignCustomTile(mapId, values) {
   const map = campaignMapById(mapId);
@@ -615,7 +663,7 @@ async function addCampaignCustomTile(mapId, values) {
   campaignTileImageDraft = "";
   selectedMapTile = customTile.id;
   selectedMapTool = "paint";
-  await saveCampaignMap(map, `${name} added to tiles`);
+  await saveCampaignMap(map, `${name} added to tiles`, { preserveTokens: true });
 }
 function persistCharacters() {
   const savedMain = saveJson(STORAGE_KEY, characters);
