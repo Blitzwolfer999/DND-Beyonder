@@ -6,10 +6,21 @@
   <meta name="theme-color" content="#11100e">
   <meta name="description" content="DND Beyonder is an open-rules fantasy character builder with automatic math, dice, portraits, and cross-device character storage.">
   <title>DND Beyonder | Fantasy Character Builder</title>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("dndb.theme");
+        var theme = saved || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=portrait-save-1">
+  <link rel="stylesheet" href="styles.css?v=ui-theme-1">
 </head>
 <body>
   <div class="app-shell">
@@ -26,6 +37,7 @@
         <button class="nav-item" data-view="dice"><span>◇</span> Dice</button>
       </nav>
       <div class="top-actions">
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme" aria-pressed="false"><span>Theme</span><strong>Light</strong></button>
         <button class="icon-button" id="quick-roll" title="Quick roll a d20">d20</button>
         <button class="profile-button" id="account-button">
           <span class="avatar-mini">W</span>
@@ -515,6 +527,6 @@
   <script src="subclass-features.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js?v=campaigns-4"></script>
-  <script src="app.js?v=map-robust-1"></script>
+  <script src="app.js?v=ui-theme-1"></script>
 </body>
 </html>

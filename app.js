@@ -213,6 +213,8 @@ const CLOUD_OWNER_KEY = "arcanaForge.cloudOwner.v1";
 const DELETED_KEY = "arcanaForge.deletedCharacters.v1";
 const CAMPAIGN_KEY = "arcanaForge.campaigns.v1";
 const CAMPAIGN_MAP_KEY = "arcanaForge.campaignMaps.v1";
+const THEME_KEY = "dndb.theme";
+const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
 
 let edition = "2014";
 let currentStep = 1;
@@ -950,6 +952,39 @@ function showHelpPopover(chip) {
   pop.style.top = `${window.scrollY + rect.bottom + 8}px`;
   pop.style.left = `${Math.max(10, Math.min(window.scrollX + rect.left - 6, maxLeft))}px`;
   helpPopoverEl = pop;
+}
+
+function routeViewFromHash() {
+  const view = String(location.hash || "").replace(/^#\/?/, "").split(/[/?&]/)[0] || "dashboard";
+  return ROUTE_VIEWS.has(view) ? view : "dashboard";
+}
+function syncRoute(view, replace = false) {
+  const nextHash = `#${view}`;
+  if (location.hash === nextHash) return;
+  const url = `${location.pathname}${location.search}${nextHash}`;
+  if (replace) history.replaceState(null, "", url);
+  else history.pushState(null, "", url);
+}
+function applyTheme(theme) {
+  const nextTheme = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = nextTheme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", nextTheme === "dark" ? "#10131a" : "#f3f5f8");
+  const toggle = $("#theme-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", String(nextTheme === "dark"));
+    const label = toggle.querySelector("strong");
+    if (label) label.textContent = nextTheme === "dark" ? "Dark" : "Light";
+  }
+}
+function initTheme() {
+  let theme = document.documentElement.dataset.theme || "light";
+  try { theme = localStorage.getItem(THEME_KEY) || theme; } catch (e) {}
+  applyTheme(theme);
+  $("#theme-toggle")?.addEventListener("click", () => {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    try { localStorage.setItem(THEME_KEY, nextTheme); } catch (e) {}
+    applyTheme(nextTheme);
+  });
 }
 
 function showWelcomeIfNeeded() {
@@ -2550,11 +2585,14 @@ function setStep(step) {
   if (currentStep === 4) renderTalentChoices();
 }
 
-function navigate(view) {
+function navigate(view, options = {}) {
+  if (!ROUTE_VIEWS.has(view)) view = "dashboard";
   $$(".view").forEach(x => x.classList.toggle("active", x.id === `${view}-view`));
   $$(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === view));
   $("#page-title").textContent = ({ dashboard: "Hall", builder: "Create", sheet: "Character Sheet", dice: "Dice Tray", vault: "Vault", campaigns: "Campaigns" })[view];
   $(".topnav")?.classList.remove("open");
+  $("#mobile-menu")?.setAttribute("aria-expanded", "false");
+  if (options.updateHash !== false) syncRoute(view, Boolean(options.replace));
   if (view === "vault" || view === "dashboard") renderCards();
   if (view === "campaigns") renderCampaigns();
   if (view === "sheet") renderSheet();
@@ -4250,6 +4288,7 @@ function initDice() {
 }
 
 function initEvents() {
+  window.addEventListener("hashchange", () => navigate(routeViewFromHash(), { updateHash: false }));
   document.addEventListener("click", event => {
     const creationMethod = event.target.closest("[data-creation-method]");
     if (creationMethod) {
@@ -4899,7 +4938,10 @@ function initEvents() {
     setCloudStatus("Signed out. This browser still has a local copy of the vault.");
     toast("Signed out");
   });
-  $("#mobile-menu").addEventListener("click", () => $(".topnav")?.classList.toggle("open"));
+  $("#mobile-menu").addEventListener("click", () => {
+    const opened = $(".topnav")?.classList.toggle("open");
+    $("#mobile-menu")?.setAttribute("aria-expanded", String(Boolean(opened)));
+  });
   $("#close-level-up").addEventListener("click", closeLevelUp);
   $("#cancel-level-up").addEventListener("click", closeLevelUp);
   $("#level-up-modal").addEventListener("click", event => { if (event.target.id === "level-up-modal") closeLevelUp(); });
@@ -5065,7 +5107,7 @@ function seedDemo() {
 }
 
 function init() {
-  seedDemo(); buildAbilities(); populateRules(); resetPortrait(); initDice(); initEvents(); updatePreview(); updateAccount(); renderCards(); setStep(1);
+  seedDemo(); buildAbilities(); populateRules(); resetPortrait(); initDice(); initTheme(); initEvents(); updatePreview(); updateAccount(); renderCards(); setStep(1); navigate(routeViewFromHash(), { replace: true });
   initCloud();
 }
 init();
