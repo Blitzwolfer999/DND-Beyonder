@@ -1805,6 +1805,14 @@ html[data-theme="dark"] .profile-button,
 html[data-theme="dark"] .topnav .profile-button {
   color: #eef2f7;
 }
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3 {
+  color: #f3f6fb;
+}
+html[data-theme="dark"] p {
+  color: #c2cad5;
+}
 html[data-theme="dark"] .page-meta .help-toggle,
 html[data-theme="dark"] .button.ghost,
 html[data-theme="dark"] .text-button {
