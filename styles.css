@@ -393,6 +393,8 @@ textarea { resize: vertical; }
 .class-choice-block { padding: 14px; border: 1px solid var(--line); background: #fffdf8; }
 .class-choice-block > strong { display: block; margin-bottom: 8px; font: 600 13px Cinzel, serif; }
 .class-choice-block > small { display: block; margin-top: 8px; color: var(--muted); }
+.choice-option.muted { opacity: .82; }
+.choice-option.muted select[data-asi-slot] { opacity: .65; }
 .resource-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
 .resource-toolbar h2 { flex: 1; margin: 0; }
 .resource-toolbar .button { min-height: 32px; padding: 7px 10px; font-size: 11px; }

@@ -1173,10 +1173,26 @@ function asiSlotCount(className, level) {
 function asiAbilityBonuses(asiState = selectedAsi) {
   const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
   Object.values(asiState || {}).forEach(slot => {
+    const mode = slot?.mode || (slot?.one || slot?.two ? "asi" : "none");
+    if (mode !== "asi") return;
     if (slot?.one) bonuses[slot.one] = (bonuses[slot.one] || 0) + 1;
     if (slot?.two) bonuses[slot.two] = (bonuses[slot.two] || 0) + 1;
   });
   return bonuses;
+}
+
+function asiStateFromBonuses(bonuses = {}) {
+  const increases = [];
+  ABILITIES.forEach(ability => {
+    const count = Math.max(0, Math.floor(Number(bonuses?.[ability] || 0)));
+    for (let index = 0; index < count; index += 1) increases.push(ability);
+  });
+  return increases.reduce((state, ability, index) => {
+    const slot = Math.floor(index / 2);
+    state[slot] = state[slot] || { mode: "asi", one: "", two: "" };
+    state[slot][index % 2 === 0 ? "one" : "two"] = ability;
+    return state;
+  }, {});
 }
 
 function spellDescription(name, rulesEdition, source = "") {
@@ -2079,6 +2095,10 @@ function maxSpellLevel(className, level, rulesEdition, subclass = "") {
 
 function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!$("#feat-list")) return;
+  $$("select[data-asi-mode]").forEach(select => {
+    selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
+    selectedAsi[select.dataset.asiMode].mode = select.value;
+  });
   $$("select[data-asi-slot]").forEach(select => {
     const slot = select.dataset.asiSlot, part = select.dataset.asiPart;
     selectedAsi[slot] = selectedAsi[slot] || { one: "", two: "" };
@@ -2184,15 +2204,22 @@ function renderAsiChoices() {
   if (guidance) {
     guidance.textContent = slots < 1
       ? `${selectedClass} gains its first Ability Score Improvement at level 4.`
-      : `${selectedClass} gains ${slots} Ability Score Improvement${slots > 1 ? "s" : ""} by level ${level}. Increase one ability by +2 or two abilities by +1 each, or leave a slot empty to take a feat instead. Scores cap at 20.`;
+      : `${selectedClass} gains ${slots} advancement slot${slots > 1 ? "s" : ""} by level ${level}. For each slot, choose an Ability Score Increase or mark it for a feat. ASI scores cap at 20.`;
   }
   if (slots < 1) { container.innerHTML = ""; return; }
-  const optionsFor = current => `<option value="">— none —</option>` + ABILITIES.map(ability => `<option value="${ability}" ${ability === current ? "selected" : ""}>${ability}</option>`).join("");
+  const optionsFor = current => `<option value="">-- none --</option>` + ABILITIES.map(ability => `<option value="${ability}" ${ability === current ? "selected" : ""}>${ability}</option>`).join("");
   container.innerHTML = Array.from({ length: slots }, (_, index) => {
     const slot = selectedAsi[index] || { one: "", two: "" };
-    return `<article class="choice-option asi-option"><span><strong>Ability Score Improvement ${index + 1}</strong><small>Increase one ability by +2 (choose it twice) or two abilities by +1 each.</small></span>
-      <label class="feat-ability-choice">+1<select data-asi-slot="${index}" data-asi-part="one">${optionsFor(slot.one)}</select></label>
-      <label class="feat-ability-choice">+1<select data-asi-slot="${index}" data-asi-part="two">${optionsFor(slot.two)}</select></label>
+    const mode = slot.mode || (slot.one || slot.two ? "asi" : "none");
+    const disabled = mode === "asi" ? "" : "disabled";
+    return `<article class="choice-option asi-option ${mode === "asi" ? "" : "muted"}"><span><strong>Advancement Slot ${index + 1}</strong><small>${mode === "asi" ? "Pick the same ability twice for +2, or two different abilities for +1 each." : mode === "feat" ? `Use this slot for a feat from the Feats list below.${slot.feat ? ` Saved: ${escapeHtml(slot.feat)}.` : ""}` : "Choose how this advancement slot is spent."}</small></span>
+      <label class="feat-ability-choice">Use slot for<select data-asi-mode="${index}">
+        <option value="none" ${mode === "none" ? "selected" : ""}>Choose later</option>
+        <option value="asi" ${mode === "asi" ? "selected" : ""}>Ability Score Increase</option>
+        <option value="feat" ${mode === "feat" ? "selected" : ""}>Feat from list below</option>
+      </select></label>
+      <label class="feat-ability-choice">First +1<select data-asi-slot="${index}" data-asi-part="one" ${disabled}>${optionsFor(slot.one)}</select></label>
+      <label class="feat-ability-choice">Second +1<select data-asi-slot="${index}" data-asi-part="two" ${disabled}>${optionsFor(slot.two)}</select></label>
     </article>`;
   }).join("");
 }
@@ -3547,7 +3574,7 @@ function editCharacter(id) {
   activeCharacterId = id; edition = c.edition || "2014"; selectedClass = c.className || "Fighter";
   currentOriginFeat = c.originFeat || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
-  selectedAsi = c.asi ? JSON.parse(JSON.stringify(c.asi)) : {};
+  selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
   showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
   $("#builder-title").textContent = `Edit ${c.name}`;
@@ -4002,16 +4029,33 @@ function completeLevelUp(event) {
   if (advancementType === "Ability Score Improvement") {
     const first = formValues.get("abilityIncreaseOne");
     const second = formValues.get("abilityIncreaseTwo");
-    updated.baseAbilities = { ...(updated.baseAbilities || Object.fromEntries(ABILITIES.map(ability => [ability, Number(updated[ability]) - Number(updated.originBonuses?.[ability] || 0) - Number(updated.featBonuses?.[ability] || 0)]))) };
-    if (first) {
-      updated[first] = Math.min(20, Number(updated[first]) + 1);
-      updated.baseAbilities[first] = Number(updated[first]) - Number(updated.originBonuses?.[first] || 0);
+    updated.asiBonuses = { ...(updated.asiBonuses || Object.fromEntries(ABILITIES.map(ability => [ability, 0]))) };
+    updated.asi = updated.asi && Object.keys(updated.asi).length ? JSON.parse(JSON.stringify(updated.asi)) : asiStateFromBonuses(updated.asiBonuses);
+    updated.baseAbilities = { ...(updated.baseAbilities || Object.fromEntries(ABILITIES.map(ability => [
+      ability,
+      Number(updated[ability] || 10)
+        - Number(updated.originBonuses?.[ability] || 0)
+        - Number(updated.featBonuses?.[ability] || 0)
+        - Number(updated.asiBonuses?.[ability] || 0)
+    ]))) };
+    const applied = [];
+    const appliedAbilities = [];
+    [first, second].forEach(ability => {
+      if (!ABILITIES.includes(ability)) return;
+      const before = Number(updated[ability] || 10);
+      if (before >= 20) return;
+      updated[ability] = before + 1;
+      updated.asiBonuses[ability] = Number(updated.asiBonuses[ability] || 0) + 1;
+      applied.push(`${ability} +1`);
+      appliedAbilities.push(ability);
+    });
+    if (!applied.length) {
+      toast("Choose an ability score below 20 for the ASI");
+      return;
     }
-    if (second) {
-      updated[second] = Math.min(20, Number(updated[second]) + 1);
-      updated.baseAbilities[second] = Number(updated[second]) - Number(updated.originBonuses?.[second] || 0);
-    }
-    choices.advancement = `${first} +1, ${second} +1`;
+    const nextSlot = String(Object.keys(updated.asi).reduce((max, key) => Math.max(max, Number(key)), -1) + 1);
+    updated.asi[nextSlot] = { mode: "asi", one: appliedAbilities[0] || "", two: appliedAbilities[1] || "" };
+    choices.advancement = applied.join(", ");
   } else if (advancementType === "Feat") {
     const feat = formValues.get("levelFeat");
     if (feat) {
@@ -4030,6 +4074,10 @@ function completeLevelUp(event) {
         updated.featBonuses = { ...(updated.featBonuses || Object.fromEntries(ABILITIES.map(ability => [ability, 0]))) };
         updated.featBonuses[featAbility] = Number(updated.featBonuses[featAbility] || 0) + 1;
       }
+      updated.asiBonuses = { ...(updated.asiBonuses || Object.fromEntries(ABILITIES.map(ability => [ability, 0]))) };
+      updated.asi = updated.asi && Object.keys(updated.asi).length ? JSON.parse(JSON.stringify(updated.asi)) : asiStateFromBonuses(updated.asiBonuses);
+      const nextSlot = String(Object.keys(updated.asi).reduce((max, key) => Math.max(max, Number(key)), -1) + 1);
+      updated.asi[nextSlot] = { mode: "feat", one: "", two: "", feat };
       choices.advancement = `Feat: ${feat}${featAbility ? ` (${featAbility} +1)` : ""}`;
     }
   }
@@ -4641,9 +4689,23 @@ function initEvents() {
   });
   form.elements.level.addEventListener("change", () => { populateSubclasses(); renderTalentChoices(); });
   $("#asi-list").addEventListener("change", event => {
+    const modeSelect = event.target.closest("select[data-asi-mode]");
+    if (modeSelect) {
+      const slot = modeSelect.dataset.asiMode;
+      selectedAsi[slot] = selectedAsi[slot] || { one: "", two: "" };
+      selectedAsi[slot].mode = modeSelect.value;
+      if (modeSelect.value !== "asi") {
+        selectedAsi[slot].one = "";
+        selectedAsi[slot].two = "";
+      }
+      renderAsiChoices();
+      updatePreview();
+      return;
+    }
     const select = event.target.closest("select[data-asi-slot]");
     if (!select) return;
     selectedAsi[select.dataset.asiSlot] = selectedAsi[select.dataset.asiSlot] || { one: "", two: "" };
+    selectedAsi[select.dataset.asiSlot].mode = "asi";
     selectedAsi[select.dataset.asiSlot][select.dataset.asiPart] = select.value;
     updatePreview();
   });
