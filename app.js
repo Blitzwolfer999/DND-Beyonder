@@ -319,6 +319,14 @@ function cloudConfigured() {
   const config = window.ARCANA_CLOUD_CONFIG || {};
   return Boolean(config.supabaseUrl && config.supabasePublishableKey && window.supabase?.createClient);
 }
+function cloudAuthErrorMessage(error) {
+  const message = error?.message || String(error || "Unknown Supabase auth error");
+  if (/failed to fetch/i.test(message)) {
+    const host = window.ARCANA_CLOUD_CONFIG?.supabaseUrl || "the configured Supabase project";
+    return `Could not reach Supabase (${host}). Check that the project is active, the publishable key matches this project, and browser/privacy tools allow requests to this Supabase URL.`;
+  }
+  return message;
+}
 function characterOwnerId(character) {
   return character?.cloudOwnerId || character?.owner_user_id || cloudUser?.id || "";
 }
@@ -5261,7 +5269,7 @@ async function handleAccountSubmit(event) {
       })
     : await cloudClient.auth.signInWithPassword({ email: values.email, password: values.password });
   $("#account-submit").disabled = false;
-  if (result.error) { setCloudStatus(result.error.message, true); return; }
+  if (result.error) { setCloudStatus(cloudAuthErrorMessage(result.error), true); return; }
   if (!result.data.session) {
     setCloudStatus("Account created. Check your email to confirm it, then sign in.");
     setAccountMode("signin");
@@ -5301,10 +5309,12 @@ async function initCloud() {
   }
   const config = window.ARCANA_CLOUD_CONFIG;
   cloudClient = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    global: { fetch: (...args) => window.fetch(...args) }
   });
-  const { data } = await cloudClient.auth.getSession();
-  cloudUser = data.session?.user || null;
+  const { data, error } = await cloudClient.auth.getSession();
+  if (error) setCloudStatus(cloudAuthErrorMessage(error), true);
+  cloudUser = data?.session?.user || null;
   if (cloudUser) prepareUserVault(cloudUser);
   updateAccount();
   if (cloudUser) await loadCampaigns();
