@@ -2093,6 +2093,104 @@ function maxSpellLevel(className, level, rulesEdition, subclass = "") {
   return Math.min(9, Math.ceil(level / 2));
 }
 
+function baseCantripCount(className, rulesEdition) {
+  return Number(QUICK_SPELL_COUNTS[className]?.[0] || 0);
+}
+
+function cantripLimitFor(className, level, rulesEdition, subclass = "") {
+  const targetLevel = Number(level || 1);
+  let total = baseCantripCount(className, rulesEdition);
+  Object.entries(CANTRIP_PROGRESSION[rulesEdition]?.[className] || {}).forEach(([unlock, count]) => {
+    if (targetLevel >= Number(unlock)) total += Number(count || 0);
+  });
+  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass) && targetLevel >= 3) {
+    total = 2 + (targetLevel >= 10 ? 1 : 0);
+  } else if (subclass === "Order of the Profane Soul" && targetLevel >= 3) {
+    total = 2 + (targetLevel >= 10 ? 1 : 0);
+  }
+  return Math.max(0, total);
+}
+
+function spellProgressionFor(rulesEdition, className, subclass = "") {
+  const thirdCasterTotals = {
+    "Eldritch Knight": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
+    "Arcane Trickster": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
+    "Order of the Profane Soul": [0,0,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,11]
+  };
+  if (thirdCasterTotals[subclass]) return { mode: "known", totals: thirdCasterTotals[subclass] };
+  return SPELL_PROGRESSION[rulesEdition]?.[className]
+    || (className === "Artificer" ? SPELL_PROGRESSION[2024]?.Artificer : null);
+}
+
+function spellLimitFor(className, level, rulesEdition, subclass = "", data = {}) {
+  const targetLevel = Number(level || 1);
+  const progression = spellProgressionFor(rulesEdition, className, subclass);
+  if (progression?.totals) return Number(progression.totals[targetLevel - 1] || 0);
+  if (progression?.perLevel) return Math.max(0, 6 + (Math.max(1, targetLevel) - 1) * Number(progression.perLevel));
+  if (rulesEdition === "2014" && (className === "Cleric" || className === "Druid")) {
+    const ability = spellcastingAbility({ ...data, className });
+    return Math.max(1, targetLevel + modifier(data[ability]));
+  }
+  if (rulesEdition === "2014" && className === "Paladin") {
+    if (targetLevel < 2) return 0;
+    return Math.max(1, Math.floor(targetLevel / 2) + modifier(data.CHA));
+  }
+  return 0;
+}
+
+function spellLimitContext() {
+  const selectedSubclass = $("#subclass-select")?.value || "";
+  const level = Number(form.elements.level?.value || 1);
+  const abilityData = Object.fromEntries(ABILITIES.map(ability => [ability, Number(form.elements[ability]?.value || 10)]));
+  const cantripLimit = cantripLimitFor(selectedClass, level, edition, selectedSubclass);
+  const spellLimit = spellLimitFor(selectedClass, level, edition, selectedSubclass, abilityData);
+  return { selectedSubclass, level, cantripLimit, spellLimit };
+}
+
+function selectedSpellCounts() {
+  const selectedSubclass = $("#subclass-select")?.value || "";
+  const lists = spellListsFor(edition, selectedClass, selectedSubclass) || {};
+  const levelsByName = new Map();
+  Object.entries(lists).forEach(([spellLevel, names]) => {
+    names.forEach(name => levelsByName.set(name, Number(spellLevel)));
+  });
+  let cantrips = 0, spells = 0;
+  selectedSpellNames.forEach(name => {
+    const spellLevel = levelsByName.get(name);
+    if (spellLevel === 0) cantrips += 1;
+    else if (spellLevel > 0) spells += 1;
+  });
+  return { cantrips, spells };
+}
+
+function spellSelectionIssue(data) {
+  const lists = spellListsFor(data.edition, data.className, data.subclass);
+  if (!lists) return "";
+  const level = Number(data.level || 1);
+  const allowed = maxSpellLevel(data.className, level, data.edition, data.subclass);
+  const cantripLimit = cantripLimitFor(data.className, level, data.edition, data.subclass);
+  const spellLimit = spellLimitFor(data.className, level, data.edition, data.subclass, data);
+  const levelsByName = new Map();
+  Object.entries(lists).forEach(([spellLevel, names]) => {
+    names.forEach(name => levelsByName.set(name, Number(spellLevel)));
+  });
+  let cantrips = 0, spells = 0;
+  const tooHigh = [];
+  (data.spells || []).forEach(spell => {
+    const name = typeof spell === "string" ? spell : spell.name;
+    const spellLevel = levelsByName.get(name);
+    if (spellLevel === 0) cantrips += 1;
+    else if (spellLevel > 0) {
+      spells += 1;
+      if (spellLevel > allowed) tooHigh.push(name);
+    }
+  });
+  if (cantrips > cantripLimit) return `Choose ${cantripLimit} cantrip${cantripLimit === 1 ? "" : "s"} or fewer`;
+  if (spells > spellLimit) return `Choose ${spellLimit} leveled spell${spellLimit === 1 ? "" : "s"} or fewer`;
+  if (tooHigh.length) return `Remove spells above your current spell level: ${tooHigh.slice(0, 3).join(", ")}`;
+  return "";
+}
+
 function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!$("#feat-list")) return;
   $$("select[data-asi-mode]").forEach(select => {
@@ -2152,6 +2250,10 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!lists) return;
   const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
   $("#spell-guidance").textContent = `${selectedClass} spell list · spell levels through ${allowed} are available at character level ${level}.`;
+  const { cantripLimit, spellLimit } = spellLimitContext();
+  const counts = selectedSpellCounts();
+  const spellLabel = spellLimit ? `Spells ${counts.spells}/${spellLimit}` : "No leveled spells available yet";
+  $("#spell-guidance").textContent = `${selectedClass} spell list - Cantrips ${counts.cantrips}/${cantripLimit} - ${spellLabel} - spell levels through ${allowed} are available at character level ${level}.`;
   $("#spell-level-tabs").innerHTML = Object.keys(lists).filter(key => lists[key].length).map(key =>
     `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? "Cantrip" : key}</button>`
   ).join("");
@@ -2166,6 +2268,8 @@ function renderSpellList() {
   const query = ($("#spell-search")?.value || "").trim().toLowerCase();
   const level = Number(form.elements.level?.value || 1);
   const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
+  const { cantripLimit, spellLimit } = spellLimitContext();
+  const counts = selectedSpellCounts();
   const rows = [];
   Object.entries(lists).forEach(([spellLevel, spells]) => {
     if (!query && Number(spellLevel) !== selectedSpellLevel) return;
@@ -2173,10 +2277,12 @@ function renderSpellList() {
   });
   const renderSpell = spell => {
     const locked = spell.level > allowed;
+    const checked = selectedSpellNames.has(spell.name);
+    const capped = !checked && !locked && (spell.level === 0 ? counts.cantrips >= cantripLimit : counts.spells >= spellLimit);
     const source = EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || "";
     const description = spellDescription(spell.name, edition, source);
-    return `<article class="choice-option ${locked ? "locked" : ""}"><label>
-      <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${selectedSpellNames.has(spell.name) ? "checked" : ""} ${locked ? "disabled" : ""}>
+    return `<article class="choice-option ${locked || capped ? "locked" : ""}"><label>
+      <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${checked ? "checked" : ""} ${locked || capped ? "disabled" : ""}>
       <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${locked ? ` · available when this spell level is reached` : ""}</small></span>
     </label>${ruleDetails(description)}</article>`;
   };
@@ -3979,6 +4085,7 @@ function completeLevelUp(event) {
     const labels = { levelCantrips: "cantrip", levelSpells: "spell", mysticArcanum: "Mystic Arcanum", metamagic: "Metamagic option", invocations: "Eldritch Invocation", expertise: "Expertise skill", skillProficiencies: "skill proficiency", weaponMastery: "mastered weapon" };
     const label = labels[name] || `${name} option`;
     if (count < required) { toast(`Choose ${required} ${label}${required > 1 ? "s" : ""}`); return; }
+    if (count > required) { toast(`Choose only ${required} ${label}${required > 1 ? "s" : ""}`); return; }
   }
   const before = progressionSnapshot(character);
   const updated = characterWithClassLevelGain(character, levelClass);
@@ -4651,9 +4758,23 @@ function initEvents() {
       populateSubclasses();
       renderTalentChoices();
     }
+    if (ABILITIES.includes(event.target.name)) renderTalentChoices();
   });
   form.addEventListener("change", event => {
-    if (event.target.name === "spells") event.target.checked ? selectedSpellNames.add(event.target.value) : selectedSpellNames.delete(event.target.value);
+    if (event.target.name === "spells") {
+      event.target.checked ? selectedSpellNames.add(event.target.value) : selectedSpellNames.delete(event.target.value);
+      const { cantripLimit, spellLimit } = spellLimitContext();
+      const counts = selectedSpellCounts();
+      const spellLevel = Number(event.target.dataset.level || 0);
+      const overLimit = event.target.checked && (spellLevel === 0 ? counts.cantrips > cantripLimit : counts.spells > spellLimit);
+      if (overLimit) {
+        event.target.checked = false;
+        selectedSpellNames.delete(event.target.value);
+        toast(spellLevel === 0 ? `Choose up to ${cantripLimit} cantrip${cantripLimit === 1 ? "" : "s"}` : `Choose up to ${spellLimit} leveled spell${spellLimit === 1 ? "" : "s"}`);
+      }
+      renderTalentChoices();
+      updatePreview();
+    }
     if (event.target.name === "feats") event.target.checked ? selectedFeatNames.add(event.target.value) : selectedFeatNames.delete(event.target.value);
     if (event.target.dataset.featAbility) {
       selectedFeatAbilities[event.target.dataset.featAbility] = event.target.value;
@@ -4903,6 +5024,8 @@ function initEvents() {
     }
     const masteryRequired = weaponMasteryCount(data.className, primaryEditLevel, data.edition);
     if (data.weaponMastery.length !== masteryRequired) { setStep(1); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
+    const spellIssue = spellSelectionIssue(data);
+    if (spellIssue) { setStep(4); toast(spellIssue); return; }
     data.id = activeCharacterId && activeCharacterId !== "demo-lyra" ? activeCharacterId : crypto.randomUUID();
     clearCharacterDeletion(data.id);
     data.updatedAt = Date.now();
