@@ -17,6 +17,8 @@ const REVISED_SPECIES_OPTIONS = [
   "Lorwyn Changeling", "Rimekin", "Dhampir", "Hexblood", "Lupin", "Reborn"
 ];
 
+const OBOJIMA_SPECIES_OPTIONS = ["Dara", "Nakudama", "Obojima Elf"];
+
 const LEGACY_BACKGROUND_OPTIONS = [
   "Acolyte", "Anthropologist", "Archaeologist", "Athlete", "Charlatan", "Clan Crafter",
   "Cloistered Scholar", "Courtier", "Criminal", "Entertainer", "Faceless", "Faction Agent",
@@ -49,7 +51,9 @@ const REVISED_BACKGROUND_OPTIONS = [
 
 const SPECIES_CATALOG = [
   ...REVISED_SPECIES_OPTIONS.map(name => customizationRecord(name, "D&D Beyond 5.5e catalog", "2024")),
-  ...LEGACY_SPECIES_OPTIONS.map(name => customizationRecord(name, "D&D Beyond 5e catalog", "2014"))
+  ...OBOJIMA_SPECIES_OPTIONS.map(name => customizationRecord(name, "Obojima: Tales from the Tall Grass", "2024")),
+  ...LEGACY_SPECIES_OPTIONS.map(name => customizationRecord(name, "D&D Beyond 5e catalog", "2014")),
+  ...OBOJIMA_SPECIES_OPTIONS.map(name => customizationRecord(name, "Obojima: Tales from the Tall Grass", "2014"))
 ];
 
 const BACKGROUND_CATALOG = [
@@ -256,6 +260,12 @@ const SPECIES_RULES_2014 = {
   Plasmoid: { variants: [flexibleSpeciesVariant()] },
   "Thri-kreen": { variants: [flexibleSpeciesVariant()] },
   Leonin: { variants: [{ name: "Leonin", bonuses: { STR: 1, CON: 2 } }] },
+  Dara: { variants: [
+    flexibleSpeciesVariant("Red Dara"),
+    flexibleSpeciesVariant("Blue Dara")
+  ] },
+  Nakudama: { variants: [flexibleSpeciesVariant("Nakudama")] },
+  "Obojima Elf": { variants: [flexibleSpeciesVariant("Obojima Elf")] },
   Custom: { variants: [
     { ...flexibleSpeciesVariant("Custom Lineage"), featChoice: true }
   ] }

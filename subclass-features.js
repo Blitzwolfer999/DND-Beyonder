@@ -1254,6 +1254,101 @@ SUBCLASS_FEATURES["2024"]["Order of the Lycan"] = SUBCLASS_FEATURES["2014"]["Ord
 SUBCLASS_FEATURES["2024"]["Order of the Mutant"] = SUBCLASS_FEATURES["2014"]["Order of the Mutant"];
 SUBCLASS_FEATURES["2024"]["Order of the Profane Soul"] = SUBCLASS_FEATURES["2014"]["Order of the Profane Soul"];
 
+// ================= Obojima: Tales from the Tall Grass =================
+// Obojima's subclasses are D&D Beyond 2014-class builder options. The 2024 rows
+// below keep them usable as expanded legacy choices while moving only changed
+// subclass-entry levels to the 2024 class chassis.
+const OBOJIMA_SUBCLASS_FEATURES_2014 = {
+  "Path of the Belly Brewer": [
+    [3, "Belly Brewing", "You turn strange ingredients and swallowed odds-and-ends into volatile belly-brewed magic for offense, healing, or daring checks."],
+    [6, "Iron Stomach", "Your internal alchemy helps you endure toxins, unsettling meals, and punishment that would drop a less stubborn warrior."],
+    [10, "Potent Concoctions", "Your belly-brewed effects grow stronger and easier to apply in the middle of a fight or frantic exploration scene."],
+    [14, "Grand Belly Brew", "Your signature brew becomes a battle-shaping surge of protection, restoration, or explosive force."]
+  ],
+  "College of Masks": [
+    [3, "Spirit Masks", "You weave magic into masks, adopting vivid personas that grant different protective, mobile, or mystical benefits."],
+    [6, "Mask Performance", "Your chosen mask becomes a stronger focus for movement, defense, and stage-like magical flourishes."],
+    [14, "Master of Many Faces", "Your masks answer more quickly and dramatically, letting you lean into a persona when the scene turns dangerous."]
+  ],
+  "Circle of the Petal": [
+    [2, "Petal Wind", "You call on blossoms and wind to shield allies, buffet enemies, and make nature's gentler face unexpectedly forceful."],
+    [6, "Blossom Shape", "Your magic can gather petals into helpful animal-like forms or other living-looking expressions of the circle's power."],
+    [10, "Wall of Petals", "You shape sweeping curtains of petals and air that divide the field, protect allies, or interfere with foes."],
+    [14, "Storm of Blossoms", "Your petal magic reaches its full bloom, surrounding the battlefield with protective and controlling floral force."]
+  ],
+  "The Spirit-Fused": [
+    [3, "Fused Spirit", "A spirit shares your body and instincts, lending uncanny senses and strange arcane tricks to your martial training."],
+    [7, "Spirit Channel", "You channel your companion spirit into improvised devices, weapons, and machines with a burst of otherworldly force."],
+    [10, "Shared Instincts", "Your spirit's presence sharpens your reactions and helps you solve problems with intuition that is not entirely your own."],
+    [15, "Possessed Invention", "Your fused spirit can surge through tools or weapons, turning a simple device into something briefly wondrous."],
+    [18, "Perfect Fusion", "You and the spirit act with near-perfect unity, letting martial skill and spiritual power reinforce each other."]
+  ],
+  "Sheep Dragon Shepherd": [
+    [3, "Sheep Dragon Companion", "You bond with the whimsical sheep dragon tradition, learning gliding movement and gentle guardian techniques."],
+    [6, "Protective Gust", "You use wind, woolly momentum, and shepherding footwork to protect allies and reposition through danger."],
+    [11, "Soaring Shepherd", "Your aerial movement and party protection improve, helping allies cross gaps or survive sudden threats."],
+    [17, "Dragonflock Guardian", "Your shepherd's bond becomes a sweeping defensive presence that can shelter the group when danger crests."]
+  ],
+  "Oath of the River": [
+    [3, "Oath Spells", "Your oath adds river-themed magic that reflects calm flow, sudden rapids, and the strength of moving water."],
+    [3, "Channel Oath: River's Flow", "You channel your oath to hinder enemies, guide movement, or keep allies steady in the current of battle."],
+    [7, "Aura of the Current", "Your aura carries riverlike pressure, helping allies move or making it harder for enemies to press through your defense."],
+    [15, "Still Water Resolve", "You draw power from patience and flow, turning restraint into resilience when the fight turns rough."],
+    [20, "Avatar of Rapids", "You become a living expression of the river's calm and fury, surging through the battlefield with oath-bound power."]
+  ],
+  "Corrupted Ranger": [
+    [3, "Corruption Magic", "Your ranger magic is marked by the island's corruption, adding eerie spells and decay-tinged effects to your hunt."],
+    [3, "Marked by Corruption", "The same corruption that threatens the wild clings to you, granting dangerous power at a visible cost."],
+    [7, "Resistant Infection", "Your body adapts to harmful energies and symptoms, helping you survive poisons, sickness, or necrotic threats."],
+    [11, "Spreading Blight", "Your strikes and magic can carry a spreading corruptive force that punishes enemies who cannot contain it."],
+    [15, "Corruption Unbound", "You can release the corruption in a controlled burst, turning your affliction into protection or devastation."]
+  ],
+  "Waxwork Rogue": [
+    [3, "Living Wick", "You shape wax and wick into tricks that bind, obscure, distract, or mark targets for a precise strike."],
+    [9, "Malleable Wax", "Your waxwork techniques grow subtler, letting you slip restraints, reshape tools, or leave traps where enemies least expect them."],
+    [13, "Candlelit Ambush", "You use light, smoke, and sticky wax to create sudden openings for stealth and punishing attacks."],
+    [17, "Explosive Effigy", "Your waxwork craft becomes violently decisive, turning prepared wax into a dramatic burst of control or damage."]
+  ],
+  "Oni Bloodline": [
+    [1, "Oni Magic", "Oni power runs through your sorcery, adding menacing magic and a frightening supernatural presence."],
+    [6, "Oni Transformation", "As your sorcery intensifies, your oni aspect can surface in horns, shadow, strength, or other fearsome signs."],
+    [14, "Dreadful Surge", "Spending sorcerous power can push your transformation further, adding mobility, menace, or raw destructive force."],
+    [18, "True Oni Aspect", "Your bloodline's monstrous magic reaches its peak, letting you embrace an overwhelming oni form for a short time."]
+  ],
+  "The Lantern": [
+    [1, "Lantern Patron Spells", "Your patron expands your magic with spells tied to spirit light, protection, revelation, and wandering souls."],
+    [1, "Spirit Lantern", "A lantern holds or channels spiritual essence, giving your pact a visible focus for attacks, guidance, or protection."],
+    [6, "Guiding Flame", "Your lantern's light can shield allies, reveal hidden truths, or punish creatures that stray into its glow."],
+    [10, "Revealing Light", "The lantern burns through deception and fear, strengthening your defenses against unseen or spiritual threats."],
+    [14, "Radiant Procession", "Your patron's lantern erupts with powerful spirit light that can blast enemies and shelter companions."]
+  ],
+  "Origami Mage": [
+    [2, "Paper Familiar", "You fold magic into animated paper forms, creating helpful constructs and clever little companions."],
+    [6, "Living Fold", "Your origami creations become more durable and responsive, aiding allies or interfering with enemies at key moments."],
+    [10, "Folded Ward", "Paper talismans and folded shapes can turn aside harm, carry spells, or reposition magic with elegant precision."],
+    [14, "Grand Origami", "You craft a dramatic paper wonder - guardian, tool, or battlefield shape - that briefly changes what is possible."]
+  ]
+};
+
+const shiftObojimaLevels = (rows, shifts) => rows.map(([level, name, summary]) => [shifts[level] || level, name, summary]);
+
+addSubclassFeatures({
+  "2014": OBOJIMA_SUBCLASS_FEATURES_2014,
+  "2024": {
+    "Path of the Belly Brewer": OBOJIMA_SUBCLASS_FEATURES_2014["Path of the Belly Brewer"],
+    "College of Masks": OBOJIMA_SUBCLASS_FEATURES_2014["College of Masks"],
+    "Circle of the Petal": shiftObojimaLevels(OBOJIMA_SUBCLASS_FEATURES_2014["Circle of the Petal"], { 2: 3 }),
+    "The Spirit-Fused": OBOJIMA_SUBCLASS_FEATURES_2014["The Spirit-Fused"],
+    "Sheep Dragon Shepherd": OBOJIMA_SUBCLASS_FEATURES_2014["Sheep Dragon Shepherd"],
+    "Oath of the River": OBOJIMA_SUBCLASS_FEATURES_2014["Oath of the River"],
+    "Corrupted Ranger": OBOJIMA_SUBCLASS_FEATURES_2014["Corrupted Ranger"],
+    "Waxwork Rogue": OBOJIMA_SUBCLASS_FEATURES_2014["Waxwork Rogue"],
+    "Oni Bloodline": shiftObojimaLevels(OBOJIMA_SUBCLASS_FEATURES_2014["Oni Bloodline"], { 1: 3 }),
+    "The Lantern": shiftObojimaLevels(OBOJIMA_SUBCLASS_FEATURES_2014["The Lantern"], { 1: 3 }),
+    "Origami Mage": shiftObojimaLevels(OBOJIMA_SUBCLASS_FEATURES_2014["Origami Mage"], { 2: 3 })
+  }
+});
+
 // ================= Third-party / newest-source subclasses =================
 // These come from Critical Role's Tal'Dorei setting or 2024-25 books whose exact
 // per-level features aren't reproduced here. Each gets one honest, sourced concept

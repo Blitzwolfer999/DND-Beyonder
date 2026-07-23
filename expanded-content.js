@@ -12,6 +12,7 @@ const SUBCLASS_CATALOG = {
     subclassRecord("Path of Wild Magic", "Tasha's Cauldron of Everything"),
     subclassRecord("Path of the Giant", "Bigby Presents: Glory of the Giants"),
     subclassRecord("Path of the Juggernaut", "Tal'Dorei Campaign Setting Reborn (Critical Role)"),
+    subclassRecord("Path of the Belly Brewer", "Obojima: Tales from the Tall Grass"),
     subclassRecord("Path of the Berserker", "Player's Handbook (2024)", "2024"),
     subclassRecord("Path of the Wild Heart", "Player's Handbook (2024)", "2024"),
     subclassRecord("Path of the World Tree", "Player's Handbook (2024)", "2024"),
@@ -27,6 +28,7 @@ const SUBCLASS_CATALOG = {
     subclassRecord("College of Creation", "Tasha's Cauldron of Everything"),
     subclassRecord("College of Spirits", "Van Richten's Guide to Ravenloft"),
     subclassRecord("College of Tragedy", "Tal'Dorei Campaign Setting Reborn (Critical Role)"),
+    subclassRecord("College of Masks", "Obojima: Tales from the Tall Grass"),
     subclassRecord("College of Dance", "Player's Handbook (2024)", "2024"),
     subclassRecord("College of Glamour", "Player's Handbook (2024)", "2024"),
     subclassRecord("College of Lore", "Player's Handbook (2024)", "2024"),
@@ -56,6 +58,7 @@ const SUBCLASS_CATALOG = {
     subclassRecord("Circle of Stars", "Tasha's Cauldron of Everything"),
     subclassRecord("Circle of Wildfire", "Tasha's Cauldron of Everything"),
     subclassRecord("Circle of the Blighted", "Tal'Dorei Campaign Setting Reborn (Critical Role)"),
+    subclassRecord("Circle of the Petal", "Obojima: Tales from the Tall Grass"),
     ...["Land", "Moon", "Sea", "Stars"].map(name => subclassRecord(`Circle of the ${name}`, "Player's Handbook (2024)", "2024"))
   ],
   Fighter: [
@@ -65,6 +68,7 @@ const SUBCLASS_CATALOG = {
     subclassRecord("Echo Knight", "Explorer's Guide to Wildemount"),
     ...["Psi Warrior", "Rune Knight"].map(name => subclassRecord(name, "Tasha's Cauldron of Everything")),
     subclassRecord("Gunslinger", "Critical Role"),
+    subclassRecord("The Spirit-Fused", "Obojima: Tales from the Tall Grass"),
     ...["Battle Master", "Champion", "Eldritch Knight", "Psi Warrior"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024")),
     subclassRecord("Banneret", "Forgotten Realms: Heroes of Faerun", "2024")
   ],
@@ -76,6 +80,7 @@ const SUBCLASS_CATALOG = {
     ...["Way of the Astral Self", "Way of Mercy"].map(name => subclassRecord(name, "Tasha's Cauldron of Everything")),
     subclassRecord("Way of the Ascendant Dragon", "Fizban's Treasury of Dragons"),
     subclassRecord("Way of the Cobalt Soul", "Tal'Dorei Campaign Setting Reborn (Critical Role)"),
+    subclassRecord("Sheep Dragon Shepherd", "Obojima: Tales from the Tall Grass"),
     ...["Warrior of Mercy", "Warrior of Shadow", "Warrior of the Elements", "Warrior of the Open Hand"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024"))
   ],
   Paladin: [
@@ -86,6 +91,7 @@ const SUBCLASS_CATALOG = {
     subclassRecord("Oath of Glory", "Mythic Odysseys of Theros / Tasha's Cauldron of Everything"),
     subclassRecord("Oath of the Watchers", "Tasha's Cauldron of Everything"),
     subclassRecord("Oath of the Open Sea", "Tal'Dorei Campaign Setting Reborn (Critical Role)"),
+    subclassRecord("Oath of the River", "Obojima: Tales from the Tall Grass"),
     ...["Oath of Devotion", "Oath of Glory", "Oath of the Ancients", "Oath of Vengeance"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024")),
     subclassRecord("Oath of the Noble Genies", "Forgotten Realms: Heroes of Faerun", "2024")
   ],
@@ -94,6 +100,7 @@ const SUBCLASS_CATALOG = {
     ...["Gloom Stalker", "Horizon Walker", "Monster Slayer"].map(name => subclassRecord(name, "Xanathar's Guide to Everything")),
     ...["Fey Wanderer", "Swarmkeeper"].map(name => subclassRecord(name, "Tasha's Cauldron of Everything")),
     subclassRecord("Drakewarden", "Fizban's Treasury of Dragons"),
+    subclassRecord("Corrupted Ranger", "Obojima: Tales from the Tall Grass"),
     ...["Beast Master", "Fey Wanderer", "Gloom Stalker", "Hunter"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024")),
     subclassRecord("Winter Walker", "Forgotten Realms: Heroes of Faerun", "2024")
   ],
@@ -102,6 +109,7 @@ const SUBCLASS_CATALOG = {
     ...["Mastermind", "Swashbuckler"].map(name => subclassRecord(name, "Sword Coast Adventurer's Guide / Xanathar's Guide to Everything")),
     ...["Inquisitive", "Scout"].map(name => subclassRecord(name, "Xanathar's Guide to Everything")),
     ...["Phantom", "Soulknife"].map(name => subclassRecord(name, "Tasha's Cauldron of Everything")),
+    subclassRecord("Waxwork Rogue", "Obojima: Tales from the Tall Grass"),
     ...["Arcane Trickster", "Assassin", "Soulknife", "Thief"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024")),
     subclassRecord("Scion of the Three", "Forgotten Realms: Heroes of Faerun", "2024")
   ],
@@ -112,6 +120,7 @@ const SUBCLASS_CATALOG = {
     ...["Aberrant Mind", "Clockwork Soul"].map(name => subclassRecord(name, "Tasha's Cauldron of Everything")),
     subclassRecord("Lunar Sorcery", "Dragonlance: Shadow of the Dragon Queen"),
     subclassRecord("Runechild", "Tal'Dorei Campaign Setting Reborn (Critical Role)"),
+    subclassRecord("Oni Bloodline", "Obojima: Tales from the Tall Grass"),
     ...["Aberrant Sorcery", "Clockwork Sorcery", "Draconic Sorcery", "Wild Magic Sorcery"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024")),
     subclassRecord("Spellfire Sorcery", "Forgotten Realms: Heroes of Faerun", "2024")
   ],
@@ -121,6 +130,7 @@ const SUBCLASS_CATALOG = {
     ...["The Celestial", "The Hexblade"].map(name => subclassRecord(name, "Xanathar's Guide to Everything")),
     ...["The Fathomless", "The Genie"].map(name => subclassRecord(name, "Tasha's Cauldron of Everything")),
     subclassRecord("The Undead", "Van Richten's Guide to Ravenloft"),
+    subclassRecord("The Lantern", "Obojima: Tales from the Tall Grass"),
     ...["Archfey Patron", "Celestial Patron", "Fiend Patron", "Great Old One Patron"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024"))
   ],
   Wizard: [
@@ -130,6 +140,7 @@ const SUBCLASS_CATALOG = {
     ...["Chronurgy Magic", "Graviturgy Magic"].map(name => subclassRecord(name, "Explorer's Guide to Wildemount")),
     subclassRecord("Order of Scribes", "Tasha's Cauldron of Everything"),
     subclassRecord("Blood Magic", "Tal'Dorei Campaign Setting Reborn (Critical Role)"),
+    subclassRecord("Origami Mage", "Obojima: Tales from the Tall Grass"),
     ...["Abjurer", "Diviner", "Evoker", "Illusionist"].map(name => subclassRecord(name, "Player's Handbook (2024)", "2024")),
     subclassRecord("Bladesinger", "Forgotten Realms: Heroes of Faerun", "2024")
   ],
