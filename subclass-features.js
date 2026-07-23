@@ -1290,7 +1290,7 @@ const OBOJIMA_SUBCLASS_FEATURES_2014 = {
     [17, "Dragonflock Guardian", "Your shepherd's bond becomes a sweeping defensive presence that can shelter the group when danger crests."]
   ],
   "Oath of the River": [
-    [3, "Oath Spells", "Your oath adds river-themed magic that reflects calm flow, sudden rapids, and the strength of moving water."],
+    [3, "River Oath Spells", "Your oath adds river-themed magic that reflects calm flow, sudden rapids, and the strength of moving water."],
     [3, "Channel Oath: River's Flow", "You channel your oath to hinder enemies, guide movement, or keep allies steady in the current of battle."],
     [7, "Aura of the Current", "Your aura carries riverlike pressure, helping allies move or making it harder for enemies to press through your defense."],
     [15, "Still Water Resolve", "You draw power from patience and flow, turning restraint into resilience when the fight turns rough."],
