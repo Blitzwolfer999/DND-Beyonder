@@ -2111,6 +2111,19 @@ function cantripLimitFor(className, level, rulesEdition, subclass = "") {
   return Math.max(0, total);
 }
 
+function nextCantripLevelFor(className, level, rulesEdition, subclass = "") {
+  const targetLevel = Number(level || 1);
+  if (["Eldritch Knight", "Arcane Trickster", "Order of the Profane Soul"].includes(subclass)) {
+    if (targetLevel < 3) return 3;
+    if (targetLevel < 10) return 10;
+    return null;
+  }
+  return Object.keys(CANTRIP_PROGRESSION[rulesEdition]?.[className] || {})
+    .map(Number)
+    .filter(unlock => unlock > targetLevel)
+    .sort((a, b) => a - b)[0] || null;
+}
+
 function spellProgressionFor(rulesEdition, className, subclass = "") {
   const thirdCasterTotals = {
     "Eldritch Knight": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
@@ -2152,9 +2165,10 @@ function spellLimitContext() {
   const level = Number(form.elements.level?.value || 1);
   const abilityData = Object.fromEntries(ABILITIES.map(ability => [ability, Number(form.elements[ability]?.value || 10)]));
   const cantripLimit = cantripLimitFor(selectedClass, level, edition, selectedSubclass);
+  const nextCantripLevel = nextCantripLevelFor(selectedClass, level, edition, selectedSubclass);
   const spellLimit = spellLimitFor(selectedClass, level, edition, selectedSubclass, abilityData);
   const spellLabel = spellLimitLabel(selectedClass, edition, selectedSubclass);
-  return { selectedSubclass, level, cantripLimit, spellLimit, spellLabel };
+  return { selectedSubclass, level, cantripLimit, nextCantripLevel, spellLimit, spellLabel };
 }
 
 function selectedSpellCounts() {
@@ -2260,10 +2274,11 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!lists) return;
   const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
   $("#spell-guidance").textContent = `${selectedClass} spell list · spell levels through ${allowed} are available at character level ${level}.`;
-  const { cantripLimit, spellLimit, spellLabel } = spellLimitContext();
+  const { cantripLimit, nextCantripLevel, spellLimit, spellLabel } = spellLimitContext();
   const counts = selectedSpellCounts();
+  const cantripText = `Cantrips ${counts.cantrips}/${cantripLimit}${nextCantripLevel ? ` (next at level ${nextCantripLevel})` : ""}`;
   const spellLimitText = spellLimit ? `${spellLabel} ${counts.spells}/${spellLimit}` : "No leveled spells available yet";
-  $("#spell-guidance").textContent = `${selectedClass} spell list - Cantrips ${counts.cantrips}/${cantripLimit} - ${spellLimitText} - spell levels through ${allowed} are available at character level ${level}.`;
+  $("#spell-guidance").textContent = `${selectedClass} spell list - ${cantripText} - ${spellLimitText} - spell levels through ${allowed} are available at character level ${level}.`;
   $("#spell-level-tabs").innerHTML = Object.keys(lists).filter(key => lists[key].length).map(key =>
     `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? "Cantrip" : key}</button>`
   ).join("");
