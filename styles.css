@@ -336,6 +336,8 @@ textarea { resize: vertical; }
 .selection-details h3 { margin: 0 0 4px; font-size: 15px; }
 .selection-details > p { margin: 0 0 14px; font-size: 12px; }
 .selection-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.selection-choice-summary { margin: 0 0 12px; padding: 10px; border: 1px solid var(--line); background: #fffdf8; border-radius: 12px; }
+.selection-choice-summary > strong { display: block; margin-bottom: 8px; font: 600 12px Cinzel, serif; color: var(--gold-dark); }
 .form-footer { padding: 18px 24px; display: flex; align-items: center; justify-content: flex-end; gap: 15px; border-top: 1px solid var(--line); }
 .form-footer span { margin-right: auto; color: var(--muted); font-size: 12px; }
 .hidden { display: none !important; }
@@ -1848,6 +1850,7 @@ html[data-theme="dark"] .quick-builder,
 html[data-theme="dark"] .quick-summary,
 html[data-theme="dark"] .choice-option,
 html[data-theme="dark"] .class-choice-block,
+html[data-theme="dark"] .selection-choice-summary,
 html[data-theme="dark"] .feature-card,
 html[data-theme="dark"] .resource-card,
 html[data-theme="dark"] .sheet-spell,

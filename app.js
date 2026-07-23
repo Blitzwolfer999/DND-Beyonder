@@ -1877,6 +1877,19 @@ function subclassChoiceMarkup(subclass, level, saved = {}, includeEarlier = fals
     .join("");
 }
 
+function subclassChoiceSummaryMarkup(subclass, level, saved = {}, rulesEdition = edition) {
+  const rows = (SUBCLASS_CHOICE_RULES[subclass] || [])
+    .filter(choice => level >= choice.level)
+    .filter(choice => !choice.editions || choice.editions.includes(rulesEdition))
+    .map(choice => {
+      const field = form.elements[`subclassChoice_${choice.key}`];
+      const value = field?.value || saved[choice.key] || "";
+      return value ? `<span class="tag">${escapeHtml(choice.label)}: ${escapeHtml(value)}</span>` : "";
+    })
+    .filter(Boolean);
+  return rows.length ? `<div class="selection-choice-summary"><strong>Selected subclass options</strong><div class="tag-list">${rows.join("")}</div></div>` : "";
+}
+
 function levelSubclassChoiceMarkup(character, subclass, targetLevel) {
   let markup = subclassChoiceMarkup(
     subclass,
@@ -1999,8 +2012,10 @@ function renderClassFeaturePreview() {
       .map(([featureLevel, name]) => ({ level: featureLevel, name, source: subclassName }))
     : [];
   const features = [...classRows, ...subclassRows];
+  const subclassChoices = subclassName ? subclassChoiceSummaryMarkup(subclassName, level) : "";
   container.innerHTML = `<h3>Features at level ${level}</h3>
     <p>Class and subclass features are granted automatically at their listed levels.</p>
+    ${subclassChoices}
     <div class="selection-feature-grid">${features.map(feature =>
       `<article class="feature-card"><small>LEVEL ${feature.level} · ${escapeHtml(feature.source)}</small><strong>${escapeHtml(feature.name)}</strong>${ruleDetails(featureDescription(edition, feature.source, feature.name, selectedClass))}</article>`
     ).join("") || "<p>No class features are available at this level.</p>"}</div>`;
@@ -2242,12 +2257,12 @@ function formData() {
   if (existing?.classes?.length > 1) {
     data.classes = classBreakdown(existing).map(entry =>
       entry.name === data.className
-        ? { ...entry, subclass: data.subclass || entry.subclass || "", customSubclass: data.customSubclass || "" }
+        ? { ...entry, subclass: data.subclass || entry.subclass || "", customSubclass: data.customSubclass || "", subclassChoices: { ...(entry.subclassChoices || {}), ...(data.subclassChoices || {}) } }
         : entry
     );
     data.level = characterTotalLevel(data);
   } else {
-    data.classes = [{ name: data.className, level: data.level, subclass: data.subclass || "", customSubclass: data.customSubclass || "" }];
+    data.classes = [{ name: data.className, level: data.level, subclass: data.subclass || "", customSubclass: data.customSubclass || "", subclassChoices: { ...(data.subclassChoices || {}) } }];
   }
   return data;
 }
@@ -4597,6 +4612,10 @@ function initEvents() {
       renderClassFeaturePreview();
       renderTalentChoices();
     }
+    if (event.target.name?.startsWith("subclassChoice_")) {
+      renderClassFeaturePreview();
+      updatePreview();
+    }
     if (["species", "background", "speciesVariant", "backgroundAbilityMode"].includes(event.target.name)) {
       renderOriginRules();
       renderTalentChoices();
@@ -4956,7 +4975,8 @@ function initEvents() {
       const target = $("#level-subclass-choices");
       if (character && target) {
         const selectedClass = $("#level-class-select")?.value || levelUpClassName || primaryClassName(character);
-        target.innerHTML = levelSubclassChoiceMarkup(withClassContext(character, selectedClass, classLevel(character, selectedClass)), event.target.value, classLevel(character, selectedClass) + 1);
+        const targetClassLevel = classLevel(character, selectedClass) + 1;
+        target.innerHTML = levelSubclassChoiceMarkup(withClassContext(character, selectedClass, targetClassLevel), event.target.value, targetClassLevel);
       }
     }
     if (event.target.name === "advancementType") {
