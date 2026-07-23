@@ -103,6 +103,11 @@ const SUBCLASS_CHOICE_RULES = {
   "Lunar Sorcery": [
     { key: "lunarPhase", label: "Current lunar phase", level: 1, options: ["Full Moon", "New Moon", "Crescent Moon"] }
   ],
+  "Oni Bloodline": [
+    { key: "oniManifestation", label: "Oni manifestation", level: 1, editions: ["2014"], options: ["Horns and fangs", "Burning eyes", "Spectral mask", "Shadowed skin", "Towering frame"] },
+    { key: "oniManifestation", label: "Oni manifestation", level: 3, editions: ["2024"], options: ["Horns and fangs", "Burning eyes", "Spectral mask", "Shadowed skin", "Towering frame"] },
+    { key: "oniTransformation", label: "Oni transformation focus", level: 6, options: ["Dreadful voice", "Claws and tusks", "Demonic aura", "Shifting size", "Smoke and sparks"] }
+  ],
   Hunter: [
     { key: "huntersPrey", label: "Hunter's Prey", level: 3, editions: ["2014"], options: ["Colossus Slayer", "Giant Killer", "Horde Breaker"] },
     { key: "defensiveTactics", label: "Defensive Tactics", level: 7, editions: ["2014"], options: ["Escape the Horde", "Multiattack Defense", "Steel Will"] },
