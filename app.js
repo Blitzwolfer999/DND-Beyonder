@@ -26,6 +26,9 @@ const RULES = {
 };
 
 const ABILITIES = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
+const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
+const POINT_BUY_BUDGET = 27;
+const POINT_BUY_COSTS = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
 const SKILLS = {
   Acrobatics: "DEX", "Animal Handling": "WIS", Arcana: "INT", Athletics: "STR", Deception: "CHA", History: "INT",
   Insight: "WIS", Intimidation: "CHA", Investigation: "INT", Medicine: "WIS", Nature: "INT", Perception: "WIS",
@@ -231,6 +234,7 @@ let selectedFeatNames = new Set();
 let selectedFeatAbilities = {};
 let selectedAsi = {};
 let selectedSpellNames = new Set();
+let abilityMethod = "standard";
 let levelingCharacterId = null;
 let levelUpClassName = "";
 let inventoryCharacterId = null;
@@ -2363,16 +2367,148 @@ function renderAsiChoices() {
   }).join("");
 }
 
-function buildAbilities() {
-  $("#ability-editor").innerHTML = ABILITIES.map((ability, i) =>
-    `<div class="ability-box"><label>${ability}<input name="${ability}" type="number" min="1" max="30" value="${[15,14,13,12,10,8][i]}"></label><small data-origin-bonus="${ability}">Origin +0</small><span data-mod="${ability}">${signed(modifier([15,14,13,12,10,8][i]))}</span></div>`
-  ).join("");
+function abilityScoreValues() {
+  return Object.fromEntries(ABILITIES.map((ability, index) => [
+    ability,
+    Number(form.elements[ability]?.value || STANDARD_ARRAY[index])
+  ]));
+}
+
+function pointBuySpent(values = abilityScoreValues()) {
+  return ABILITIES.reduce((total, ability) => total + Number(POINT_BUY_COSTS[Number(values[ability])] ?? 999), 0);
+}
+
+function standardArrayCounts(values = abilityScoreValues()) {
+  return STANDARD_ARRAY.reduce((counts, score) => {
+    counts[score] = ABILITIES.filter(ability => Number(values[ability]) === score).length;
+    return counts;
+  }, {});
+}
+
+function standardArrayValid(values = abilityScoreValues()) {
+  const scores = ABILITIES.map(ability => Number(values[ability])).sort((a, b) => b - a);
+  return scores.length === STANDARD_ARRAY.length && scores.every((score, index) => score === STANDARD_ARRAY[index]);
+}
+
+function setAbilityMethod(method, options = {}) {
+  abilityMethod = ["standard", "pointbuy", "manual"].includes(method) ? method : "standard";
+  $$("[name='abilityMethod']").forEach(input => {
+    input.checked = input.value === abilityMethod;
+    input.closest(".ability-method")?.classList.toggle("active", input.checked);
+  });
+  if (!options.keepScores) {
+    if (abilityMethod === "standard") setAbilityScores(Object.fromEntries(ABILITIES.map((ability, index) => [ability, STANDARD_ARRAY[index]])), { silent: true });
+    if (abilityMethod === "pointbuy") setAbilityScores(Object.fromEntries(ABILITIES.map(ability => [ability, 8])), { silent: true });
+  }
+  buildAbilities({ keepScores: true });
+  updateAbilityMethodStatus();
+  updatePreview();
+}
+
+function setAbilityScores(scores, options = {}) {
+  ABILITIES.forEach(ability => {
+    const field = form.elements[ability];
+    if (field && scores[ability] != null) field.value = Number(scores[ability]);
+  });
+  enforceAbilityCaps({ silent: options.silent });
+  updateAbilityMethodStatus();
+  if (!options.silent) updatePreview();
+}
+
+function enforceAbilityCaps(options = {}) {
+  ABILITIES.forEach(ability => {
+    const field = form.elements[ability];
+    if (!field) return;
+    const min = abilityMethod === "pointbuy" ? 8 : 1;
+    const max = abilityMethod === "pointbuy" ? 15 : 30;
+    let value = Math.round(Number(field.value || min));
+    value = Math.max(min, Math.min(max, value));
+    field.value = value;
+  });
+  if (abilityMethod === "pointbuy" && pointBuySpent() > POINT_BUY_BUDGET && !options.silent) {
+    toast("Point buy is over 27 points");
+  }
+}
+
+function abilityInputFor(ability, value) {
+  if (abilityMethod === "standard") {
+    return `<select name="${ability}" data-ability-score="${ability}">
+      ${STANDARD_ARRAY.map(score => `<option value="${score}" ${Number(value) === score ? "selected" : ""}>${score}</option>`).join("")}
+    </select>`;
+  }
+  const min = abilityMethod === "pointbuy" ? 8 : 1;
+  const max = abilityMethod === "pointbuy" ? 15 : 30;
+  return `<input name="${ability}" data-ability-score="${ability}" type="number" min="${min}" max="${max}" step="1" value="${Number(value)}">`;
+}
+
+function updateAbilityMethodStatus() {
+  const status = $("#ability-method-status");
+  if (!status) return;
+  const values = abilityScoreValues();
+  if (abilityMethod === "pointbuy") {
+    const spent = pointBuySpent(values);
+    const remaining = POINT_BUY_BUDGET - spent;
+    status.classList.toggle("error", remaining < 0);
+    status.innerHTML = `<strong>Point Buy:</strong> ${spent}/${POINT_BUY_BUDGET} points spent · ${remaining >= 0 ? `${remaining} remaining` : `${Math.abs(remaining)} over budget`} · scores must stay between 8 and 15 before bonuses.`;
+    ABILITIES.forEach(ability => {
+      const cost = POINT_BUY_COSTS[Number(values[ability])] ?? 0;
+      const label = $(`[data-point-cost="${ability}"]`);
+      if (label) label.textContent = `Point cost ${cost}`;
+    });
+    return;
+  }
+  if (abilityMethod === "standard") {
+    const counts = standardArrayCounts(values);
+    const missing = STANDARD_ARRAY.filter(score => counts[score] !== 1);
+    status.classList.toggle("error", missing.length > 0);
+    status.innerHTML = missing.length
+      ? `<strong>Standard Array:</strong> use each score exactly once: ${STANDARD_ARRAY.join(", ")}.`
+      : `<strong>Standard Array:</strong> all six scores are assigned once.`;
+    return;
+  }
+  status.classList.remove("error");
+  status.innerHTML = `<strong>Manual Entry:</strong> type any table-approved base scores. These are before origin, feat, and ASI bonuses.`;
+}
+
+function validateAbilityScores() {
+  enforceAbilityCaps({ silent: true });
+  const values = abilityScoreValues();
+  if (abilityMethod === "pointbuy") {
+    const spent = pointBuySpent(values);
+    const inRange = ABILITIES.every(ability => Number(values[ability]) >= 8 && Number(values[ability]) <= 15);
+    if (!inRange || spent > POINT_BUY_BUDGET) {
+      setStep(3);
+      updateAbilityMethodStatus();
+      toast(spent > POINT_BUY_BUDGET ? "Point buy cannot exceed 27 points" : "Point buy scores must stay between 8 and 15");
+      return false;
+    }
+  }
+  if (abilityMethod === "standard" && !standardArrayValid(values)) {
+    setStep(3);
+    updateAbilityMethodStatus();
+    toast("Standard Array must use 15, 14, 13, 12, 10, and 8 exactly once");
+    return false;
+  }
+  return true;
+}
+
+function buildAbilities(options = {}) {
+  const current = options.keepScores ? abilityScoreValues() : Object.fromEntries(ABILITIES.map((ability, index) => [ability, STANDARD_ARRAY[index]]));
+  $("#ability-editor").innerHTML = ABILITIES.map((ability, i) => {
+    const value = current[ability] ?? STANDARD_ARRAY[i];
+    const helper = abilityMethod === "pointbuy"
+      ? `<small data-point-cost="${ability}">Point cost ${POINT_BUY_COSTS[Number(value)] ?? 0}</small>`
+      : "";
+    return `<div class="ability-box"><label>${ability}${abilityInputFor(ability, value)}</label>${helper}<small data-origin-bonus="${ability}">Origin +0</small><span data-mod="${ability}">${signed(modifier(value))}</span></div>`;
+  }).join("");
   $("#preview-abilities").innerHTML = ABILITIES.map(a => `<div><small>${a}</small><strong data-preview-mod="${a}">+0</strong></div>`).join("");
+  updateAbilityMethodStatus();
 }
 
 function formData() {
   const data = Object.fromEntries(new FormData(form));
   data.edition = edition;
+  data.abilityMethod = abilityMethod;
   data.className = selectedClass;
   data.portrait = portraitData ? portraitFromCanvas() : "";
   selectedValues("feats", form).forEach(name => selectedFeatNames.add(name));
@@ -2406,6 +2542,7 @@ function formData() {
   const asiBonuses = asiAbilityBonuses(selectedAsi);
   data.asi = JSON.parse(JSON.stringify(selectedAsi));
   data.asiBonuses = { ...asiBonuses };
+  data.pointBuySpent = abilityMethod === "pointbuy" ? pointBuySpent() : null;
   data.baseAbilities = {};
   ABILITIES.forEach(ability => {
     const base = Number(data[ability] || 10);
@@ -2807,7 +2944,13 @@ function startNewCharacter() {
   selectedFeatAbilities = {};
   selectedAsi = {};
   selectedSpellNames.clear();
+  abilityMethod = "standard";
   form.reset();
+  buildAbilities({ keepScores: false });
+  $$("[name='abilityMethod']").forEach(input => {
+    input.checked = input.value === abilityMethod;
+    input.closest(".ability-method")?.classList.toggle("active", input.checked);
+  });
   form.elements.level.value = 1;
   if ($("#subclass-select")) $("#subclass-select").value = "";
   $("#builder-eyebrow").textContent = "CHARACTER CREATOR";
@@ -3711,6 +3854,7 @@ function editCharacter(id) {
   const c = characters.find(x => x.id === id); if (!c) return;
   if (!canControlCharacter(c)) { toast("Only the owner or campaign DM can edit this sheet"); return; }
   activeCharacterId = id; edition = c.edition || "2014"; selectedClass = c.className || "Fighter";
+  abilityMethod = c.abilityMethod || "manual";
   currentOriginFeat = c.originFeat || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
   selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
@@ -3720,6 +3864,11 @@ function editCharacter(id) {
   $("#builder-description").textContent = "Adjust any saved detail directly. Use Level Up for guided progression.";
   $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b.dataset.edition === edition));
   populateRules();
+  buildAbilities({ keepScores: false });
+  $$("[name='abilityMethod']").forEach(input => {
+    input.checked = input.value === abilityMethod;
+    input.closest(".ability-method")?.classList.toggle("active", input.checked);
+  });
   Object.entries(c).forEach(([key, value]) => {
     const input = form.elements[key]; if (input && key !== "portrait" && !Array.isArray(value)) input.value = value;
   });
@@ -4786,14 +4935,28 @@ function initEvents() {
     if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.rollMode || "normal"); return; }
   });
   form.addEventListener("input", event => {
+    if (ABILITIES.includes(event.target.name)) {
+      enforceAbilityCaps();
+      updateAbilityMethodStatus();
+      renderTalentChoices();
+    }
     updatePreview();
     if (event.target.name === "level") {
       populateSubclasses();
       renderTalentChoices();
     }
-    if (ABILITIES.includes(event.target.name)) renderTalentChoices();
   });
   form.addEventListener("change", event => {
+    if (event.target.name === "abilityMethod") {
+      setAbilityMethod(event.target.value);
+      return;
+    }
+    if (ABILITIES.includes(event.target.name)) {
+      enforceAbilityCaps();
+      updateAbilityMethodStatus();
+      renderTalentChoices();
+      updatePreview();
+    }
     if (event.target.name === "spells") {
       event.target.checked ? selectedSpellNames.add(event.target.value) : selectedSpellNames.delete(event.target.value);
       const { cantripLimit, spellLimit } = spellLimitContext();
@@ -5025,9 +5188,9 @@ function initEvents() {
   $("#quick-species").addEventListener("change", renderQuickOrigin);
   $("#quick-background").addEventListener("change", renderQuickOrigin);
   $("#quick-name").addEventListener("input", renderQuickSummary);
-  $("#standard-array").addEventListener("click", () => { [15,14,13,12,10,8].forEach((v, i) => form.elements[ABILITIES[i]].value = v); updatePreview(); });
   form.addEventListener("submit", event => {
     event.preventDefault();
+    if (!validateAbilityScores()) return;
     const data = formData();
     if (!data.name.trim()) { setStep(5); form.elements.name.focus(); toast("Your character needs a name"); return; }
     if (!validateOriginChoices()) { setStep(2); toast("Choose different eligible abilities and complete the origin feat selection"); return; }

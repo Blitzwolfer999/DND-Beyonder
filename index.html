@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=spell-limits-3">
+  <link rel="stylesheet" href="styles.css?v=ability-methods-1">
 </head>
 <body>
   <div class="app-shell">
@@ -235,9 +235,14 @@
             </div>
 
             <div class="form-step" data-step-panel="3">
-              <div class="step-intro"><span>03</span><div><h2>Set ability scores</h2><p>New here? The standard array (recommended) is the easy choice &mdash; origin bonuses are added for you.</p></div></div>
+              <div class="step-intro"><span>03</span><div><h2>Set ability scores</h2><p>Choose how to set your six base scores. Origin, feat, and ASI bonuses are added afterward.</p></div></div>
+              <div class="ability-methods" id="ability-methods" role="radiogroup" aria-label="Ability score method">
+                <label class="ability-method active"><input type="radio" name="abilityMethod" value="standard" checked> Standard Array <small>Assign 15, 14, 13, 12, 10, and 8 once each.</small></label>
+                <label class="ability-method"><input type="radio" name="abilityMethod" value="pointbuy"> Point Buy <small>Spend 27 points. Scores start at 8 and cap at 15 before bonuses.</small></label>
+                <label class="ability-method"><input type="radio" name="abilityMethod" value="manual"> Manual Entry <small>Type custom base scores directly.</small></label>
+              </div>
+              <div class="ability-method-status" id="ability-method-status" aria-live="polite"></div>
               <div class="ability-editor" id="ability-editor"></div>
-              <button class="text-button" type="button" id="standard-array">Use standard array (recommended)</button>
               <div class="field-grid compact">
                 <label>Armor class override<input name="acOverride" type="number" min="0" max="40" placeholder="Auto"></label>
                 <label>Hit point override<input name="hpOverride" type="number" min="1" max="999" placeholder="Auto"></label>
@@ -533,6 +538,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=auth-fetch-2"></script>
+  <script src="app.js?v=ability-methods-1"></script>
 </body>
 </html>
