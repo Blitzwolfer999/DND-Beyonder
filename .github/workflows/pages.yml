@@ -38,10 +38,7 @@ jobs:
             supabaseUrl: "https://ifvygjdmdzpdllbfrayv.supabase.co",
             supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
           };
-          const config = {
-            supabaseUrl: process.env.SUPABASE_URL || fallback.supabaseUrl,
-            supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || fallback.supabasePublishableKey
-          };
+          const config = fallback;
           fs.writeFileSync("cloud-config.js", `window.ARCANA_CLOUD_CONFIG = ${JSON.stringify(config, null, 2)};\n`);
           NODE
       - name: Harden deployed account sync
@@ -54,9 +51,9 @@ jobs:
             supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
           };
           let html = fs.readFileSync(htmlPath, "utf8");
-          const inlineConfig = `  <script>\n    window.ARCANA_CLOUD_CONFIG = {\n      supabaseUrl: window.ARCANA_CLOUD_CONFIG?.supabaseUrl || "${fallback.supabaseUrl}",\n      supabasePublishableKey: window.ARCANA_CLOUD_CONFIG?.supabasePublishableKey || "${fallback.supabasePublishableKey}"\n    };\n  </script>`;
+          const inlineConfig = `  <script>\n    window.ARCANA_CLOUD_CONFIG = {\n      supabaseUrl: "${fallback.supabaseUrl}",\n      supabasePublishableKey: "${fallback.supabasePublishableKey}"\n    };\n  </script>`;
           html = html
-            .replace(/<script src="cloud-config\.js\?v=[^"]+"><\/script>/, `<script src="cloud-config.js?v=supabase-ifvyg-2"></script>\n${inlineConfig}`)
+            .replace(/<script src="cloud-config\.js\?v=[^"]+"><\/script>/, `<script src="cloud-config.js?v=supabase-ifvyg-3"></script>\n${inlineConfig}`)
             .replace(/<script src="app\.js\?v=[^"]+"><\/script>/, '<script src="app.js?v=auth-fetch-2"></script>');
           fs.writeFileSync(htmlPath, html);
           NODE
