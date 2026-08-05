@@ -337,6 +337,21 @@ function characterOwnerId(character) {
 function isOwnCharacter(character) {
   return !cloudUser || !character?.cloudOwnerId || character.cloudOwnerId === cloudUser.id;
 }
+function characterVaultKey(character, ownerId = cloudUser?.id || "") {
+  return `${character?.cloudOwnerId || character?.owner_user_id || ownerId}:${character?.id || ""}`;
+}
+function mergeUserVaultCharacters(lists, userId) {
+  const merged = new Map();
+  lists.flat().forEach(character => {
+    if (!character?.id || isDemoCharacter(character)) return;
+    const ownerId = character.cloudOwnerId || character.owner_user_id || userId || "";
+    const normalized = { ...character, cloudOwnerId: ownerId };
+    const key = characterVaultKey(normalized, userId);
+    const existing = merged.get(key);
+    if (!existing || characterTimestamp(normalized) >= characterTimestamp(existing)) merged.set(key, normalized);
+  });
+  return [...merged.values()].sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+}
 function canControlCharacter(character) {
   return isOwnCharacter(character) || character?._campaignRole === "dm";
 }
@@ -915,12 +930,15 @@ function setCloudStatus(message, isError = false) {
 function prepareUserVault(user) {
   if (!user) return;
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
+  const localCharacters = Array.isArray(characters) ? characters : [];
   const cached = readJson(`${STORAGE_KEY}.${user.id}`, null);
   const cachedCampaigns = readJson(`${CAMPAIGN_KEY}.${user.id}`, null);
   const cachedCampaignMaps = readJson(`${CAMPAIGN_MAP_KEY}.${user.id}`, null);
   const cachedDeletions = readJson(`${DELETED_KEY}.${user.id}`, null);
-  if (cached !== null) characters = cached;
+  const canImportLocalVault = !priorOwner || priorOwner === user.id;
+  if (cached !== null) characters = mergeUserVaultCharacters([cached, canImportLocalVault ? localCharacters : []], user.id);
   else if (priorOwner && priorOwner !== user.id) characters = [];
+  else characters = mergeUserVaultCharacters([localCharacters], user.id);
   campaigns = cachedCampaigns || [];
   campaignMaps = cachedCampaignMaps || [];
   deletedCharacters = cachedDeletions || {};
