@@ -52,9 +52,7 @@ jobs:
           };
           let html = fs.readFileSync(htmlPath, "utf8");
           const inlineConfig = `  <script>\n    window.ARCANA_CLOUD_CONFIG = {\n      supabaseUrl: "${fallback.supabaseUrl}",\n      supabasePublishableKey: "${fallback.supabasePublishableKey}"\n    };\n  </script>`;
-          html = html
-            .replace(/<script src="cloud-config\.js\?v=[^"]+"><\/script>/, `<script src="cloud-config.js?v=supabase-ifvyg-3"></script>\n${inlineConfig}`)
-            .replace(/<script src="app\.js\?v=[^"]+"><\/script>/, '<script src="app.js?v=auth-fetch-2"></script>');
+          html = html.replace(/<script src="cloud-config\.js\?v=[^"]+"><\/script>/, `<script src="cloud-config.js?v=supabase-ifvyg-3"></script>\n${inlineConfig}`);
           fs.writeFileSync(htmlPath, html);
           NODE
       - name: Upload static site
