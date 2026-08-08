@@ -461,6 +461,9 @@ function mergeRecordsById(primary = [], fallback = [], keyFn = item => item?.id)
   });
   return [...merged.values()];
 }
+function accountDisplayName(fallback = "Adventurer") {
+  return cloudUser?.user_metadata?.display_name || cloudUser?.email?.split("@")[0] || fallback;
+}
 function generateInviteCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
@@ -1045,6 +1048,79 @@ async function syncCharactersToCloud() {
   }
   setCloudStatus(`Cloud vault synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
 }
+async function syncCampaignsToCloud() {
+  if (!cloudUser || !cloudClient) return false;
+  const ownedCampaigns = campaigns.filter(campaign => campaign?.id && campaign.owner_id === cloudUser.id);
+  if (!ownedCampaigns.length) return true;
+  try {
+    const now = new Date().toISOString();
+    const ownedCampaignIds = new Set(ownedCampaigns.map(campaign => campaign.id));
+    const campaignRows = ownedCampaigns.map(campaign => ({
+      id: campaign.id,
+      owner_id: cloudUser.id,
+      name: campaign.name || "Untitled Campaign",
+      description: campaign.description || "",
+      invite_code: campaign.invite_code || generateInviteCode(),
+      updated_at: campaign.updated_at || now
+    }));
+    const { error: campaignError } = await cloudClient.from("campaigns")
+      .upsert(campaignRows, { onConflict: "id" });
+    if (campaignError) { reportCampaignError(campaignError, "Campaign sync failed", false); return false; }
+
+    const displayName = accountDisplayName("DM");
+    const memberRows = ownedCampaigns.map(campaign => {
+      const existing = campaignMemberships.find(member => member.campaign_id === campaign.id && member.user_id === cloudUser.id);
+      return {
+        campaign_id: campaign.id,
+        user_id: cloudUser.id,
+        role: "dm",
+        display_name: existing?.display_name || displayName,
+        joined_at: existing?.joined_at || campaign.updated_at || now
+      };
+    });
+    const { error: memberError } = await cloudClient.from("campaign_members")
+      .upsert(memberRows, { onConflict: "campaign_id,user_id" });
+    if (memberError) { reportCampaignError(memberError, "Campaign membership sync failed", false); return false; }
+
+    const ownLinks = campaignCharacters
+      .filter(link => ownedCampaignIds.has(link.campaign_id) && link.owner_user_id === cloudUser.id)
+      .map(link => ({
+        campaign_id: link.campaign_id,
+        owner_user_id: cloudUser.id,
+        character_id: link.character_id,
+        nickname: link.nickname || "",
+        added_at: link.added_at || now
+      }));
+    if (ownLinks.length) {
+      const { error: linkError } = await cloudClient.from("campaign_characters")
+        .upsert(ownLinks, { onConflict: "campaign_id,owner_user_id,character_id" });
+      if (linkError) { reportCampaignError(linkError, "Campaign character sync failed", false); return false; }
+    }
+
+    const mapRows = campaignMaps
+      .filter(map => ownedCampaignIds.has(map.campaign_id))
+      .map(map => ({
+        id: map.id,
+        campaign_id: map.campaign_id,
+        owner_id: cloudUser.id,
+        name: map.name || "Encounter Map",
+        data: normalizeMapData(map.data),
+        updated_at: map.updated_at || now
+      }));
+    if (mapRows.length) {
+      const { error: mapError } = await cloudClient.from("campaign_maps")
+        .upsert(mapRows, { onConflict: "id" });
+      if (mapError && !isMissingCampaignSchema(mapError)) { reportCampaignError(mapError, "Campaign map sync failed", false); return false; }
+    }
+
+    setCloudStatus(`Campaigns synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+    return true;
+  } catch (error) {
+    writeRecoverySnapshot("campaign sync failed");
+    setCloudStatus(`Campaign sync failed. Cached campaigns are still local: ${error.message || error}`, true);
+    return false;
+  }
+}
 async function loadCloudCharacters() {
   if (!cloudUser || !cloudClient) return;
   const { data, error } = await cloudClient.from("characters").select("id, user_id, data, updated_at, is_deleted");
@@ -1142,7 +1218,7 @@ async function loadCampaigns() {
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
   campaigns.forEach(campaign => {
     if (campaign.owner_id === cloudUser.id && !campaignMemberships.some(member => member.campaign_id === campaign.id && member.user_id === cloudUser.id)) {
-      campaignMemberships.push({ campaign_id: campaign.id, user_id: cloudUser.id, role: "dm", display_name: cloudUser.email?.split("@")[0] || "DM", joined_at: campaign.updated_at || new Date().toISOString() });
+      campaignMemberships.push({ campaign_id: campaign.id, user_id: cloudUser.id, role: "dm", display_name: accountDisplayName("DM"), joined_at: campaign.updated_at || new Date().toISOString() });
       myCampaignIds.add(campaign.id);
     }
   });
@@ -1180,7 +1256,7 @@ async function createCampaign(name, description) {
     campaign_id: data.id,
     user_id: cloudUser.id,
     role: "dm",
-    display_name: cloudUser.user_metadata?.display_name || cloudUser.email?.split("@")[0] || "DM"
+    display_name: accountDisplayName("DM")
   }, { onConflict: "campaign_id,user_id" });
   activeCampaignId = data.id;
   await loadCampaigns();
@@ -1189,7 +1265,7 @@ async function createCampaign(name, description) {
 async function joinCampaign(inviteCode) {
   if (!cloudUser || !cloudClient) { toast("Sign in to join a campaign"); return; }
   const code = inviteCode.trim().toUpperCase();
-  const displayName = cloudUser.user_metadata?.display_name || cloudUser.email?.split("@")[0] || "Player";
+  const displayName = accountDisplayName("Player");
   const { data, error } = await cloudClient.rpc("join_campaign_by_invite", {
     p_invite_code: code,
     p_display_name: displayName
@@ -6045,6 +6121,7 @@ function initEvents() {
     $("#sync-now").disabled = true;
     try {
       await syncCharactersToCloud();
+      await syncCampaignsToCloud();
       await loadCampaigns();
     } finally {
       $("#sync-now").disabled = false;
@@ -6163,8 +6240,8 @@ async function handleAccountSubmit(event) {
   event.preventDefault();
   const values = Object.fromEntries(new FormData(event.currentTarget));
   const displayName = String(values.displayName || values.email.split("@")[0]).trim();
-  saveJson(PROFILE_KEY, { displayName, email: values.email });
   if (!cloudClient) {
+    saveJson(PROFILE_KEY, { displayName, email: values.email });
     updateAccount();
     setCloudStatus("Local profile saved. Add Supabase settings in cloud-config.js to enable cross-device sign-in.", true);
     toast("Profile saved locally");
@@ -6184,24 +6261,27 @@ async function handleAccountSubmit(event) {
   $("#account-submit").disabled = false;
   if (result.error) { setCloudStatus(cloudAuthErrorMessage(result.error), true); return; }
   if (!result.data.session) {
+    saveJson(PROFILE_KEY, { displayName, email: values.email });
     setCloudStatus("Account created. Check your email to confirm it, then sign in.");
     setAccountMode("signin");
     return;
   }
+  saveJson(PROFILE_KEY, { displayName, email: values.email });
   cloudUser = result.data.user;
   prepareUserVault(cloudUser);
   updateAccount();
+  await syncCharactersToCloud();
+  await syncCampaignsToCloud();
   await loadCampaigns();
   $("#account-modal").classList.add("hidden");
   toast(`Welcome, ${displayName}`);
 }
 
 function updateAccount() {
-  const localProfile = readJson(PROFILE_KEY, null);
-  const displayName = cloudUser?.user_metadata?.display_name || localProfile?.displayName || cloudUser?.email?.split("@")[0] || "";
-  $("#account-label").textContent = displayName || "Sign in";
-  $(".avatar-mini").textContent = (displayName || "W").charAt(0).toUpperCase();
   const signedIn = Boolean(cloudUser);
+  const displayName = signedIn ? accountDisplayName("Adventurer") : "";
+  $("#account-label").textContent = signedIn ? displayName : "Sign in";
+  $(".avatar-mini").textContent = (signedIn ? displayName : "D").charAt(0).toUpperCase();
   $("#account-form").classList.toggle("hidden", signedIn);
   $("#account-modes").classList.toggle("hidden", signedIn);
   $("#sync-now").classList.toggle("hidden", !signedIn);
@@ -6230,14 +6310,22 @@ async function initCloud() {
   cloudUser = data?.session?.user || null;
   if (cloudUser) prepareUserVault(cloudUser);
   updateAccount();
-  if (cloudUser) await loadCampaigns();
+  if (cloudUser) {
+    await syncCharactersToCloud();
+    await syncCampaignsToCloud();
+    await loadCampaigns();
+  }
   cloudClient.auth.onAuthStateChange((_event, session) => {
     const nextUser = session?.user || null;
     const changed = nextUser?.id !== cloudUser?.id;
     cloudUser = nextUser;
     if (cloudUser) prepareUserVault(cloudUser);
     updateAccount();
-    if (changed && cloudUser) setTimeout(loadCampaigns, 0);
+    if (changed && cloudUser) setTimeout(async () => {
+      await syncCharactersToCloud();
+      await syncCampaignsToCloud();
+      await loadCampaigns();
+    }, 0);
   });
   window.addEventListener("online", () => {
     if (cloudUser) loadCampaigns();
