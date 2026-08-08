@@ -162,6 +162,43 @@ begin
 end;
 $$;
 
+create or replace function public.ensure_campaign_dm_membership(p_campaign_id uuid, p_display_name text default '')
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_campaign public.campaigns;
+  clean_name text;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Sign in required';
+  end if;
+
+  select *
+  into target_campaign
+  from public.campaigns c
+  where c.id = p_campaign_id
+  limit 1;
+
+  if target_campaign.id is null then
+    raise exception 'Campaign not found';
+  end if;
+
+  if target_campaign.owner_id <> (select auth.uid()) then
+    raise exception 'Only the campaign owner can repair DM membership';
+  end if;
+
+  clean_name := coalesce(nullif(trim(p_display_name), ''), 'DM');
+
+  insert into public.campaign_members (campaign_id, user_id, role, display_name)
+  values (target_campaign.id, (select auth.uid()), 'dm', clean_name)
+  on conflict (campaign_id, user_id)
+  do update set role = 'dm', display_name = excluded.display_name;
+end;
+$$;
+
 create or replace function public.move_campaign_map_token(p_map_id uuid, p_token_id text, p_x integer, p_y integer)
 returns public.campaign_maps
 language plpgsql
@@ -386,12 +423,14 @@ $$;
 revoke all on function public.is_campaign_member(uuid) from public;
 revoke all on function public.is_campaign_dm(uuid) from public;
 revoke all on function public.join_campaign_by_invite(text, text) from public;
+revoke all on function public.ensure_campaign_dm_membership(uuid, text) from public;
 revoke all on function public.move_campaign_map_token(uuid, text, integer, integer) from public;
 revoke all on function public.resize_campaign_map_token(uuid, text, integer) from public;
 revoke all on function public.add_campaign_map_ping(uuid, integer, integer, text) from public;
 grant execute on function public.is_campaign_member(uuid) to authenticated;
 grant execute on function public.is_campaign_dm(uuid) to authenticated;
 grant execute on function public.join_campaign_by_invite(text, text) to authenticated;
+grant execute on function public.ensure_campaign_dm_membership(uuid, text) to authenticated;
 grant execute on function public.move_campaign_map_token(uuid, text, integer, integer) to authenticated;
 grant execute on function public.resize_campaign_map_token(uuid, text, integer) to authenticated;
 grant execute on function public.add_campaign_map_ping(uuid, integer, integer, text) to authenticated;

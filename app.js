@@ -451,7 +451,8 @@ function campaignMember(campaignId, userId = cloudUser?.id) {
   return campaignMemberships.find(member => member.campaign_id === campaignId && member.user_id === userId);
 }
 function campaignRole(campaignId) {
-  return campaignMember(campaignId)?.role || (campaigns.find(campaign => campaign.id === campaignId)?.owner_id === cloudUser?.id ? "dm" : "");
+  if (campaigns.find(campaign => campaign.id === campaignId)?.owner_id === cloudUser?.id) return "dm";
+  return campaignMember(campaignId)?.role || "";
 }
 function mergeRecordsById(primary = [], fallback = [], keyFn = item => item?.id) {
   const merged = new Map();
@@ -1053,6 +1054,39 @@ async function syncCharactersToCloud() {
   const sharedText = syncedSharedCount ? `, ${syncedSharedCount} DM sheet update${syncedSharedCount === 1 ? "" : "s"}` : "";
   setCloudStatus(`Cloud vault synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} (${syncedOwnCount} owned character${syncedOwnCount === 1 ? "" : "s"}${sharedText})`);
 }
+async function ensureCampaignDmMembership(campaign, displayName, joinedAt) {
+  const row = {
+    campaign_id: campaign.id,
+    user_id: cloudUser.id,
+    role: "dm",
+    display_name: displayName,
+    joined_at: joinedAt || campaign.updated_at || new Date().toISOString()
+  };
+  const upsert = await cloudClient.from("campaign_members")
+    .upsert(row, { onConflict: "campaign_id,user_id" });
+  if (!upsert.error) return { ok: true, method: "upsert" };
+
+  const rpc = await cloudClient.rpc("ensure_campaign_dm_membership", {
+    p_campaign_id: campaign.id,
+    p_display_name: displayName
+  });
+  if (!rpc.error) return { ok: true, method: "rpc" };
+  if (!isMissingSecurityRpc(rpc.error)) return { ok: false, error: upsert.error, fallbackError: rpc.error };
+
+  const insert = await cloudClient.from("campaign_members").insert(row);
+  if (!insert.error) return { ok: true, method: "insert" };
+  const insertMessage = String(insert.error.message || "").toLowerCase();
+  if (!insertMessage.includes("duplicate") && !insertMessage.includes("already exists")) {
+    return { ok: false, error: upsert.error, fallbackError: insert.error };
+  }
+
+  const update = await cloudClient.from("campaign_members")
+    .update({ role: "dm", display_name: displayName })
+    .eq("campaign_id", campaign.id)
+    .eq("user_id", cloudUser.id);
+  if (!update.error) return { ok: true, method: "update" };
+  return { ok: false, error: upsert.error, fallbackError: update.error };
+}
 async function syncCampaignsToCloud() {
   if (!cloudUser || !cloudClient) return false;
   const ownedCampaigns = campaigns.filter(campaign => campaign?.id && campaign.owner_id === cloudUser.id);
@@ -1083,9 +1117,17 @@ async function syncCampaignsToCloud() {
         joined_at: existing?.joined_at || campaign.updated_at || now
       };
     });
-    const { error: memberError } = await cloudClient.from("campaign_members")
-      .upsert(memberRows, { onConflict: "campaign_id,user_id" });
-    if (memberError) { reportCampaignError(memberError, "Campaign membership sync failed", false); return false; }
+    let repairedMemberships = 0;
+    for (const campaign of ownedCampaigns) {
+      const existing = memberRows.find(row => row.campaign_id === campaign.id);
+      const result = await ensureCampaignDmMembership(campaign, existing?.display_name || displayName, existing?.joined_at || now);
+      if (!result.ok) {
+        const detail = result.fallbackError?.message || result.error?.message || "Unknown membership error";
+        setCloudStatus(`Campaign membership sync failed for "${campaign.name}". ${detail}`, true);
+        return false;
+      }
+      if (result.method !== "upsert") repairedMemberships += 1;
+    }
 
     const ownLinks = campaignCharacters
       .filter(link => ownedCampaignIds.has(link.campaign_id) && link.owner_user_id === cloudUser.id)
@@ -1118,7 +1160,8 @@ async function syncCampaignsToCloud() {
       if (mapError && !isMissingCampaignSchema(mapError)) { reportCampaignError(mapError, "Campaign map sync failed", false); return false; }
     }
 
-    setCloudStatus(`Campaigns synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} (${campaignRows.length} campaign${campaignRows.length === 1 ? "" : "s"}, ${mapRows.length} map${mapRows.length === 1 ? "" : "s"})`);
+    const repairText = repairedMemberships ? `, ${repairedMemberships} membership repair${repairedMemberships === 1 ? "" : "s"}` : "";
+    setCloudStatus(`Campaigns synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} (${campaignRows.length} campaign${campaignRows.length === 1 ? "" : "s"}, ${mapRows.length} map${mapRows.length === 1 ? "" : "s"}${repairText})`);
     return true;
   } catch (error) {
     writeRecoverySnapshot("campaign sync failed");
@@ -1257,12 +1300,11 @@ async function createCampaign(name, description) {
     updated_at: new Date().toISOString()
   }).select("id, owner_id, name, description, invite_code, updated_at").single();
   if (error) { reportCampaignError(error, "Campaign create failed"); return; }
-  await cloudClient.from("campaign_members").upsert({
-    campaign_id: data.id,
-    user_id: cloudUser.id,
-    role: "dm",
-    display_name: accountDisplayName("DM")
-  }, { onConflict: "campaign_id,user_id" });
+  const membership = await ensureCampaignDmMembership(data, accountDisplayName("DM"), data.updated_at);
+  if (!membership.ok) {
+    const detail = membership.fallbackError?.message || membership.error?.message || "Unknown membership error";
+    setCloudStatus(`Campaign created, but DM membership repair failed: ${detail}`, true);
+  }
   activeCampaignId = data.id;
   await loadCampaigns();
   toast(`${name} created`);
