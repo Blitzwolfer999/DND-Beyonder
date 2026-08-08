@@ -1062,16 +1062,16 @@ async function ensureCampaignDmMembership(campaign, displayName, joinedAt) {
     display_name: displayName,
     joined_at: joinedAt || campaign.updated_at || new Date().toISOString()
   };
-  const upsert = await cloudClient.from("campaign_members")
-    .upsert(row, { onConflict: "campaign_id,user_id" });
-  if (!upsert.error) return { ok: true, method: "upsert" };
-
   const rpc = await cloudClient.rpc("ensure_campaign_dm_membership", {
     p_campaign_id: campaign.id,
     p_display_name: displayName
   });
   if (!rpc.error) return { ok: true, method: "rpc" };
-  if (!isMissingSecurityRpc(rpc.error)) return { ok: false, error: upsert.error, fallbackError: rpc.error };
+  if (!isMissingSecurityRpc(rpc.error)) return { ok: false, fallbackError: rpc.error };
+
+  const upsert = await cloudClient.from("campaign_members")
+    .upsert(row, { onConflict: "campaign_id,user_id" });
+  if (!upsert.error) return { ok: true, method: "upsert" };
 
   const insert = await cloudClient.from("campaign_members").insert(row);
   if (!insert.error) return { ok: true, method: "insert" };

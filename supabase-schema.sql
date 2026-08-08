@@ -164,23 +164,67 @@ to authenticated
 using (owner_id = (select auth.uid()));
 
 drop policy if exists "Campaign members can read membership" on public.campaign_members;
+drop policy if exists "Campaign owners can read membership" on public.campaign_members;
 create policy "Campaign members can read membership"
 on public.campaign_members for select
 to authenticated
-using (true);
+using (
+  user_id = (select auth.uid())
+  or exists (
+    select 1 from public.campaigns c
+    where c.id = public.campaign_members.campaign_id
+      and c.owner_id = (select auth.uid())
+  )
+);
 
 drop policy if exists "Users can join campaigns" on public.campaign_members;
 create policy "Users can join campaigns"
 on public.campaign_members for insert
 to authenticated
-with check (user_id = (select auth.uid()));
+with check (
+  user_id = (select auth.uid())
+  and (
+    role = 'player'
+    or exists (
+      select 1 from public.campaigns c
+      where c.id = public.campaign_members.campaign_id
+        and c.owner_id = (select auth.uid())
+    )
+  )
+);
 
 drop policy if exists "Users can update their campaign profile" on public.campaign_members;
+drop policy if exists "Campaign owners can manage memberships" on public.campaign_members;
 create policy "Users can update their campaign profile"
 on public.campaign_members for update
 to authenticated
-using (user_id = (select auth.uid()))
-with check (user_id = (select auth.uid()));
+using (
+  user_id = (select auth.uid())
+  or exists (
+    select 1 from public.campaigns c
+    where c.id = public.campaign_members.campaign_id
+      and c.owner_id = (select auth.uid())
+  )
+)
+with check (
+  user_id = (select auth.uid())
+  or exists (
+    select 1 from public.campaigns c
+    where c.id = public.campaign_members.campaign_id
+      and c.owner_id = (select auth.uid())
+  )
+);
+
+create policy "Campaign owners can manage memberships"
+on public.campaign_members for delete
+to authenticated
+using (
+  exists (
+    select 1 from public.campaigns c
+    where c.id = public.campaign_members.campaign_id
+      and c.owner_id = (select auth.uid())
+  )
+);
 
 drop policy if exists "Members can read campaign characters" on public.campaign_characters;
 create policy "Members can read campaign characters"
