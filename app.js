@@ -232,6 +232,8 @@ const CAMPAIGN_MEMBER_KEY = "arcanaForge.campaignMembers.v1";
 const CAMPAIGN_CHARACTER_KEY = "arcanaForge.campaignCharacters.v1";
 const CAMPAIGN_MAP_KEY = "arcanaForge.campaignMaps.v1";
 const CAMPAIGN_LOG_KEY = "arcanaForge.campaignGameLog.v1";
+const RECOVERY_SNAPSHOT_KEY = "arcanaForge.recoverySnapshots.v1";
+const MAX_RECOVERY_SNAPSHOTS = 5;
 const THEME_KEY = "dndb.theme";
 const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
 const BUILDER_STEP_COUNT = 7;
@@ -279,6 +281,7 @@ let campaignTileImageDraft = "";
 let campaignLiveTimer = null;
 let deletedCharacters = readJson(DELETED_KEY, {});
 let rollHistory = readJson(ROLL_KEY, []);
+restoreRecoverySnapshotIfEmpty("initial load");
 localStorage.removeItem("arcanaForge.ownedContent.v1");
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -314,6 +317,75 @@ function saveJson(key, value) {
     console.warn(`Could not save ${key}`, error);
     return false;
   }
+}
+function meaningfulState(payload) {
+  return Boolean(payload?.characters?.length
+    || payload?.campaigns?.length
+    || payload?.campaignMemberships?.length
+    || payload?.campaignCharacters?.length
+    || payload?.campaignMaps?.length
+    || payload?.campaignGameLogs?.length);
+}
+function recoveryContent() {
+  return {
+    ownerId: cloudUser?.id || localStorage.getItem(CLOUD_OWNER_KEY) || "",
+    characters: Array.isArray(characters) ? characters : [],
+    campaigns: Array.isArray(campaigns) ? campaigns : [],
+    campaignMemberships: Array.isArray(campaignMemberships) ? campaignMemberships : [],
+    campaignCharacters: Array.isArray(campaignCharacters) ? campaignCharacters : [],
+    campaignMaps: Array.isArray(campaignMaps) ? campaignMaps : [],
+    campaignGameLogs: Array.isArray(campaignGameLogs) ? campaignGameLogs : [],
+    deletedCharacters: deletedCharacters && typeof deletedCharacters === "object" ? deletedCharacters : {}
+  };
+}
+function writeRecoverySnapshot(reason = "save") {
+  try {
+    const content = recoveryContent();
+    if (!meaningfulState(content)) return true;
+    const fingerprint = JSON.stringify(content);
+    const snapshots = readJson(RECOVERY_SNAPSHOT_KEY, []);
+    if (snapshots[0]?.fingerprint === fingerprint) return true;
+    const entry = {
+      version: 1,
+      reason,
+      createdAt: Date.now(),
+      fingerprint,
+      ...content
+    };
+    return saveJson(RECOVERY_SNAPSHOT_KEY, [entry, ...snapshots].slice(0, MAX_RECOVERY_SNAPSHOTS));
+  } catch (error) {
+    console.warn("Could not write recovery snapshot", error);
+    return false;
+  }
+}
+function restoreRecoverySnapshotIfEmpty(reason = "recovery") {
+  const hasCurrentState = meaningfulState({
+    characters,
+    campaigns,
+    campaignMemberships,
+    campaignCharacters,
+    campaignMaps,
+    campaignGameLogs
+  });
+  if (hasCurrentState) return false;
+  const snapshot = readJson(RECOVERY_SNAPSHOT_KEY, [])[0];
+  if (!meaningfulState(snapshot)) return false;
+  characters = Array.isArray(snapshot.characters) ? snapshot.characters : [];
+  campaigns = Array.isArray(snapshot.campaigns) ? snapshot.campaigns : [];
+  campaignMemberships = Array.isArray(snapshot.campaignMemberships) ? snapshot.campaignMemberships : [];
+  campaignCharacters = Array.isArray(snapshot.campaignCharacters) ? snapshot.campaignCharacters : [];
+  campaignMaps = Array.isArray(snapshot.campaignMaps) ? snapshot.campaignMaps : [];
+  campaignGameLogs = Array.isArray(snapshot.campaignGameLogs) ? snapshot.campaignGameLogs : [];
+  deletedCharacters = snapshot.deletedCharacters && typeof snapshot.deletedCharacters === "object" ? snapshot.deletedCharacters : {};
+  saveJson(STORAGE_KEY, characters);
+  saveJson(CAMPAIGN_KEY, campaigns);
+  saveJson(CAMPAIGN_MEMBER_KEY, campaignMemberships);
+  saveJson(CAMPAIGN_CHARACTER_KEY, campaignCharacters);
+  saveJson(CAMPAIGN_MAP_KEY, campaignMaps);
+  saveJson(CAMPAIGN_LOG_KEY, campaignGameLogs);
+  saveJson(DELETED_KEY, deletedCharacters);
+  console.info(`Recovered DND Beyonder save state from snapshot (${reason})`);
+  return true;
 }
 function characterTimestamp(character) { return Number(character?.updatedAt || 0); }
 function deletionTimestamp(id) { return Number(deletedCharacters[id] || 0); }
@@ -404,6 +476,7 @@ function saveCampaignCache() {
   if (cloudUser) saveJson(`${CAMPAIGN_CHARACTER_KEY}.${cloudUser.id}`, campaignCharacters);
   if (cloudUser) saveJson(`${CAMPAIGN_MAP_KEY}.${cloudUser.id}`, campaignMaps);
   if (cloudUser) saveJson(`${CAMPAIGN_LOG_KEY}.${cloudUser.id}`, campaignGameLogs);
+  writeRecoverySnapshot("campaign cache saved");
 }
 function campaignSetupMessage() {
   return "Campaign tables are not set up yet. Run supabase-campaign-schema.sql in the Supabase SQL Editor, then refresh DND Beyonder.";
@@ -912,6 +985,7 @@ async function recordCampaignGameLog(campaignId, payload) {
 function persistCharacters() {
   const savedMain = saveJson(STORAGE_KEY, characters);
   const savedUser = cloudUser ? saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters) : true;
+  if (savedMain || savedUser) writeRecoverySnapshot("characters saved");
   if (cloudUser && cloudClient) {
     clearTimeout(cloudSyncTimer);
     cloudSyncTimer = setTimeout(syncCharactersToCloud, 350);
@@ -920,55 +994,67 @@ function persistCharacters() {
 }
 async function syncCharactersToCloud() {
   if (!cloudUser || !cloudClient) return;
-  const ownRows = characters
-    .filter(character => !isDemoCharacter(character)
-      && characterTimestamp(character) > deletionTimestamp(character.id)
-      && isOwnCharacter(character))
-    .map(character => ({
-    id: character.id,
-    user_id: cloudUser.id,
-    data: { ...character, cloudOwnerId: cloudUser.id, _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
-    is_deleted: false,
-    updated_at: new Date(character.updatedAt || Date.now()).toISOString()
-  }));
-  const sharedRows = characters
-    .filter(character => !isDemoCharacter(character)
-      && characterTimestamp(character) > deletionTimestamp(character.id)
-      && !isOwnCharacter(character)
-      && character._campaignRole === "dm")
-    .map(character => ({
+  try {
+    const ownRows = characters
+      .filter(character => !isDemoCharacter(character)
+        && characterTimestamp(character) > deletionTimestamp(character.id)
+        && isOwnCharacter(character))
+      .map(character => ({
       id: character.id,
-      user_id: characterOwnerId(character),
-      data: { ...character, cloudOwnerId: characterOwnerId(character), _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
+      user_id: cloudUser.id,
+      data: { ...character, cloudOwnerId: cloudUser.id, _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
       is_deleted: false,
       updated_at: new Date(character.updatedAt || Date.now()).toISOString()
     }));
-  const activeIds = new Set(ownRows.map(row => row.id));
-  const deletedRows = Object.entries(deletedCharacters).filter(([id]) => !activeIds.has(id)).map(([id, timestamp]) => ({
-    id,
-    user_id: cloudUser.id,
-    data: { id },
-    is_deleted: true,
-    updated_at: new Date(timestamp).toISOString()
-  }));
-  const ownSyncRows = [...ownRows, ...deletedRows];
-  if (ownSyncRows.length) {
-    const { error } = await cloudClient.from("characters").upsert(ownSyncRows, { onConflict: "user_id,id" });
-    if (error) { setCloudStatus(`Cloud sync failed: ${error.message}`, true); return; }
-  }
-  for (const row of sharedRows) {
-    const { error } = await cloudClient.from("characters")
-      .update({ data: row.data, is_deleted: false, updated_at: row.updated_at })
-      .eq("user_id", row.user_id)
-      .eq("id", row.id);
-    if (error) { setCloudStatus(`Campaign sheet sync failed: ${error.message}`, true); return; }
+    const sharedRows = characters
+      .filter(character => !isDemoCharacter(character)
+        && characterTimestamp(character) > deletionTimestamp(character.id)
+        && !isOwnCharacter(character)
+        && character._campaignRole === "dm")
+      .map(character => ({
+        id: character.id,
+        user_id: characterOwnerId(character),
+        data: { ...character, cloudOwnerId: characterOwnerId(character), _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined },
+        is_deleted: false,
+        updated_at: new Date(character.updatedAt || Date.now()).toISOString()
+      }));
+    const activeIds = new Set(ownRows.map(row => row.id));
+    const deletedRows = Object.entries(deletedCharacters).filter(([id]) => !activeIds.has(id)).map(([id, timestamp]) => ({
+      id,
+      user_id: cloudUser.id,
+      data: { id },
+      is_deleted: true,
+      updated_at: new Date(timestamp).toISOString()
+    }));
+    const ownSyncRows = [...ownRows, ...deletedRows];
+    if (ownSyncRows.length) {
+      const { error } = await cloudClient.from("characters").upsert(ownSyncRows, { onConflict: "user_id,id" });
+      if (error) { setCloudStatus(`Cloud sync failed: ${error.message}`, true); return; }
+    }
+    for (const row of sharedRows) {
+      const { error } = await cloudClient.from("characters")
+        .update({ data: row.data, is_deleted: false, updated_at: row.updated_at })
+        .eq("user_id", row.user_id)
+        .eq("id", row.id);
+      if (error) { setCloudStatus(`Campaign sheet sync failed: ${error.message}`, true); return; }
+    }
+  } catch (error) {
+    writeRecoverySnapshot("character sync failed");
+    setCloudStatus(`Cloud sync failed. Your changes are saved locally: ${error.message || error}`, true);
+    return;
   }
   setCloudStatus(`Cloud vault synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
 }
 async function loadCloudCharacters() {
   if (!cloudUser || !cloudClient) return;
   const { data, error } = await cloudClient.from("characters").select("id, user_id, data, updated_at, is_deleted");
-  if (error) { setCloudStatus(`Could not load cloud vault: ${error.message}`, true); return; }
+  if (error) {
+    writeRecoverySnapshot("cloud vault load failed");
+    setCloudStatus(`Could not load cloud vault. Showing cached characters: ${error.message}`, true);
+    renderCards();
+    renderSheet();
+    return;
+  }
   const sharedLookup = new Map(campaignCharacters.map(link => [`${link.owner_user_id}:${link.character_id}`, link]));
   const merged = new Map(characters
     .filter(character => !isDemoCharacter(character) && isOwnCharacter(character))
@@ -1008,6 +1094,7 @@ async function loadCloudCharacters() {
   saveJson(STORAGE_KEY, characters);
   saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters);
   persistDeletedCharacters();
+  writeRecoverySnapshot("cloud vault loaded");
   renderCards();
   renderSheet();
   await syncCharactersToCloud();
@@ -1017,13 +1104,25 @@ async function loadCampaigns() {
     renderCampaigns();
     return;
   }
-  const [campaignResult, memberResult, characterResult, mapResult, logResult] = await Promise.all([
-    cloudClient.from("campaigns").select("id, owner_id, name, description, invite_code, updated_at"),
-    cloudClient.from("campaign_members").select("campaign_id, user_id, role, display_name, joined_at"),
-    cloudClient.from("campaign_characters").select("campaign_id, owner_user_id, character_id, nickname, added_at"),
-    cloudClient.from("campaign_maps").select("id, campaign_id, owner_id, name, data, updated_at"),
-    cloudClient.from("campaign_game_log").select("id, campaign_id, actor_user_id, actor_name, character_id, source, label, rolls, raw_total, modifier, total, visibility, created_at").order("created_at", { ascending: false }).limit(120)
-  ]);
+  let campaignResult;
+  let memberResult;
+  let characterResult;
+  let mapResult;
+  let logResult;
+  try {
+    [campaignResult, memberResult, characterResult, mapResult, logResult] = await Promise.all([
+      cloudClient.from("campaigns").select("id, owner_id, name, description, invite_code, updated_at"),
+      cloudClient.from("campaign_members").select("campaign_id, user_id, role, display_name, joined_at"),
+      cloudClient.from("campaign_characters").select("campaign_id, owner_user_id, character_id, nickname, added_at"),
+      cloudClient.from("campaign_maps").select("id, campaign_id, owner_id, name, data, updated_at"),
+      cloudClient.from("campaign_game_log").select("id, campaign_id, actor_user_id, actor_name, character_id, source, label, rolls, raw_total, modifier, total, visibility, created_at").order("created_at", { ascending: false }).limit(120)
+    ]);
+  } catch (error) {
+    writeRecoverySnapshot("campaign load failed");
+    setCloudStatus(`Could not refresh campaigns. Showing cached campaign data: ${error.message || error}`, true);
+    renderCampaigns();
+    return;
+  }
   if (campaignResult.error) { reportCampaignError(campaignResult.error, "Could not load campaigns", false); return; }
   if (memberResult.error) { reportCampaignError(memberResult.error, "Could not load campaign members", false); return; }
   if (characterResult.error) { reportCampaignError(characterResult.error, "Could not load campaign characters", false); return; }
@@ -1163,6 +1262,7 @@ function setCloudStatus(message, isError = false) {
 }
 function prepareUserVault(user) {
   if (!user) return;
+  writeRecoverySnapshot("before account switch");
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
   const localCharacters = Array.isArray(characters) ? characters : [];
   const localCampaigns = Array.isArray(campaigns) ? campaigns : [];
@@ -1213,6 +1313,7 @@ function prepareUserVault(user) {
   saveJson(STORAGE_KEY, characters);
   persistDeletedCharacters();
   saveCampaignCache();
+  writeRecoverySnapshot("account prepared");
 }
 function modifier(score) { return Math.floor((Number(score || 10) - 10) / 2); }
 function signed(value) { return value >= 0 ? `+${value}` : String(value); }
@@ -5915,11 +6016,13 @@ function initEvents() {
       try {
         const data = JSON.parse(reader.result);
         if (!Array.isArray(data.characters)) throw new Error();
+        writeRecoverySnapshot("before vault import");
         const importedIds = new Set(data.characters.map(character => character.id));
         characters.filter(character => !importedIds.has(character.id)).forEach(character => rememberCharacterDeletion(character.id));
         characters = data.characters.map(character => ({ ...character, updatedAt: Number(character.updatedAt || Date.now()) }));
         characters.forEach(character => clearCharacterDeletion(character.id));
         persistCharacters();
+        writeRecoverySnapshot("vault imported");
         renderCards();
         renderSheet();
         toast("Vault imported");
@@ -5940,13 +6043,30 @@ function initEvents() {
   $("#account-form").addEventListener("submit", handleAccountSubmit);
   $("#sync-now").addEventListener("click", async () => {
     $("#sync-now").disabled = true;
-    await loadCampaigns();
-    $("#sync-now").disabled = false;
+    try {
+      await syncCharactersToCloud();
+      await loadCampaigns();
+    } finally {
+      $("#sync-now").disabled = false;
+    }
   });
   $("#sign-out").addEventListener("click", async () => {
-    if (cloudClient) await cloudClient.auth.signOut();
+    writeRecoverySnapshot("before sign out");
+    const localCharacters = characters
+      .filter(character => !isDemoCharacter(character) && isOwnCharacter(character))
+      .map(character => ({
+        ...character,
+        cloudOwnerId: undefined,
+        _campaignShared: undefined,
+        _campaignRole: undefined,
+        _campaignIds: undefined
+      }));
+    if (cloudClient) {
+      const { error } = await cloudClient.auth.signOut();
+      if (error) setCloudStatus(`Supabase sign-out warning: ${error.message}`, true);
+    }
     cloudUser = null;
-    characters = [];
+    characters = localCharacters;
     campaigns = [];
     campaignMemberships = [];
     campaignCharacters = [];
@@ -5957,7 +6077,7 @@ function initEvents() {
     selectedMapToken = null;
     startCampaignLiveSync(false);
     deletedCharacters = {};
-    activeCharacterId = null;
+    activeCharacterId = characters.some(character => character.id === activeCharacterId) ? activeCharacterId : characters[0]?.id || null;
     saveJson(STORAGE_KEY, characters);
     saveJson(CAMPAIGN_KEY, campaigns);
     saveJson(CAMPAIGN_MEMBER_KEY, campaignMemberships);
@@ -5965,6 +6085,7 @@ function initEvents() {
     saveJson(CAMPAIGN_MAP_KEY, campaignMaps);
     saveJson(CAMPAIGN_LOG_KEY, campaignGameLogs);
     saveJson(DELETED_KEY, deletedCharacters);
+    writeRecoverySnapshot("after sign out");
     renderCards();
     renderSheet();
     renderCampaigns();
