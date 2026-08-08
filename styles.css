@@ -987,6 +987,20 @@ textarea { resize: vertical; }
   font-weight: 800;
 }
 .card-meta strong { color: var(--muted); }
+.source-pill {
+  display: inline-flex;
+  width: fit-content;
+  margin: -2px 0 8px;
+  padding: 3px 8px;
+  border: 1px solid rgba(118, 87, 44, .26);
+  border-radius: 999px;
+  background: #fff4dd;
+  color: var(--gold-dark);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 .card-open {
   margin-top: 13px;
   display: flex;
@@ -1637,6 +1651,14 @@ textarea:focus-visible {
 .confirm-actions { margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px; }
 .button.danger { border-color: #9c2b2b; background: #9c2b2b; color: #fff; }
 .button.danger:hover { background: #b23636; box-shadow: 0 6px 18px rgba(156, 43, 43, .25); }
+.button.danger-button {
+  border-color: rgba(156, 43, 43, .36);
+  color: #9c2b2b;
+}
+.button.danger-button:hover {
+  border-color: #9c2b2b;
+  background: #fff1f1;
+}
 
 /* ---- Character sheet: D&D Beyond-style layout ---- */
 /* Combat-stat bar */
@@ -2181,6 +2203,19 @@ html[data-theme="dark"] .card-meta,
 html[data-theme="dark"] .sheet-source,
 html[data-theme="dark"] .legal-footer {
   color: var(--muted);
+}
+html[data-theme="dark"] .source-pill {
+  background: rgba(220, 181, 114, .13);
+  border-color: rgba(220, 181, 114, .28);
+  color: #f0c987;
+}
+html[data-theme="dark"] .button.danger-button {
+  border-color: rgba(239, 145, 140, .38);
+  color: #ffb4ae;
+}
+html[data-theme="dark"] .button.danger-button:hover {
+  background: rgba(156, 43, 43, .22);
+  border-color: #ef918c;
 }
 html[data-theme="dark"] .step-tabs button,
 html[data-theme="dark"] .account-modes button,

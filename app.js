@@ -997,6 +997,8 @@ function persistCharacters() {
 }
 async function syncCharactersToCloud() {
   if (!cloudUser || !cloudClient) return;
+  let syncedOwnCount = 0;
+  let syncedSharedCount = 0;
   try {
     const ownRows = characters
       .filter(character => !isDemoCharacter(character)
@@ -1033,6 +1035,7 @@ async function syncCharactersToCloud() {
     if (ownSyncRows.length) {
       const { error } = await cloudClient.from("characters").upsert(ownSyncRows, { onConflict: "user_id,id" });
       if (error) { setCloudStatus(`Cloud sync failed: ${error.message}`, true); return; }
+      syncedOwnCount = ownRows.length;
     }
     for (const row of sharedRows) {
       const { error } = await cloudClient.from("characters")
@@ -1040,13 +1043,15 @@ async function syncCharactersToCloud() {
         .eq("user_id", row.user_id)
         .eq("id", row.id);
       if (error) { setCloudStatus(`Campaign sheet sync failed: ${error.message}`, true); return; }
+      syncedSharedCount += 1;
     }
   } catch (error) {
     writeRecoverySnapshot("character sync failed");
     setCloudStatus(`Cloud sync failed. Your changes are saved locally: ${error.message || error}`, true);
     return;
   }
-  setCloudStatus(`Cloud vault synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+  const sharedText = syncedSharedCount ? `, ${syncedSharedCount} DM sheet update${syncedSharedCount === 1 ? "" : "s"}` : "";
+  setCloudStatus(`Cloud vault synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} (${syncedOwnCount} owned character${syncedOwnCount === 1 ? "" : "s"}${sharedText})`);
 }
 async function syncCampaignsToCloud() {
   if (!cloudUser || !cloudClient) return false;
@@ -1113,7 +1118,7 @@ async function syncCampaignsToCloud() {
       if (mapError && !isMissingCampaignSchema(mapError)) { reportCampaignError(mapError, "Campaign map sync failed", false); return false; }
     }
 
-    setCloudStatus(`Campaigns synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+    setCloudStatus(`Campaigns synced at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} (${campaignRows.length} campaign${campaignRows.length === 1 ? "" : "s"}, ${mapRows.length} map${mapRows.length === 1 ? "" : "s"})`);
     return true;
   } catch (error) {
     writeRecoverySnapshot("campaign sync failed");
@@ -1296,6 +1301,24 @@ async function joinCampaign(inviteCode) {
   await loadCampaigns();
   toast(`Joined ${joined.name}`);
 }
+async function deleteCampaign(campaignId) {
+  const campaign = campaigns.find(item => item.id === campaignId);
+  if (!cloudUser || !cloudClient || !campaign) return;
+  if (campaign.owner_id !== cloudUser.id) { toast("Only the campaign owner can delete this campaign"); return; }
+  const { error } = await cloudClient.from("campaigns").delete().eq("id", campaignId);
+  if (error) { reportCampaignError(error, "Could not delete campaign"); return; }
+  campaigns = campaigns.filter(item => item.id !== campaignId);
+  campaignMemberships = campaignMemberships.filter(member => member.campaign_id !== campaignId);
+  campaignCharacters = campaignCharacters.filter(link => link.campaign_id !== campaignId);
+  campaignMaps = campaignMaps.filter(map => map.campaign_id !== campaignId);
+  campaignGameLogs = campaignGameLogs.filter(entry => entry.campaign_id !== campaignId);
+  if (activeCampaignId === campaignId) activeCampaignId = campaigns[0]?.id || "";
+  if (activeMapId && !campaignMaps.some(map => map.id === activeMapId)) activeMapId = "";
+  saveCampaignCache();
+  renderCards();
+  renderCampaigns();
+  toast("Campaign deleted");
+}
 async function shareCharacterWithCampaign(campaignId, characterId) {
   const character = characters.find(item => item.id === characterId && isOwnCharacter(item));
   if (!cloudUser || !cloudClient || !character) return;
@@ -1340,19 +1363,13 @@ function prepareUserVault(user) {
   if (!user) return;
   writeRecoverySnapshot("before account switch");
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
-  const snapshots = readJson(RECOVERY_SNAPSHOT_KEY, []).filter(meaningfulState);
-  const snapshotCharacters = snapshots.flatMap(snapshot => Array.isArray(snapshot.characters) ? snapshot.characters : []);
-  const snapshotCampaigns = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaigns) ? snapshot.campaigns : []);
-  const snapshotMemberships = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignMemberships) ? snapshot.campaignMemberships : []);
-  const snapshotCampaignCharacters = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignCharacters) ? snapshot.campaignCharacters : []);
-  const snapshotCampaignMaps = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignMaps) ? snapshot.campaignMaps : []);
-  const snapshotCampaignLogs = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignGameLogs) ? snapshot.campaignGameLogs : []);
-  const localCharacters = mergeUserVaultCharacters([Array.isArray(characters) ? characters : [], snapshotCharacters], priorOwner || user.id);
-  const localCampaigns = mergeRecordsById(Array.isArray(campaigns) ? campaigns : [], snapshotCampaigns);
-  const localMemberships = mergeRecordsById(Array.isArray(campaignMemberships) ? campaignMemberships : [], snapshotMemberships, member => `${member?.campaign_id}:${member?.user_id}`);
-  const localCampaignCharacters = mergeRecordsById(Array.isArray(campaignCharacters) ? campaignCharacters : [], snapshotCampaignCharacters, link => `${link?.campaign_id}:${link?.owner_user_id}:${link?.character_id}`);
-  const localCampaignMaps = mergeRecordsById(Array.isArray(campaignMaps) ? campaignMaps : [], snapshotCampaignMaps);
-  const localCampaignLogs = mergeRecordsById(Array.isArray(campaignGameLogs) ? campaignGameLogs : [], snapshotCampaignLogs);
+  const sameOwnerLocal = priorOwner === user.id;
+  const localCharacters = sameOwnerLocal ? (Array.isArray(characters) ? characters : []) : [];
+  const localCampaigns = sameOwnerLocal ? (Array.isArray(campaigns) ? campaigns : []) : [];
+  const localMemberships = sameOwnerLocal ? (Array.isArray(campaignMemberships) ? campaignMemberships : []) : [];
+  const localCampaignCharacters = sameOwnerLocal ? (Array.isArray(campaignCharacters) ? campaignCharacters : []) : [];
+  const localCampaignMaps = sameOwnerLocal ? (Array.isArray(campaignMaps) ? campaignMaps : []) : [];
+  const localCampaignLogs = sameOwnerLocal ? (Array.isArray(campaignGameLogs) ? campaignGameLogs : []) : [];
   const cached = readJson(`${STORAGE_KEY}.${user.id}`, null);
   const cachedCampaigns = readJson(`${CAMPAIGN_KEY}.${user.id}`, null);
   const cachedMemberships = readJson(`${CAMPAIGN_MEMBER_KEY}.${user.id}`, null);
@@ -1360,80 +1377,13 @@ function prepareUserVault(user) {
   const cachedCampaignMaps = readJson(`${CAMPAIGN_MAP_KEY}.${user.id}`, null);
   const cachedCampaignLogs = readJson(`${CAMPAIGN_LOG_KEY}.${user.id}`, null);
   const cachedDeletions = readJson(`${DELETED_KEY}.${user.id}`, null);
-  const cachedIds = new Set((cached || []).map(character => character?.id).filter(Boolean));
-  const canImportLocalVault = !priorOwner || priorOwner === user.id;
-  const shouldRecoverLocalVault = canImportLocalVault || ((!cached || !cached.length) && localCharacters.length);
-  const shouldClaimLocalCharacters = shouldRecoverLocalVault && (!cached || !cached.length);
-  const shouldRecoverCampaigns = canImportLocalVault || (!cachedCampaigns || !cachedCampaigns.length);
-  const localDmCampaignIds = new Set(localMemberships
-    .filter(member => member?.role === "dm" && (!member.user_id || member.user_id === user.id || member.user_id === priorOwner || localCampaigns.some(campaign => campaign.id === member.campaign_id && campaign.owner_id === member.user_id)))
-    .map(member => member.campaign_id));
-  const shouldClaimCampaign = campaign => shouldRecoverCampaigns && Boolean(campaign?.id) && (
-    campaign.owner_id === user.id
-    || !campaign.owner_id
-    || (priorOwner && campaign.owner_id === priorOwner)
-    || localDmCampaignIds.has(campaign.id)
-  );
-  const claimedCampaignIds = new Set(localCampaigns.filter(shouldClaimCampaign).map(campaign => campaign.id));
-  const recoveredLocalCharacters = localCharacters
-    .filter(character => canImportLocalVault || !character._campaignShared)
-    .map(character => {
-      const claimCharacter = !character._campaignShared && (
-        shouldClaimLocalCharacters
-        || (!cachedIds.has(character.id) && character.cloudOwnerId !== user.id)
-      );
-      return {
-        ...character,
-        cloudOwnerId: claimCharacter ? user.id : character.cloudOwnerId || user.id,
-        _campaignShared: claimCharacter ? undefined : character._campaignShared,
-        _campaignRole: claimCharacter ? undefined : character._campaignRole,
-        _campaignIds: claimCharacter ? undefined : character._campaignIds
-      };
-    });
-  const recoveredCharacterIds = new Set(recoveredLocalCharacters.filter(character => !character._campaignShared).map(character => character.id));
-  const recoverOwner = (value, fallbackToUser = false) => value === user.id || value === priorOwner || !value || fallbackToUser ? user.id : value;
-  const recoveredCampaigns = localCampaigns.map(campaign => ({
-    ...campaign,
-    owner_id: shouldClaimCampaign(campaign) ? user.id : recoverOwner(campaign.owner_id)
-  }));
-  const recoveredMemberships = localMemberships.map(member => {
-    const claimDmMembership = claimedCampaignIds.has(member.campaign_id) && member.role === "dm";
-    return { ...member, user_id: recoverOwner(member.user_id, claimDmMembership) };
-  });
-  claimedCampaignIds.forEach(campaignId => {
-    if (!recoveredMemberships.some(member => member.campaign_id === campaignId && member.user_id === user.id)) {
-      recoveredMemberships.push({
-        campaign_id: campaignId,
-        user_id: user.id,
-        role: "dm",
-        display_name: accountDisplayName("DM"),
-        joined_at: new Date().toISOString()
-      });
-    }
-  });
-  const recoveredCampaignCharacters = localCampaignCharacters.map(link => ({
-    ...link,
-    owner_user_id: claimedCampaignIds.has(link.campaign_id) && recoveredCharacterIds.has(link.character_id)
-      ? user.id
-      : recoverOwner(link.owner_user_id)
-  }));
-  const recoveredCampaignMaps = localCampaignMaps.map(map => ({
-    ...map,
-    owner_id: claimedCampaignIds.has(map.campaign_id) ? user.id : recoverOwner(map.owner_id)
-  }));
-  const recoveredCampaignLogs = localCampaignLogs.map(entry => ({
-    ...entry,
-    actor_user_id: claimedCampaignIds.has(entry.campaign_id) ? recoverOwner(entry.actor_user_id) : entry.actor_user_id
-  }));
-  if (cached !== null) characters = mergeUserVaultCharacters([cached, shouldRecoverLocalVault ? recoveredLocalCharacters : []], user.id);
-  else if (priorOwner && priorOwner !== user.id && !shouldRecoverLocalVault) characters = [];
-  else characters = mergeUserVaultCharacters([shouldRecoverLocalVault ? recoveredLocalCharacters : localCharacters], user.id);
-  campaigns = mergeRecordsById(cachedCampaigns || [], (canImportLocalVault || (!cachedCampaigns || !cachedCampaigns.length)) ? recoveredCampaigns : []);
-  campaignMemberships = mergeRecordsById(cachedMemberships || [], (canImportLocalVault || (!cachedMemberships || !cachedMemberships.length)) ? recoveredMemberships : [], member => `${member?.campaign_id}:${member?.user_id}`);
-  campaignCharacters = mergeRecordsById(cachedCampaignCharacters || [], (canImportLocalVault || (!cachedCampaignCharacters || !cachedCampaignCharacters.length)) ? recoveredCampaignCharacters : [], link => `${link?.campaign_id}:${link?.owner_user_id}:${link?.character_id}`);
-  campaignMaps = mergeRecordsById(cachedCampaignMaps || [], (canImportLocalVault || (!cachedCampaignMaps || !cachedCampaignMaps.length)) ? recoveredCampaignMaps : []);
-  campaignGameLogs = mergeRecordsById(cachedCampaignLogs || [], (canImportLocalVault || (!cachedCampaignLogs || !cachedCampaignLogs.length)) ? recoveredCampaignLogs : []);
-  deletedCharacters = cachedDeletions || {};
+  characters = mergeUserVaultCharacters([cached || [], localCharacters], user.id);
+  campaigns = mergeRecordsById(cachedCampaigns || [], localCampaigns);
+  campaignMemberships = mergeRecordsById(cachedMemberships || [], localMemberships, member => `${member?.campaign_id}:${member?.user_id}`);
+  campaignCharacters = mergeRecordsById(cachedCampaignCharacters || [], localCampaignCharacters, link => `${link?.campaign_id}:${link?.owner_user_id}:${link?.character_id}`);
+  campaignMaps = mergeRecordsById(cachedCampaignMaps || [], localCampaignMaps);
+  campaignGameLogs = mergeRecordsById(cachedCampaignLogs || [], localCampaignLogs);
+  deletedCharacters = cachedDeletions || (sameOwnerLocal ? deletedCharacters : {});
   localStorage.setItem(CLOUD_OWNER_KEY, user.id);
   saveJson(STORAGE_KEY, characters);
   persistDeletedCharacters();
@@ -3660,12 +3610,16 @@ function characterCard(character, withActions = false) {
   const subclass = classBreakdown(character).map(entry => classSubclassName(character, entry.name)).filter(Boolean).join(" / ") || primaryClassName(character);
   const canControl = canControlCharacter(character);
   const canDelete = isOwnCharacter(character);
+  const sourceLabel = cloudUser
+    ? (isOwnCharacter(character) ? "Cloud account" : "DM access")
+    : "Local only";
   return `<article class="character-card" data-character-id="${character.id}">
     <div class="art">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}
       ${withActions ? `<div class="card-actions">${canControl ? `<button data-level-up="${character.id}" title="Level up">↑</button><button data-edit="${character.id}" title="Edit">✎</button>` : ""}${canDelete ? `<button data-delete="${character.id}" title="Delete">×</button>` : ""}</div>` : ""}
     </div>
     <div class="card-copy">
       <div class="card-meta"><span>${character.edition === "2024" ? "5.5e · 2024" : "5e · 2014"}</span><strong>Level ${characterTotalLevel(character)}</strong></div>
+      <small class="source-pill">${escapeHtml(sourceLabel)}</small>
       <h3>${escapeHtml(character.name)}</h3>
       <p>${character._campaignShared ? "Campaign sheet · " : ""}${escapeHtml(character.species)} ${escapeHtml(classSummary(character))} · ${escapeHtml(subclass)}</p>
       <span class="card-open">Open character <b>→</b></span>
@@ -4010,6 +3964,7 @@ function renderCampaigns() {
   }
   const role = campaignRole(campaign.id) || (campaign.owner_id === cloudUser.id ? "dm" : "player");
   const isDm = role === "dm";
+  const isOwner = campaign.owner_id === cloudUser.id;
   const members = campaignMemberships.filter(member => member.campaign_id === campaign.id);
   const allLinks = campaignCharacters.filter(link => link.campaign_id === campaign.id);
   const links = allLinks.filter(link => isDm || link.owner_user_id === cloudUser.id);
@@ -4050,7 +4005,7 @@ function renderCampaigns() {
         <h2>${escapeHtml(campaign.name)}</h2>
         <p>${escapeHtml(campaign.description || "No campaign notes yet.")}</p>
       </div>
-      ${isDm ? `<div class="campaign-dm-actions"><div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button></div><button type="button" class="button primary small" data-campaign-roll-party="${escapeHtml(campaign.id)}">Roll party initiative</button></div>` : ""}
+      ${isDm ? `<div class="campaign-dm-actions"><div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button></div><button type="button" class="button primary small" data-campaign-roll-party="${escapeHtml(campaign.id)}">Roll party initiative</button>${isOwner ? `<button type="button" class="button ghost small danger-button" data-campaign-delete="${escapeHtml(campaign.id)}">Delete campaign</button>` : ""}</div>` : ""}
     </div>
     ${workbench}
     <section class="campaign-panel campaign-party-panel">
@@ -5558,6 +5513,18 @@ function initEvents() {
     if (copyInvite) {
       navigator.clipboard?.writeText(copyInvite.dataset.copyInvite);
       toast("Invite code copied");
+      return;
+    }
+    const campaignDelete = event.target.closest("[data-campaign-delete]");
+    if (campaignDelete) {
+      const campaign = campaigns.find(item => item.id === campaignDelete.dataset.campaignDelete);
+      confirmAction({
+        title: "Delete campaign?",
+        message: `This permanently removes ${campaign?.name || "this campaign"} for everyone. Character sheets remain in their owners' vaults.`,
+        confirmLabel: "Delete campaign",
+        danger: true,
+        onConfirm: () => deleteCampaign(campaignDelete.dataset.campaignDelete)
+      });
       return;
     }
     const partyRoll = event.target.closest("[data-campaign-roll-party]");
