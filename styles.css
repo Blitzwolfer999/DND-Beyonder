@@ -400,8 +400,8 @@ p { color: var(--muted); line-height: 1.65; }
 .quick-footer span { text-align: center; color: var(--muted); font-weight: 800; }
 .builder-card, .live-preview, .dice-panel, .roll-history { border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
 .builder-card { min-width: 0; }
-.step-tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--line); }
-.step-tabs button { padding: 17px 10px; border: 0; border-right: 1px solid var(--line); color: var(--muted); background: #f2ede4; cursor: pointer; font-size: 12px; }
+.step-tabs { display: grid; grid-template-columns: repeat(7, minmax(92px, 1fr)); overflow-x: auto; border-bottom: 1px solid var(--line); }
+.step-tabs button { min-width: 92px; padding: 17px 10px; border: 0; border-right: 1px solid var(--line); color: var(--muted); background: #f2ede4; cursor: pointer; font-size: 12px; white-space: nowrap; }
 .step-tabs button:last-child { border-right: 0; }
 .step-tabs button.active { color: var(--gold-dark); background: var(--panel); font-weight: 700; }
 .step-tabs span { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; }
@@ -861,7 +861,8 @@ textarea { resize: vertical; }
   .currency-editor { grid-template-columns: repeat(3, 1fr); }
   .currency-editor .button { grid-column: 1 / -1; }
   .choice-heading input { max-width: none; }
-  .step-tabs button { font-size: 0; }
+  .step-tabs { grid-template-columns: repeat(7, minmax(58px, 1fr)); }
+  .step-tabs button { min-width: 58px; font-size: 0; }
   .step-tabs span { font-size: 10px; margin: 0; }
   .form-step { padding: 24px 18px; }
   .dice-layout { grid-template-columns: 1fr; }
@@ -1923,6 +1924,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .theme-toggle:hover {
   border-color: var(--gold);
   background: rgba(185, 138, 62, .12);
+}
+@media (max-width: 520px) {
+  .topnav {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .topnav .brand {
+    gap: 8px;
+    min-width: 0;
+  }
+  .topnav .brand-word {
+    max-width: 94px;
+  }
+  .topnav .top-actions {
+    gap: 6px;
+  }
+  .topnav .profile-button > span:not(.avatar-mini) {
+    display: none;
+  }
+  .theme-toggle {
+    min-width: 42px;
+    width: 42px;
+    padding: 0;
+    gap: 0;
+  }
+  .theme-toggle span,
+  .theme-toggle strong {
+    display: none;
+  }
+  .theme-toggle::after {
+    content: "T";
+    font-weight: 800;
+    font-size: 12px;
+  }
 }
 .topnav {
   box-shadow: 0 1px 0 rgba(255, 255, 255, .04), 0 10px 30px rgba(0, 0, 0, .12);
