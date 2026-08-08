@@ -1355,27 +1355,65 @@ function prepareUserVault(user) {
   const cachedDeletions = readJson(`${DELETED_KEY}.${user.id}`, null);
   const canImportLocalVault = !priorOwner || priorOwner === user.id;
   const shouldRecoverLocalVault = canImportLocalVault || ((!cached || !cached.length) && localCharacters.length);
-  const recoveredLocalCharacters = canImportLocalVault
-    ? localCharacters
-    : localCharacters
-      .filter(character => !character._campaignShared)
-      .map(character => ({ ...character, cloudOwnerId: user.id, _campaignShared: undefined, _campaignRole: undefined, _campaignIds: undefined }));
-  const recoverOwner = value => value === priorOwner ? user.id : value;
-  const recoveredCampaigns = canImportLocalVault
-    ? localCampaigns
-    : localCampaigns.map(campaign => ({ ...campaign, owner_id: recoverOwner(campaign.owner_id) }));
-  const recoveredMemberships = canImportLocalVault
-    ? localMemberships
-    : localMemberships.map(member => ({ ...member, user_id: recoverOwner(member.user_id) }));
-  const recoveredCampaignCharacters = canImportLocalVault
-    ? localCampaignCharacters
-    : localCampaignCharacters.map(link => ({ ...link, owner_user_id: recoverOwner(link.owner_user_id) }));
-  const recoveredCampaignMaps = canImportLocalVault
-    ? localCampaignMaps
-    : localCampaignMaps.map(map => ({ ...map, owner_id: recoverOwner(map.owner_id) }));
-  const recoveredCampaignLogs = canImportLocalVault
-    ? localCampaignLogs
-    : localCampaignLogs.map(entry => ({ ...entry, actor_user_id: recoverOwner(entry.actor_user_id) }));
+  const shouldClaimLocalCharacters = shouldRecoverLocalVault && (!cached || !cached.length);
+  const shouldRecoverCampaigns = canImportLocalVault || (!cachedCampaigns || !cachedCampaigns.length);
+  const localDmCampaignIds = new Set(localMemberships
+    .filter(member => member?.role === "dm" && (!member.user_id || member.user_id === user.id || member.user_id === priorOwner || localCampaigns.some(campaign => campaign.id === member.campaign_id && campaign.owner_id === member.user_id)))
+    .map(member => member.campaign_id));
+  const shouldClaimCampaign = campaign => shouldRecoverCampaigns && Boolean(campaign?.id) && (
+    campaign.owner_id === user.id
+    || !campaign.owner_id
+    || (priorOwner && campaign.owner_id === priorOwner)
+    || localDmCampaignIds.has(campaign.id)
+  );
+  const claimedCampaignIds = new Set(localCampaigns.filter(shouldClaimCampaign).map(campaign => campaign.id));
+  const recoveredLocalCharacters = localCharacters
+    .filter(character => canImportLocalVault || !character._campaignShared)
+    .map(character => {
+      const claimCharacter = shouldClaimLocalCharacters && !character._campaignShared;
+      return {
+        ...character,
+        cloudOwnerId: claimCharacter ? user.id : character.cloudOwnerId || user.id,
+        _campaignShared: claimCharacter ? undefined : character._campaignShared,
+        _campaignRole: claimCharacter ? undefined : character._campaignRole,
+        _campaignIds: claimCharacter ? undefined : character._campaignIds
+      };
+    });
+  const recoveredCharacterIds = new Set(recoveredLocalCharacters.filter(character => !character._campaignShared).map(character => character.id));
+  const recoverOwner = (value, fallbackToUser = false) => value === user.id || value === priorOwner || !value || fallbackToUser ? user.id : value;
+  const recoveredCampaigns = localCampaigns.map(campaign => ({
+    ...campaign,
+    owner_id: shouldClaimCampaign(campaign) ? user.id : recoverOwner(campaign.owner_id)
+  }));
+  const recoveredMemberships = localMemberships.map(member => {
+    const claimDmMembership = claimedCampaignIds.has(member.campaign_id) && member.role === "dm";
+    return { ...member, user_id: recoverOwner(member.user_id, claimDmMembership) };
+  });
+  claimedCampaignIds.forEach(campaignId => {
+    if (!recoveredMemberships.some(member => member.campaign_id === campaignId && member.user_id === user.id)) {
+      recoveredMemberships.push({
+        campaign_id: campaignId,
+        user_id: user.id,
+        role: "dm",
+        display_name: accountDisplayName("DM"),
+        joined_at: new Date().toISOString()
+      });
+    }
+  });
+  const recoveredCampaignCharacters = localCampaignCharacters.map(link => ({
+    ...link,
+    owner_user_id: claimedCampaignIds.has(link.campaign_id) && recoveredCharacterIds.has(link.character_id)
+      ? user.id
+      : recoverOwner(link.owner_user_id)
+  }));
+  const recoveredCampaignMaps = localCampaignMaps.map(map => ({
+    ...map,
+    owner_id: claimedCampaignIds.has(map.campaign_id) ? user.id : recoverOwner(map.owner_id)
+  }));
+  const recoveredCampaignLogs = localCampaignLogs.map(entry => ({
+    ...entry,
+    actor_user_id: claimedCampaignIds.has(entry.campaign_id) ? recoverOwner(entry.actor_user_id) : entry.actor_user_id
+  }));
   if (cached !== null) characters = mergeUserVaultCharacters([cached, shouldRecoverLocalVault ? recoveredLocalCharacters : []], user.id);
   else if (priorOwner && priorOwner !== user.id && !shouldRecoverLocalVault) characters = [];
   else characters = mergeUserVaultCharacters([shouldRecoverLocalVault ? recoveredLocalCharacters : localCharacters], user.id);
