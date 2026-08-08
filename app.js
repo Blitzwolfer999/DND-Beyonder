@@ -207,6 +207,14 @@ const QUICK_SPELL_COUNTS = {
   Paladin: { 0: 0, 1: 2 }, Ranger: { 0: 0, 1: 2 }, Sorcerer: { 0: 4, 1: 2 },
   Warlock: { 0: 2, 1: 2 }, Wizard: { 0: 3, 1: 6 }, Artificer: { 0: 2, 1: 3 }
 };
+const PREMADE_HEROES = [
+  { key: "ironward", name: "Branna Ironward", className: "Fighter", species: "Dwarf", background: "Soldier", role: "Defender", pitch: "A shield-bearing veteran who keeps danger pointed at herself.", level: 1 },
+  { key: "brightbrook", name: "Mira Brightbrook", className: "Cleric", species: "Human", background: "Acolyte", role: "Healer", pitch: "A steady divine caster with healing, blessings, and sturdy armor.", level: 1, subclass: "Life Domain" },
+  { key: "moonfall", name: "Lyra Moonfall", className: "Wizard", species: "Elf", background: "Sage", role: "Arcane problem-solver", pitch: "A careful scholar stocked with utility magic and battle control.", level: 1 },
+  { key: "quickstep", name: "Pip Quickstep", className: "Rogue", species: "Halfling", background: "Criminal", role: "Scout", pitch: "A stealthy expert who opens locks, reads rooms, and strikes precisely.", level: 1 },
+  { key: "embersong", name: "Kael Embersong", className: "Bard", species: "Tiefling", background: "Entertainer", role: "Face", pitch: "A silver-tongued performer with support magic and social skills.", level: 1 },
+  { key: "ashtrail", name: "Rowan Ashtrail", className: "Ranger", species: "Human", background: "Outlander", role: "Wilderness striker", pitch: "A tracker with ranged combat, survival skills, and practical magic.", level: 1 }
+];
 const QUICK_NAMES = {
   Aasimar: ["Seraphine", "Valen", "Astra"], Dragonborn: ["Arjhan", "Kava", "Rhogar"], Dwarf: ["Brynja", "Dain", "Torga"],
   Elf: ["Aelar", "Lia", "Thalion"], Gnome: ["Fizzwick", "Nissa", "Wrenn"], Goliath: ["Korr", "Nalla", "Vimak"],
@@ -226,6 +234,7 @@ const CAMPAIGN_MAP_KEY = "arcanaForge.campaignMaps.v1";
 const CAMPAIGN_LOG_KEY = "arcanaForge.campaignGameLog.v1";
 const THEME_KEY = "dndb.theme";
 const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
+const BUILDER_STEP_COUNT = 7;
 
 let edition = "2014";
 let currentStep = 1;
@@ -1587,6 +1596,7 @@ function populateRules(savedCharacter = null) {
   populateSubclasses();
   renderOriginRules(savedCharacter);
   renderTalentChoices();
+  renderStartingEquipmentChoices();
 }
 
 function quickAbilityScores(className) {
@@ -1701,6 +1711,39 @@ function quickInventory(className) {
     });
   });
   return [...entries.values()];
+}
+
+function equipmentDisplayName(item) {
+  if (!item) return "";
+  return `${item.quantity > 1 ? `${item.quantity}x ` : ""}${item.name}`;
+}
+
+function renderStartingEquipmentChoices() {
+  const target = $("#starting-equipment-list");
+  if (!target) return;
+  const mode = form.elements.startingEquipmentMode?.value || "starting";
+  updateEquipmentMethodUI();
+  if (mode === "manual") {
+    target.innerHTML = `<article class="equipment-empty"><strong>Manual inventory selected</strong><p>Your sheet will start without a class kit. Use the Items section after saving to add gear.</p></article>`;
+    return;
+  }
+  if (mode === "keep" && activeCharacterId) {
+    const existing = characters.find(character => character.id === activeCharacterId);
+    const count = existing?.inventory?.length || 0;
+    target.innerHTML = `<article class="equipment-empty"><strong>Keeping current inventory</strong><p>${count} saved item${count === 1 ? "" : "s"} will remain on this character.</p></article>`;
+    return;
+  }
+  const kit = quickInventory(selectedClass);
+  target.innerHTML = kit.map((item, index) => `<label class="equipment-option">
+    <input type="checkbox" name="startingEquipment" value="${index}" checked>
+    <span><strong>${escapeHtml(equipmentDisplayName(item))}</strong><small>${escapeHtml(item.type || "Equipment")}${item.weight ? ` · ${item.weight} lb.` : ""}</small></span>
+  </label>`).join("") || `<article class="equipment-empty"><strong>No class kit found</strong><p>You can add equipment from the sheet after saving.</p></article>`;
+}
+
+function updateEquipmentMethodUI() {
+  $$("[name='startingEquipmentMode']").forEach(input => {
+    input.closest(".equipment-method")?.classList.toggle("active", input.checked);
+  });
 }
 
 function quickDefaultSubclass(className) {
@@ -1872,18 +1915,26 @@ function initializeQuickBuilder() {
 }
 
 function showCreationMethod(method) {
+  if (method === "random") {
+    initializeQuickBuilder();
+    createRandomCharacter();
+    return;
+  }
   const choosing = method === "choose";
   const quick = method === "quick";
   const standard = method === "standard";
+  const premade = method === "premade";
   $("#creation-methods").classList.toggle("hidden", !choosing);
   $("#quick-builder").classList.toggle("hidden", !quick);
+  $("#premade-builder")?.classList.toggle("hidden", !premade);
   $("#standard-builder").classList.toggle("hidden", !standard);
-  $("#builder-eyebrow").textContent = choosing ? "CHARACTER CREATOR" : quick ? "BEGINNER QUICK BUILD" : "FULL CHARACTER CREATOR";
-  $("#builder-title").textContent = choosing ? "Build your adventurer" : quick ? "Create a hero in minutes" : "Build every detail";
+  $("#builder-eyebrow").textContent = choosing ? "CHARACTER CREATOR" : quick ? "BEGINNER QUICK BUILD" : premade ? "PREMADE HEROES" : "FULL CHARACTER CREATOR";
+  $("#builder-title").textContent = choosing ? "Build your adventurer" : quick ? "Create a hero in minutes" : premade ? "Claim a ready character" : "Build every detail";
   $("#builder-description").textContent = choosing
     ? "Choose a fast guided build or take full control."
-    : quick ? "Level 1, smart defaults, and no rules expertise required." : "Every choice updates your sheet as you go.";
+    : quick ? "Level 1, smart defaults, and no rules expertise required." : premade ? "Pick a playable hero, then edit anything from the sheet." : "Every choice updates your sheet as you go.";
   if (quick) initializeQuickBuilder();
+  if (premade) renderPremadeHeroes();
   if (standard) setStep(currentStep);
 }
 
@@ -1922,6 +1973,84 @@ function createQuickCharacter() {
   renderSheet();
   navigate("sheet");
   toast(`${character.name} is ready to adventure`);
+}
+
+function buildPremadeCharacter(hero, preview = false) {
+  if (!hero) return null;
+  const previousQuickClass = quickClass;
+  quickClass = hero.className;
+  renderQuickOrigin(true);
+  if ($("#quick-species")) $("#quick-species").value = hero.species;
+  if ($("#quick-background")) $("#quick-background").value = hero.background;
+  if ($("#quick-name")) $("#quick-name").value = hero.name;
+  if ($("#quick-player")) $("#quick-player").value = "";
+  const character = buildQuickCharacter(preview);
+  quickClass = previousQuickClass;
+  character.id = preview ? `premade-${hero.key}` : crypto.randomUUID();
+  character.name = hero.name;
+  character.level = Number(hero.level || 1);
+  character.className = hero.className;
+  const subclassUnlocked = character.level >= subclassLevel(hero.className, edition);
+  character.subclass = subclassUnlocked ? (hero.subclass || character.subclass || "") : "";
+  character.classes = [{ name: hero.className, level: character.level, subclass: character.subclass, customSubclass: "", subclassChoices: character.subclassChoices || {} }];
+  character.backstory = `${hero.pitch} This premade character is ready for play and can be fully customized after creation.`;
+  character.premade = true;
+  character.quickBuilt = true;
+  character.currentHp = derived(character).hp;
+  return character;
+}
+
+function renderPremadeHeroes() {
+  const target = $("#premade-grid");
+  if (!target) return;
+  target.innerHTML = PREMADE_HEROES.map(hero => {
+    const preview = buildPremadeCharacter(hero, true);
+    const stats = preview ? derived(preview) : { ac: "-", hp: "-", prof: "" };
+    return `<article class="premade-card">
+      <span class="premade-role">${escapeHtml(hero.role)}</span>
+      <h3>${escapeHtml(hero.name)}</h3>
+      <p>${escapeHtml(hero.pitch)}</p>
+      <div class="premade-tags"><span>${escapeHtml(hero.species)}</span><span>${escapeHtml(hero.className)}</span><span>${escapeHtml(hero.background)}</span></div>
+      <div class="premade-stats"><span>AC <strong>${stats.ac}</strong></span><span>HP <strong>${stats.hp}</strong></span><span>PROF <strong>${escapeHtml(signed(stats.prof || 2))}</strong></span></div>
+      <button type="button" class="button primary small" data-premade-create="${escapeHtml(hero.key)}">Claim character</button>
+    </article>`;
+  }).join("");
+}
+
+function createPremadeCharacter(key) {
+  const hero = PREMADE_HEROES.find(item => item.key === key);
+  const character = buildPremadeCharacter(hero);
+  if (!character) return;
+  clearCharacterDeletion(character.id);
+  characters.unshift(character);
+  activeCharacterId = character.id;
+  persistCharacters();
+  renderCards();
+  renderSheet();
+  navigate("sheet");
+  toast(`${character.name} added to your vault`);
+}
+
+function createRandomCharacter() {
+  const classNames = Object.keys(RULES.classes);
+  quickClass = classNames[Math.floor(Math.random() * classNames.length)] || "Fighter";
+  renderQuickOrigin(true);
+  const speciesOptions = [...($("#quick-species")?.options || [])];
+  const backgroundOptions = [...($("#quick-background")?.options || [])];
+  if (speciesOptions.length) $("#quick-species").value = speciesOptions[Math.floor(Math.random() * speciesOptions.length)].value;
+  if (backgroundOptions.length) $("#quick-background").value = backgroundOptions[Math.floor(Math.random() * backgroundOptions.length)].value;
+  if ($("#quick-name")) $("#quick-name").value = generateQuickName(false);
+  if ($("#quick-player")) $("#quick-player").value = "";
+  const character = buildQuickCharacter();
+  character.randomized = true;
+  clearCharacterDeletion(character.id);
+  characters.unshift(character);
+  activeCharacterId = character.id;
+  persistCharacters();
+  renderCards();
+  renderSheet();
+  navigate("sheet");
+  toast(`${character.name} was randomized and saved`);
 }
 
 function customizationEntries(catalog, fallback, legacyFallback = []) {
@@ -2754,14 +2883,14 @@ function validateAbilityScores() {
     const spent = pointBuySpent(values);
     const inRange = ABILITIES.every(ability => Number(values[ability]) >= 8 && Number(values[ability]) <= 15);
     if (!inRange || spent > POINT_BUY_BUDGET) {
-      setStep(3);
+      setStep(4);
       updateAbilityMethodStatus();
       toast(spent > POINT_BUY_BUDGET ? "Point buy cannot exceed 27 points" : "Point buy scores must stay between 8 and 15");
       return false;
     }
   }
   if (abilityMethod === "standard" && !standardArrayValid(values)) {
-    setStep(3);
+    setStep(4);
     updateAbilityMethodStatus();
     toast("Standard Array must use 15, 14, 13, 12, 10, and 8 exactly once");
     return false;
@@ -2848,6 +2977,21 @@ function formData() {
     data.level = characterTotalLevel(data);
   } else {
     data.classes = [{ name: data.className, level: data.level, subclass: data.subclass || "", customSubclass: data.customSubclass || "", subclassChoices: { ...(data.subclassChoices || {}) } }];
+  }
+  const equipmentMode = data.startingEquipmentMode || "starting";
+  if (equipmentMode === "keep" && existing) {
+    data.inventory = existing.inventory || [];
+    data.currency = existing.currency || { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 };
+  } else if (equipmentMode === "manual") {
+    data.inventory = existing?.inventory || [];
+    data.currency = existing?.currency || { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 };
+  } else {
+    const kit = quickInventory(data.className);
+    const selectedEquipment = new Set(selectedValues("startingEquipment", form));
+    data.inventory = selectedEquipment.size
+      ? kit.filter((item, index) => selectedEquipment.has(String(index)))
+      : kit;
+    data.currency = existing?.currency || { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 };
   }
   return data;
 }
@@ -3142,6 +3286,43 @@ function resolvedSubclassFeatures(rulesEdition, className, subclassName) {
   return (SUBCLASS_LEVELS[rulesEdition]?.[className] || []).map(level => [level, `${subclassName}: subclass feature gained`]);
 }
 
+function validateAbilityScoresQuiet() {
+  const values = abilityScoreValues();
+  if (abilityMethod === "pointbuy") {
+    return ABILITIES.every(ability => Number(values[ability]) >= 8 && Number(values[ability]) <= 15)
+      && pointBuySpent(values) <= POINT_BUY_BUDGET;
+  }
+  if (abilityMethod === "standard") return standardArrayValid(values);
+  return true;
+}
+
+function builderChecklistItems(data) {
+  const abilityOk = validateAbilityScoresQuiet();
+  const originOk = Boolean(data.species && data.background);
+  const spellIssue = spellSelectionIssue(data);
+  const equipmentMode = data.startingEquipmentMode || "starting";
+  const equipmentOk = equipmentMode !== "starting" || selectedValues("startingEquipment", form).length > 0 || currentStep < 6;
+  return [
+    { label: "Home", detail: data.name ? `${data.name} is named` : "Add a character name", complete: Boolean(data.name) },
+    { label: "Class", detail: `${data.className || "Class"} level ${data.level || 1}`, complete: Boolean(data.className) },
+    { label: "Origin", detail: originOk ? `${data.species} / ${data.background}` : "Choose species and background", complete: originOk },
+    { label: "Abilities", detail: abilityOk ? "Ability scores are valid" : "Fix ability score method limits", complete: abilityOk },
+    { label: "Talents", detail: spellIssue || "Feats, ASI, and spells are within limits", complete: !spellIssue },
+    { label: "Equipment", detail: equipmentMode === "manual" ? "Manual inventory selected" : equipmentMode === "keep" ? "Keeping current inventory" : "Starting kit selected", complete: equipmentOk }
+  ];
+}
+
+function renderBuilderChecklist(data = formData()) {
+  const items = builderChecklistItems(data);
+  const markup = items.map(item => `<div class="checklist-item ${item.complete ? "complete" : "attention"}">
+    <span>${item.complete ? "✓" : "!"}</span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.detail)}</small>
+  </div>`).join("");
+  const finish = $("#builder-checklist");
+  if (finish) finish.innerHTML = `<h3>Builder readiness</h3>${markup}`;
+  const preview = $("#preview-readiness");
+  if (preview) preview.innerHTML = items.map(item => `<span class="${item.complete ? "complete" : "attention"}">${item.complete ? "✓" : "!"} ${escapeHtml(item.label)}</span>`).join("");
+}
+
 function updatePreview() {
   const data = formData();
   const stats = derived(data);
@@ -3167,10 +3348,11 @@ function updatePreview() {
     }
     const preview = $(`[data-preview-mod="${a}"]`); if (preview) preview.textContent = mod;
   });
+  renderBuilderChecklist(data);
 }
 
 function setStep(step) {
-  currentStep = Math.max(1, Math.min(5, step));
+  currentStep = Math.max(1, Math.min(BUILDER_STEP_COUNT, step));
   $$(".form-step").forEach(x => x.classList.toggle("active", Number(x.dataset.stepPanel) === currentStep));
   $$(".step-tabs button").forEach(x => {
     const tabStep = Number(x.dataset.step);
@@ -3179,10 +3361,12 @@ function setStep(step) {
   });
   $("#character-form").dataset.currentStep = currentStep;
   $("#prev-step").style.visibility = currentStep === 1 ? "hidden" : "visible";
-  $("#next-step").classList.toggle("hidden", currentStep === 5);
-  $("#save-character").classList.toggle("hidden", currentStep !== 5);
-  $("#step-count").textContent = `Step ${currentStep} of 5`;
-  if (currentStep === 4) renderTalentChoices();
+  $("#next-step").classList.toggle("hidden", currentStep === BUILDER_STEP_COUNT);
+  $("#save-character").classList.toggle("hidden", currentStep !== BUILDER_STEP_COUNT);
+  $("#step-count").textContent = `Step ${currentStep} of ${BUILDER_STEP_COUNT}`;
+  if (currentStep === 5) renderTalentChoices();
+  if (currentStep === 6 || currentStep === 7) renderStartingEquipmentChoices();
+  if (currentStep === 7) renderBuilderChecklist(formData());
 }
 
 function navigate(view, options = {}) {
@@ -3228,6 +3412,10 @@ function startNewCharacter() {
     input.checked = input.value === abilityMethod;
     input.closest(".ability-method")?.classList.toggle("active", input.checked);
   });
+  $$("[name='startingEquipmentMode']").forEach(input => {
+    input.checked = input.value === "starting";
+  });
+  updateEquipmentMethodUI();
   form.elements.level.value = 1;
   if ($("#subclass-select")) $("#subclass-select").value = "";
   $("#builder-eyebrow").textContent = "CHARACTER CREATOR";
@@ -3236,6 +3424,7 @@ function startNewCharacter() {
   $$(".edition-toggle button").forEach(button => button.classList.toggle("active", button.dataset.edition === edition));
   populateRules();
   resetPortrait();
+  renderStartingEquipmentChoices();
   setStep(1);
   showCreationMethod("choose");
   updatePreview();
@@ -4207,6 +4396,10 @@ function editCharacter(id) {
   Object.entries(c).forEach(([key, value]) => {
     const input = form.elements[key]; if (input && key !== "portrait" && !Array.isArray(value)) input.value = value;
   });
+  $$("[name='startingEquipmentMode']").forEach(input => {
+    input.checked = input.value === (c.inventory?.length ? "keep" : "starting");
+  });
+  updateEquipmentMethodUI();
   renderOriginRules(c);
   const legacyOriginBonuses = c.originBonuses || originAbilityBonuses();
   ABILITIES.forEach(ability => {
@@ -4223,6 +4416,7 @@ function editCharacter(id) {
   renderStartingClassOptions(c);
   updateSubclassMeta();
   renderTalentChoices(c.feats || [], (c.spells || []).map(spell => typeof spell === "string" ? spell : spell.name), c.featAbilityChoices || {});
+  renderStartingEquipmentChoices();
   portraitData = c.portrait || ""; resetCanvasFromPortrait();
   setStep(1); updatePreview(); navigate("builder"); toast("Character loaded for editing");
 }
@@ -5011,6 +5205,11 @@ function initEvents() {
       setQuickStep(Number(quickStepButton.dataset.quickStep));
       return;
     }
+    const premadeCreate = event.target.closest("[data-premade-create]");
+    if (premadeCreate) {
+      createPremadeCharacter(premadeCreate.dataset.premadeCreate);
+      return;
+    }
     const helpChipEl = event.target.closest(".help-chip");
     if (helpChipEl) { event.preventDefault(); showHelpPopover(helpChipEl); return; }
     if (!event.target.closest(".help-popover")) hideHelpPopover();
@@ -5318,7 +5517,7 @@ function initEvents() {
     const go = event.target.closest("[data-go]"); if (go) { if (go.dataset.go === "builder") startNewCharacter(); navigate(go.dataset.go); }
     const link = event.target.closest("[data-view-link]"); if (link) { event.preventDefault(); navigate(link.dataset.viewLink); }
     const classButton = event.target.closest("[data-class]");
-    if (classButton) { selectedClass = classButton.dataset.class; selectedSpellLevel = 0; selectedSpellNames.clear(); $("#class-choice-fields").innerHTML = ""; $$(".class-option").forEach(b => b.classList.toggle("selected", b === classButton)); populateSubclasses(); renderTalentChoices(); updatePreview(); }
+    if (classButton) { selectedClass = classButton.dataset.class; selectedSpellLevel = 0; selectedSpellNames.clear(); $("#class-choice-fields").innerHTML = ""; $$(".class-option").forEach(b => b.classList.toggle("selected", b === classButton)); populateSubclasses(); renderTalentChoices(); renderStartingEquipmentChoices(); updatePreview(); }
     const spellLevel = event.target.closest("[data-spell-level]");
     if (spellLevel) { selectedSpellLevel = Number(spellLevel.dataset.spellLevel); $("#spell-search").value = ""; renderTalentChoices(); }
     const step = event.target.closest("[data-step]"); if (step) setStep(Number(step.dataset.step));
@@ -5366,6 +5565,15 @@ function initEvents() {
     if (event.target.name === "abilityMethod") {
       setAbilityMethod(event.target.value);
       return;
+    }
+    if (event.target.name === "startingEquipmentMode") {
+      updateEquipmentMethodUI();
+      renderStartingEquipmentChoices();
+      updatePreview();
+      return;
+    }
+    if (event.target.name === "startingEquipment") {
+      updatePreview();
     }
     if (ABILITIES.includes(event.target.name)) {
       enforceAbilityCaps();
@@ -5595,6 +5803,7 @@ function initEvents() {
   $$(".edition-toggle button").forEach(button => button.addEventListener("click", () => {
     edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
     if (!$("#quick-builder").classList.contains("hidden")) initializeQuickBuilder();
+    if (!$("#premade-builder")?.classList.contains("hidden")) renderPremadeHeroes();
   }));
   $("#quick-next").addEventListener("click", () => setQuickStep(quickStep + 1));
   $("#quick-back").addEventListener("click", () => setQuickStep(quickStep - 1));
@@ -5608,36 +5817,36 @@ function initEvents() {
     event.preventDefault();
     if (!validateAbilityScores()) return;
     const data = formData();
-    if (!data.name.trim()) { setStep(5); form.elements.name.focus(); toast("Your character needs a name"); return; }
-    if (!validateOriginChoices()) { setStep(2); toast("Choose different eligible abilities and complete the origin feat selection"); return; }
+    if (!data.name.trim()) { setStep(1); form.elements.name.focus(); toast("Your character needs a name"); return; }
+    if (!validateOriginChoices()) { setStep(3); toast("Choose different eligible abilities and complete the origin feat selection"); return; }
     const primaryEditLevel = classLevel(data, data.className) || data.level;
     const skillRule = classSkillRuleAtLevel(data.className, primaryEditLevel, data.edition, data.subclass);
     if (data.skillProficiencies.length !== skillRule.count) {
-      setStep(1);
+      setStep(2);
       toast(`Choose ${skillRule.count} class skill proficiencies`);
       return;
     }
     if (data.backgroundSkills.length !== 2 || new Set(data.backgroundSkills).size !== 2) {
-      setStep(2);
+      setStep(3);
       toast("Choose two different background skill proficiencies");
       return;
     }
     const trainedSkills = new Set([...data.skillProficiencies, ...data.backgroundSkills]);
     if (data.expertise.some(skill => !trainedSkills.has(skill))) {
-      setStep(1);
+      setStep(2);
       toast("Expertise must be assigned to a proficient skill");
       return;
     }
     const expertiseRequired = expertiseCountAtLevel(data.className, primaryEditLevel, data.edition);
     if (data.expertise.length !== expertiseRequired) {
-      setStep(1);
+      setStep(2);
       toast(`Choose ${expertiseRequired} skills for Expertise`);
       return;
     }
     const masteryRequired = weaponMasteryCount(data.className, primaryEditLevel, data.edition);
-    if (data.weaponMastery.length !== masteryRequired) { setStep(1); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
+    if (data.weaponMastery.length !== masteryRequired) { setStep(2); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
     const spellIssue = spellSelectionIssue(data);
-    if (spellIssue) { setStep(4); toast(spellIssue); return; }
+    if (spellIssue) { setStep(5); toast(spellIssue); return; }
     data.id = activeCharacterId && activeCharacterId !== "demo-lyra" ? activeCharacterId : crypto.randomUUID();
     clearCharacterDeletion(data.id);
     data.updatedAt = Date.now();

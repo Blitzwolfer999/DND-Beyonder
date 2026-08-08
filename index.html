@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=vtt-foundation-1">
+  <link rel="stylesheet" href="styles.css?v=creator-polish-1">
 </head>
 <body>
   <div class="app-shell">
@@ -57,7 +57,7 @@
         <div class="welcome-tip" id="welcome-tip" hidden>
           <div class="welcome-tip-body">
             <strong>New to building D&amp;D characters?</strong>
-            <p>Tap the small <span class="welcome-q">?</span> icons anywhere for plain-language explanations. To begin, choose <b>Create a character</b> and follow the five guided steps — everything is filled in and calculated for you.</p>
+            <p>Tap the small <span class="welcome-q">?</span> icons anywhere for plain-language explanations. To begin, choose <b>Create a character</b> and follow the guided steps — everything is filled in and calculated for you.</p>
           </div>
           <button type="button" id="dismiss-welcome" class="button small">Got it</button>
         </div>
@@ -125,6 +125,22 @@
               <em>Open full builder →</em>
             </button>
           </div>
+          <div class="creation-method-grid extra-methods">
+            <button type="button" class="creation-method" data-creation-method="premade">
+              <span class="method-badge">Play now</span>
+              <span class="method-icon">P</span>
+              <strong>Premade</strong>
+              <small>Pick a table-ready hero with class, origin, equipment, and spells already selected.</small>
+              <em>Browse premades</em>
+            </button>
+            <button type="button" class="creation-method" data-creation-method="random">
+              <span class="method-badge">Surprise me</span>
+              <span class="method-icon">?</span>
+              <strong>Randomize</strong>
+              <small>Instantly generate a playable level-1 character using smart defaults.</small>
+              <em>Roll a hero</em>
+            </button>
+          </div>
         </section>
 
         <section class="quick-builder hidden" id="quick-builder">
@@ -173,18 +189,28 @@
           </div>
         </section>
 
+        <section class="premade-builder hidden" id="premade-builder">
+          <div class="quick-builder-head">
+            <button type="button" class="text-button" data-creation-method="choose">Back to methods</button>
+            <div><span class="eyebrow">PREMADE CHARACTERS</span><h2>Choose a ready adventurer</h2><p>Start from a complete sheet, then edit anything after creation.</p></div>
+          </div>
+          <div class="premade-grid" id="premade-grid"></div>
+        </section>
+
         <div class="builder-layout hidden" id="standard-builder">
           <form class="builder-card" id="character-form">
             <div class="step-tabs">
-              <button type="button" class="active" data-step="1"><span>1</span> Class</button>
-              <button type="button" data-step="2"><span>2</span> Origin</button>
-              <button type="button" data-step="3"><span>3</span> Abilities</button>
-              <button type="button" data-step="4"><span>4</span> Talents</button>
-              <button type="button" data-step="5"><span>5</span> Details</button>
+              <button type="button" class="active" data-step="1"><span>1</span> Home</button>
+              <button type="button" data-step="2"><span>2</span> Class</button>
+              <button type="button" data-step="3"><span>3</span> Origin</button>
+              <button type="button" data-step="4"><span>4</span> Abilities</button>
+              <button type="button" data-step="5"><span>5</span> Talents</button>
+              <button type="button" data-step="6"><span>6</span> Equipment</button>
+              <button type="button" data-step="7"><span>7</span> Finish</button>
             </div>
 
-            <div class="form-step" data-step-panel="5">
-              <div class="step-intro"><span>05</span><div><h2>Finishing details</h2><p>Name your hero and give them a face. You're almost done!</p></div></div>
+            <div class="form-step active" data-step-panel="1">
+              <div class="step-intro"><span>01</span><div><h2>Character home</h2><p>Name your hero, choose table preferences, and set up the builder before the crunchy choices begin.</p></div></div>
               <div class="identity-grid">
                 <div class="portrait-editor">
                   <canvas id="portrait-canvas" width="420" height="420" aria-label="Character portrait"></canvas>
@@ -201,10 +227,16 @@
                   <label>Pronouns<input name="pronouns" maxlength="30" placeholder="e.g. she / her"></label>
                 </div>
               </div>
+              <div class="builder-home-options">
+                <label>Advancement type<select name="advancementType"><option value="milestone">Milestone</option><option value="xp">Experience Points</option></select><small>Milestone is easiest for most tables; XP can be tracked manually.</small></label>
+                <label>Hit point type<select name="hpType"><option value="fixed">Fixed average HP</option><option value="manual">Manual HP override</option></select><small>Fixed uses class hit dice and Constitution automatically.</small></label>
+                <label>Encumbrance<select name="encumbranceRule"><option value="standard">Standard carrying capacity</option><option value="variant">Variant encumbrance</option><option value="ignore">Ignore weight</option></select><small>Inventory weight is shown on the sheet either way.</small></label>
+                <label>Character privacy<select name="sheetPrivacy"><option value="private">Private</option><option value="campaign">Campaign members</option><option value="dm">DM only</option></select><small>Campaign permissions still control who can edit or view.</small></label>
+              </div>
             </div>
 
-            <div class="form-step" data-step-panel="2">
-              <div class="step-intro"><span>02</span><div><h2>Choose an origin</h2><p>Your lineage and background shape the beginning.</p></div></div>
+            <div class="form-step" data-step-panel="3">
+              <div class="step-intro"><span>03</span><div><h2>Choose an origin</h2><p>Your lineage and background shape the beginning.</p></div></div>
               <div class="field-grid">
                 <label>Species<select name="species" id="species-select"></select><small class="field-hint" id="species-desc"></small></label>
                 <label>Background<select name="background" id="background-select"></select><small class="field-hint" id="background-desc"></small></label>
@@ -219,8 +251,8 @@
               <label>Backstory<textarea name="backstory" rows="6" placeholder="A few lines about where your hero came from..."></textarea></label>
             </div>
 
-            <div class="form-step active" data-step-panel="1">
-              <div class="step-intro"><span>01</span><div><h2>Choose a class</h2><p>Your class is the heart of your character &mdash; what they can do in and out of a fight. Pick one, then set your level.</p></div></div>
+            <div class="form-step" data-step-panel="2">
+              <div class="step-intro"><span>02</span><div><h2>Choose a class</h2><p>Your class is the heart of your character &mdash; what they can do in and out of a fight. Pick one, then set your level.</p></div></div>
               <div class="field-grid compact">
                 <label>Level <span class="help-chip" role="button" tabindex="0" data-help="level" aria-label="What is Level?">?</span><input name="level" type="number" min="1" max="20" value="1"></label>
               </div>
@@ -234,8 +266,8 @@
               <section class="selection-details" id="class-feature-preview" aria-live="polite"></section>
             </div>
 
-            <div class="form-step" data-step-panel="3">
-              <div class="step-intro"><span>03</span><div><h2>Set ability scores</h2><p>Choose how to set your six base scores. Origin, feat, and ASI bonuses are added afterward.</p></div></div>
+            <div class="form-step" data-step-panel="4">
+              <div class="step-intro"><span>04</span><div><h2>Set ability scores</h2><p>Choose how to set your six base scores. Origin, feat, and ASI bonuses are added afterward.</p></div></div>
               <div class="ability-methods" id="ability-methods" role="radiogroup" aria-label="Ability score method">
                 <label class="ability-method active"><input type="radio" name="abilityMethod" value="standard" checked> Standard Array <small>Assign 15, 14, 13, 12, 10, and 8 once each.</small></label>
                 <label class="ability-method"><input type="radio" name="abilityMethod" value="pointbuy"> Point Buy <small>Spend 27 points. Scores start at 8 and cap at 15 before bonuses.</small></label>
@@ -249,8 +281,8 @@
               </div>
             </div>
 
-            <div class="form-step" data-step-panel="4">
-              <div class="step-intro"><span>04</span><div><h2>Choose talents</h2><p>Pick ability boosts or feats, and &mdash; for spellcasters &mdash; your spells.</p></div></div>
+            <div class="form-step" data-step-panel="5">
+              <div class="step-intro"><span>05</span><div><h2>Choose talents</h2><p>Pick ability boosts or feats, and &mdash; for spellcasters &mdash; your spells.</p></div></div>
               <section class="choice-section hidden" id="asi-section">
                 <div class="choice-heading"><div><h3>Ability Score Improvements</h3><p id="asi-guidance"></p></div></div>
                 <div class="option-list" id="asi-list"></div>
@@ -273,9 +305,30 @@
               <div class="non-caster-note hidden" id="non-caster-note">This class has no core spell list. Feats and homebrew talents are still available.</div>
             </div>
 
+            <div class="form-step" data-step-panel="6">
+              <div class="step-intro"><span>06</span><div><h2>Starting equipment</h2><p>Choose class starting gear or skip it and manage inventory manually from the sheet.</p></div></div>
+              <div class="equipment-methods" role="radiogroup" aria-label="Starting equipment method">
+                <label class="equipment-method active"><input type="radio" name="startingEquipmentMode" value="starting" checked> Starting Equipment <small>Add the class kit below to your inventory.</small></label>
+                <label class="equipment-method"><input type="radio" name="startingEquipmentMode" value="manual"> Manual Later <small>Start empty and add items from the sheet.</small></label>
+                <label class="equipment-method"><input type="radio" name="startingEquipmentMode" value="keep"> Keep Existing <small>When editing, leave your current inventory alone.</small></label>
+              </div>
+              <div class="starting-equipment-list" id="starting-equipment-list"></div>
+            </div>
+
+            <div class="form-step" data-step-panel="7">
+              <div class="step-intro"><span>07</span><div><h2>What's next?</h2><p>Review your build, save to the vault, then jump to the sheet or campaign tools.</p></div></div>
+              <section class="finish-panel">
+                <div class="builder-checklist" id="builder-checklist"></div>
+                <div class="finish-actions">
+                  <strong>Ready for the table</strong>
+                  <p>Your character can still be leveled, edited, equipped, and assigned to a campaign after saving.</p>
+                </div>
+              </section>
+            </div>
+
             <div class="form-footer">
               <button type="button" class="button ghost" id="prev-step">Back</button>
-              <span id="step-count">Step 1 of 4</span>
+              <span id="step-count">Step 1 of 7</span>
               <button type="button" class="button primary" id="next-step">Continue</button>
               <button type="submit" class="button primary hidden" id="save-character">Save character</button>
             </div>
@@ -291,6 +344,7 @@
               <div><span>HP</span><strong id="preview-hp">8</strong></div>
               <div><span>PROF</span><strong id="preview-prof">+2</strong></div>
             </div>
+            <div class="preview-readiness" id="preview-readiness"></div>
             <div class="preview-abilities" id="preview-abilities"></div>
             <p class="autosave-note" id="save-status">Changes are kept in this browser until you save.</p>
           </aside>
@@ -538,6 +592,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=vtt-sync-recovery-1"></script>
+  <script src="app.js?v=creator-polish-1"></script>
 </body>
 </html>
