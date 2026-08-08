@@ -221,6 +221,7 @@ const CLOUD_OWNER_KEY = "arcanaForge.cloudOwner.v1";
 const DELETED_KEY = "arcanaForge.deletedCharacters.v1";
 const CAMPAIGN_KEY = "arcanaForge.campaigns.v1";
 const CAMPAIGN_MAP_KEY = "arcanaForge.campaignMaps.v1";
+const CAMPAIGN_LOG_KEY = "arcanaForge.campaignGameLog.v1";
 const THEME_KEY = "dndb.theme";
 const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
 
@@ -255,11 +256,13 @@ let campaigns = readJson(CAMPAIGN_KEY, []);
 let campaignMemberships = [];
 let campaignCharacters = [];
 let campaignMaps = readJson(CAMPAIGN_MAP_KEY, []);
+let campaignGameLogs = readJson(CAMPAIGN_LOG_KEY, []);
 let activeCampaignId = "";
 let activeMapId = "";
 let selectedMapToken = null;
 let selectedMapTool = "token";
 let selectedMapTile = "stone-floor";
+let selectedMapRulerStart = null;
 let campaignMapImageDraft = "";
 let campaignTileImageDraft = "";
 let campaignLiveTimer = null;
@@ -374,8 +377,10 @@ function generateInviteCode() {
 function saveCampaignCache() {
   saveJson(CAMPAIGN_KEY, campaigns);
   saveJson(CAMPAIGN_MAP_KEY, campaignMaps);
+  saveJson(CAMPAIGN_LOG_KEY, campaignGameLogs);
   if (cloudUser) saveJson(`${CAMPAIGN_KEY}.${cloudUser.id}`, campaigns);
   if (cloudUser) saveJson(`${CAMPAIGN_MAP_KEY}.${cloudUser.id}`, campaignMaps);
+  if (cloudUser) saveJson(`${CAMPAIGN_LOG_KEY}.${cloudUser.id}`, campaignGameLogs);
 }
 function campaignSetupMessage() {
   return "Campaign tables are not set up yet. Run supabase-campaign-schema.sql in the Supabase SQL Editor, then refresh DND Beyonder.";
@@ -398,16 +403,59 @@ function reportCampaignError(error, fallbackMessage, showToast = true) {
   if (showToast) toast(message);
 }
 function normalizeMapData(data = {}) {
+  const session = data.session && typeof data.session === "object" ? data.session : {};
+  const fog = data.fog && typeof data.fog === "object" ? data.fog : {};
   return {
     columns: Math.min(80, Math.max(4, Number(data.columns || 24))),
     rows: Math.min(80, Math.max(4, Number(data.rows || 16))),
     gridSize: Math.min(72, Math.max(28, Number(data.gridSize || 44))),
     background: String(data.background || ""),
     backgroundFit: data.backgroundFit || "cover",
+    scale: data.scale && typeof data.scale === "object" ? {
+      feetPerSquare: Math.min(100, Math.max(1, Number(data.scale.feetPerSquare || 5))),
+      offsetX: Number(data.scale.offsetX || 0),
+      offsetY: Number(data.scale.offsetY || 0)
+    } : { feetPerSquare: 5, offsetX: 0, offsetY: 0 },
+    session: {
+      state: ["draft", "live", "paused", "ended"].includes(session.state) ? session.state : "draft",
+      updatedAt: session.updatedAt || ""
+    },
+    fog: {
+      enabled: Boolean(fog.enabled),
+      cells: Array.isArray(fog.cells) ? fog.cells.filter(Boolean).map(String).slice(0, 7000) : []
+    },
+    pings: Array.isArray(data.pings) ? data.pings : [],
+    drawings: Array.isArray(data.drawings) ? data.drawings : [],
+    overlays: Array.isArray(data.overlays) ? data.overlays : [],
+    stickers: Array.isArray(data.stickers) ? data.stickers : [],
     tokens: Array.isArray(data.tokens) ? data.tokens : [],
     tiles: Array.isArray(data.tiles) ? data.tiles : [],
     customTiles: Array.isArray(data.customTiles) ? data.customTiles : []
   };
+}
+function mapCellKey(x, y) {
+  return `${Math.max(0, Number(x) || 0)},${Math.max(0, Number(y) || 0)}`;
+}
+function mapCellCovered(data, x, y) {
+  return data.fog.enabled && new Set(data.fog.cells).has(mapCellKey(x, y));
+}
+function mapTokenVisibleForRole(data, token, isDm) {
+  if (isDm) return true;
+  if (token.hidden) return false;
+  const size = mapTokenSize(token);
+  for (let dx = 0; dx < size; dx += 1) {
+    for (let dy = 0; dy < size; dy += 1) {
+      if (mapCellCovered(data, Number(token.x || 0) + dx, Number(token.y || 0) + dy)) return false;
+    }
+  }
+  return true;
+}
+function allMapCells(data) {
+  const cells = [];
+  for (let y = 0; y < data.rows; y += 1) {
+    for (let x = 0; x < data.columns; x += 1) cells.push(mapCellKey(x, y));
+  }
+  return cells;
 }
 function mapTileDefinition(map, tileId) {
   const data = normalizeMapData(map?.data);
@@ -469,7 +517,7 @@ function tokensForCampaignMap(map, links) {
     const character = characters.find(item => item.id === link.character_id && characterOwnerId(item) === link.owner_user_id);
     const id = mapTokenId(link.owner_user_id, link.character_id);
     const prior = existing.get(id) || {};
-    const name = character?.name || link.nickname || "Hero";
+    const name = prior.name || character?.name || link.nickname || "Hero";
     const token = {
       id,
       ownerUserId: link.owner_user_id,
@@ -527,7 +575,8 @@ async function createCampaignMap(campaignId, values) {
     columns: values.columns,
     rows: values.rows,
     gridSize: values.gridSize,
-    background: campaignMapImageDraft || String(values.background || "").trim()
+    background: campaignMapImageDraft || String(values.background || "").trim(),
+    session: { state: "draft", updatedAt: new Date().toISOString() }
   });
   const { data: inserted, error } = await cloudClient.from("campaign_maps").insert({
     campaign_id: campaignId,
@@ -699,6 +748,144 @@ async function addCampaignCustomTile(mapId, values) {
   selectedMapTool = "paint";
   await saveCampaignMap(map, `${name} added to tiles`, { preserveTokens: true });
 }
+async function setCampaignMapSession(mapId, state) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can control the map session"); return; }
+  map.data = normalizeMapData(map.data);
+  map.data.session = { state, updatedAt: new Date().toISOString() };
+  await saveCampaignMap(map, state === "live" ? "Session started" : state === "paused" ? "Session paused" : state === "ended" ? "Session ended" : "Session reset", { preserveTokens: true });
+}
+async function updateCampaignMapToken(mapId, tokenId, updates = {}, message = "Token updated") {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit token details"); return; }
+  const data = normalizeMapData(map.data);
+  const index = data.tokens.findIndex(token => token.id === tokenId);
+  if (index < 0) { toast("Token not found"); return; }
+  data.tokens[index] = { ...data.tokens[index], ...updates };
+  map.data = data;
+  await saveCampaignMap(map, message);
+}
+async function deleteCampaignMapToken(mapId, tokenId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can delete tokens"); return; }
+  const data = normalizeMapData(map.data);
+  data.tokens = data.tokens.filter(token => token.id !== tokenId);
+  if (selectedMapToken === tokenId) selectedMapToken = null;
+  map.data = data;
+  await saveCampaignMap(map, "Token removed");
+}
+async function updateCampaignFog(mapId, action, x, y) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit fog of war"); return; }
+  const data = normalizeMapData(map.data);
+  const cells = new Set(data.fog.cells);
+  if (action === "cover-all") {
+    data.fog.enabled = true;
+    data.fog.cells = allMapCells(data);
+  } else if (action === "reveal-all") {
+    data.fog.enabled = false;
+    data.fog.cells = [];
+  } else {
+    data.fog.enabled = true;
+    const key = mapCellKey(x, y);
+    if (action === "fog-erase") cells.delete(key);
+    else cells.add(key);
+    data.fog.cells = [...cells];
+  }
+  map.data = data;
+  await saveCampaignMap(map, action === "cover-all" ? "Map covered by fog" : action === "reveal-all" ? "Map revealed" : "", { preserveTokens: true });
+}
+async function addCampaignMapPing(mapId, x, y) {
+  const map = campaignMapById(mapId);
+  if (!map) return;
+  const data = normalizeMapData(map.data);
+  const ping = {
+    id: `ping-${Date.now().toString(36)}`,
+    x: Math.max(0, Math.min(data.columns - 1, Number(x) || 0)),
+    y: Math.max(0, Math.min(data.rows - 1, Number(y) || 0)),
+    by: cloudUser?.user_metadata?.display_name || cloudUser?.email?.split("@")[0] || "Player",
+    time: Date.now()
+  };
+  if (cloudUser && cloudClient) {
+    const { data: updatedMap, error } = await cloudClient.rpc("add_campaign_map_ping", {
+      p_map_id: map.id,
+      p_x: ping.x,
+      p_y: ping.y,
+      p_label: ping.by
+    });
+    if (!error && updatedMap?.id) {
+      updateCampaignMapCache(updatedMap);
+      renderCampaigns();
+      return;
+    }
+    if (error && !isMissingSecurityRpc(error)) {
+      toast(`Could not ping map: ${error.message}`);
+      return;
+    }
+  }
+  data.pings = [
+    ...data.pings.filter(ping => Date.now() - Number(ping.time || 0) < 15000),
+    ping
+  ].slice(-12);
+  map.data = data;
+  if (canEditCampaign(map.campaign_id)) await saveCampaignMap(map, "", { preserveTokens: true });
+  else {
+    updateCampaignMapCache(map);
+    renderCampaigns();
+  }
+}
+function campaignLogRows(campaignId, isDm = false) {
+  return campaignGameLogs
+    .filter(entry => entry.campaign_id === campaignId && (isDm || (entry.visibility || "public") !== "dm" || entry.actor_user_id === cloudUser?.id))
+    .sort((a, b) => new Date(b.created_at || b.time || 0) - new Date(a.created_at || a.time || 0))
+    .slice(0, 40);
+}
+async function recordCampaignGameLog(campaignId, payload) {
+  if (!campaignId) return;
+  const entry = {
+    id: `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    campaign_id: campaignId,
+    actor_user_id: cloudUser?.id || "",
+    actor_name: cloudUser?.user_metadata?.display_name || cloudUser?.email?.split("@")[0] || "Player",
+    source: payload.source || "sheet",
+    label: payload.label || "Roll",
+    rolls: payload.rolls || [],
+    raw_total: Number(payload.rawTotal || 0),
+    modifier: Number(payload.modifier || 0),
+    total: Number(payload.total || 0),
+    visibility: payload.visibility || "public",
+    created_at: new Date().toISOString()
+  };
+  campaignGameLogs = [entry, ...campaignGameLogs.filter(item => item.id !== entry.id)].slice(0, 120);
+  saveCampaignCache();
+  if (cloudUser && cloudClient) {
+    const { data, error } = await cloudClient.from("campaign_game_log").insert({
+      campaign_id: campaignId,
+      actor_user_id: cloudUser.id,
+      actor_name: entry.actor_name,
+      character_id: payload.characterId || null,
+      source: entry.source,
+      label: entry.label,
+      rolls: entry.rolls,
+      raw_total: entry.raw_total,
+      modifier: entry.modifier,
+      total: entry.total,
+      visibility: entry.visibility
+    }).select("id, campaign_id, actor_user_id, actor_name, character_id, source, label, rolls, raw_total, modifier, total, visibility, created_at").maybeSingle();
+    if (error) {
+      const message = String(error.message || "").toLowerCase();
+      if (message.includes("campaign_game_log") || message.includes("schema cache") || message.includes("relation")) {
+        setCloudStatus("Campaign rolls are local until you run the updated supabase-campaign-schema.sql.", true);
+      } else {
+        setCloudStatus(`Could not save campaign roll: ${error.message}`, true);
+      }
+    } else if (data?.id) {
+      campaignGameLogs = [data, ...campaignGameLogs.filter(item => item.id !== entry.id && item.id !== data.id)].slice(0, 120);
+      saveCampaignCache();
+    }
+  }
+  if ($("#campaigns-view")?.classList.contains("active")) renderCampaigns();
+}
 function persistCharacters() {
   const savedMain = saveJson(STORAGE_KEY, characters);
   const savedUser = cloudUser ? saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters) : true;
@@ -807,11 +994,12 @@ async function loadCampaigns() {
     renderCampaigns();
     return;
   }
-  const [campaignResult, memberResult, characterResult, mapResult] = await Promise.all([
+  const [campaignResult, memberResult, characterResult, mapResult, logResult] = await Promise.all([
     cloudClient.from("campaigns").select("id, owner_id, name, description, invite_code, updated_at"),
     cloudClient.from("campaign_members").select("campaign_id, user_id, role, display_name, joined_at"),
     cloudClient.from("campaign_characters").select("campaign_id, owner_user_id, character_id, nickname, added_at"),
-    cloudClient.from("campaign_maps").select("id, campaign_id, owner_id, name, data, updated_at")
+    cloudClient.from("campaign_maps").select("id, campaign_id, owner_id, name, data, updated_at"),
+    cloudClient.from("campaign_game_log").select("id, campaign_id, actor_user_id, actor_name, character_id, source, label, rolls, raw_total, modifier, total, visibility, created_at").order("created_at", { ascending: false }).limit(120)
   ]);
   if (campaignResult.error) { reportCampaignError(campaignResult.error, "Could not load campaigns", false); return; }
   if (memberResult.error) { reportCampaignError(memberResult.error, "Could not load campaign members", false); return; }
@@ -824,6 +1012,11 @@ async function loadCampaigns() {
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
   campaignCharacters = (characterResult.data || []).filter(link => myCampaignIds.has(link.campaign_id));
   campaignMaps = mapResult.error ? [] : (mapResult.data || []).filter(map => myCampaignIds.has(map.campaign_id));
+  if (!logResult.error) {
+    campaignGameLogs = (logResult.data || []).filter(entry => myCampaignIds.has(entry.campaign_id));
+  } else if (!String(logResult.error.message || "").toLowerCase().includes("campaign_game_log")) {
+    setCloudStatus(`Could not load campaign game log: ${logResult.error.message}`, true);
+  }
   if (!activeCampaignId || !campaigns.some(campaign => campaign.id === activeCampaignId)) activeCampaignId = campaigns[0]?.id || "";
   if (activeMapId && !campaignMaps.some(map => map.id === activeMapId)) activeMapId = "";
   saveCampaignCache();
@@ -3073,12 +3266,28 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </section>`;
   }
   const data = normalizeMapData(activeMap.data);
+  const sessionState = data.session.state;
+  const playerCanSeeMap = isDm || sessionState === "live";
   const allTiles = [...BUILT_IN_MAP_TILES, ...data.customTiles];
   if (!allTiles.some(tile => tile.id === selectedMapTile)) selectedMapTile = allTiles[0]?.id || "stone-floor";
-  const toolButtons = isDm ? `<div class="map-editor-tools" aria-label="Map editor tools">
+  const sessionControls = isDm ? `<div class="map-session-controls">
+    <span class="tag">${sessionState === "live" ? "Live" : sessionState === "paused" ? "Paused" : sessionState === "ended" ? "Ended" : "Draft"}</span>
+    <button type="button" data-map-session="live" data-map-id="${escapeHtml(activeMap.id)}">${sessionState === "live" ? "Restart" : "Start"} session</button>
+    <button type="button" data-map-session="paused" data-map-id="${escapeHtml(activeMap.id)}" ${sessionState === "live" ? "" : "disabled"}>Pause</button>
+    <button type="button" data-map-session="ended" data-map-id="${escapeHtml(activeMap.id)}">End</button>
+  </div>` : `<div class="map-session-controls player"><span class="tag">${sessionState === "live" ? "Live" : sessionState === "paused" ? "Paused" : sessionState === "ended" ? "Ended" : "Waiting for DM"}</span></div>`;
+  const fogControls = isDm ? `<div class="map-fog-controls">
+    <button type="button" data-map-fog="cover-all" data-map-id="${escapeHtml(activeMap.id)}">Cover all</button>
+    <button type="button" data-map-fog="reveal-all" data-map-id="${escapeHtml(activeMap.id)}">Reveal all</button>
+  </div>` : "";
+  const toolButtons = playerCanSeeMap ? `<div class="map-editor-tools" aria-label="Map editor tools">
     <button type="button" class="${selectedMapTool === "token" ? "active" : ""}" data-map-tool="token">Move tokens</button>
-    <button type="button" class="${selectedMapTool === "paint" ? "active" : ""}" data-map-tool="paint">Paint tiles</button>
+    ${isDm ? `<button type="button" class="${selectedMapTool === "paint" ? "active" : ""}" data-map-tool="paint">Paint tiles</button>
     <button type="button" class="${selectedMapTool === "erase" ? "active" : ""}" data-map-tool="erase">Erase tiles</button>
+    <button type="button" class="${selectedMapTool === "fog-paint" ? "active" : ""}" data-map-tool="fog-paint">Add fog</button>
+    <button type="button" class="${selectedMapTool === "fog-erase" ? "active" : ""}" data-map-tool="fog-erase">Reveal fog</button>` : ""}
+    <button type="button" class="${selectedMapTool === "ping" ? "active" : ""}" data-map-tool="ping">Ping</button>
+    <button type="button" class="${selectedMapTool === "ruler" ? "active" : ""}" data-map-tool="ruler">Ruler</button>
   </div>` : "";
   const tilePalette = isDm ? `<div class="map-tile-palette">
     ${allTiles.map(tile => `<button type="button" class="map-tile-swatch ${selectedMapTile === tile.id ? "active" : ""}" data-map-tile="${escapeHtml(tile.id)}" title="${escapeHtml(tile.name)}">
@@ -3102,17 +3311,18 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     const y = Math.min(data.rows - 1, Math.max(0, Number(tile.y || 0)));
     return `<div class="map-cell-tile" style="--x:${x};--y:${y};${mapTileStyle(activeMap, tile.tileId)}"></div>`;
   }).join("");
-  const tokenCards = data.tokens.map(token => {
+  const tokenCards = data.tokens.filter(token => mapTokenVisibleForRole(data, token, isDm)).map(token => {
     const character = characterForMapToken(token);
     const canMove = canMoveMapToken(token, campaign.id);
     const label = character?.name || token.name || "Token";
     const portrait = character?.portrait || token.portrait || "";
     const size = mapTokenSize(token);
+    const hiddenText = token.hidden ? "Hidden from players" : "Visible to players";
     return `<article class="map-token-card ${selectedMapToken === token.id ? "active" : ""}">
       <button type="button" class="map-token-pick" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"}>
         <span class="map-token-avatar" style="--token:${escapeHtml(token.color)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</span>
         <strong>${escapeHtml(label)}</strong>
-        <small>${canMove ? "Click, then choose a square" : "DM controlled"}</small>
+        <small>${isDm ? hiddenText : canMove ? "Click, then choose a square" : "DM controlled"}</small>
       </button>
       <div class="map-token-size-row">
         <small>Token size: ${size}x${size}</small>
@@ -3121,16 +3331,30 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
           <button type="button" data-map-token-size="1" data-token-id="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove && size < 4 ? "" : "disabled"}>+</button>
         </span>
       </div>
+      ${isDm ? `<div class="map-token-toolbar">
+        <button type="button" data-map-token-toggle-hidden="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">${token.hidden ? "Reveal" : "Hide"}</button>
+        <button type="button" data-map-token-rename="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Rename</button>
+        <button type="button" data-map-token-color="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Color</button>
+        <button type="button" data-map-token-delete="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Delete</button>
+      </div>` : ""}
     </article>`;
   }).join("");
-  const tokenButtons = data.tokens.map(token => {
+  const tokenButtons = data.tokens.filter(token => mapTokenVisibleForRole(data, token, isDm)).map(token => {
     const character = characterForMapToken(token);
     const canMove = canMoveMapToken(token, campaign.id);
     const label = character?.name || token.name || "Token";
     const portrait = character?.portrait || token.portrait || "";
     const size = mapTokenSize(token);
-    return `<button type="button" class="map-token ${selectedMapToken === token.id ? "selected" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--size:${size};--token:${escapeHtml(token.color)}" title="${escapeHtml(`${label} (${size}x${size})`)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</button>`;
+    return `<button type="button" class="map-token ${selectedMapToken === token.id ? "selected" : ""} ${token.hidden ? "hidden-token" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--size:${size};--token:${escapeHtml(token.color || tokenColor(label))}" title="${escapeHtml(`${label} (${size}x${size})`)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</button>`;
   }).join("");
+  const fogCells = data.fog.enabled ? data.fog.cells.map(cell => {
+    const [x, y] = String(cell).split(",").map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return "";
+    return `<div class="map-fog-cell" style="--x:${Math.min(data.columns - 1, Math.max(0, x))};--y:${Math.min(data.rows - 1, Math.max(0, y))};"></div>`;
+  }).join("") : "";
+  const pings = data.pings.filter(ping => Date.now() - Number(ping.time || 0) < 15000).map(ping =>
+    `<div class="map-ping" style="--x:${Number(ping.x)};--y:${Number(ping.y)};"><span></span><small>${escapeHtml(ping.by || "Ping")}</small></div>`
+  ).join("");
   const settingsForm = isDm ? `<details class="map-settings">
     <summary>Map settings</summary>
     <form data-campaign-map-settings="${escapeHtml(activeMap.id)}">
@@ -3150,25 +3374,29 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   </details>` : "";
   return `<section class="campaign-panel campaign-map-panel">
     <div class="campaign-panel-head">
-      <div><h3>Encounter maps</h3><p>${isDm ? "Run a gridded battle map. Players can move their own shared character tokens." : "Select your token, then click a square to move it."}</p></div>
+      <div><h3>Encounter maps</h3><p>${isDm ? "Run a gridded battle map, control visibility, and manage a live table view." : "When the DM starts the session, select your token and click a square to move it."}</p></div>
       ${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}
     </div>
     <div class="campaign-map-tabs">${mapTabs}</div>
+    ${sessionControls}
     ${createForm}
     ${settingsForm}
+    ${fogControls}
     ${toolButtons}
-    ${tilePalette}
-    <div class="campaign-map-workspace">
+    ${isDm ? tilePalette : ""}
+    ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace">
       <aside class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</aside>
       <div class="battle-map-shell">
         <div class="battle-map-board" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;">
           ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : `<div class="battle-map-empty">No map art uploaded</div>`}
           <div class="battle-map-tiles">${paintedTiles}</div>
           <div class="battle-map-grid" aria-hidden="true"></div>
+          <div class="battle-map-fog ${isDm ? "dm-fog" : ""}" aria-hidden="true">${fogCells}</div>
           ${tokenButtons}
+          <div class="battle-map-pings" aria-hidden="true">${pings}</div>
         </div>
       </div>
-    </div>
+    </div>`}
   </section>`;
 }
 
@@ -3216,6 +3444,27 @@ function renderCampaignWorkbench(campaign, isDm, visibleLinks, allLinks, maps) {
       <strong>Player-safe view</strong>
       <p>Players only see their own shared sheet. The DM can see campaign sheets for table management.</p>
     </article>
+  </section>`;
+}
+
+function renderCampaignGameLog(campaignId, isDm = false) {
+  const rows = campaignLogRows(campaignId, isDm);
+  return `<section class="campaign-panel campaign-log-panel">
+    <div class="campaign-panel-head">
+      <div><h3>Game log</h3><p>Shared rolls from campaign sheets and map tools appear here for the table.</p></div>
+      <button type="button" class="button ghost small" data-campaign-log-refresh="${escapeHtml(campaignId)}">Refresh</button>
+    </div>
+    <ol class="campaign-game-log">
+      ${rows.length ? rows.map(entry => {
+        const rolls = Array.isArray(entry.rolls) ? entry.rolls : [];
+        const rollText = rolls.length ? rolls.join(", ") : entry.raw_total || entry.total || "";
+        const when = entry.created_at ? new Date(entry.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+        return `<li>
+          <div><strong>${escapeHtml(entry.label || "Roll")}</strong><small>${escapeHtml(entry.actor_name || "Player")} · ${escapeHtml(entry.source || "sheet")} · ${escapeHtml(when)}</small></div>
+          <span><small>${escapeHtml(String(rollText))}${Number(entry.modifier || 0) ? ` ${escapeHtml(signed(entry.modifier))}` : ""}</small><b>${Number(entry.total || 0)}</b></span>
+        </li>`;
+      }).join("") : `<li class="empty-log"><div><strong>No shared rolls yet</strong><small>Roll from a campaign sheet to start the log.</small></div></li>`}
+    </ol>
   </section>`;
 }
 
@@ -3301,6 +3550,7 @@ function renderCampaigns() {
   ).join("");
   const mapPanel = renderCampaignMapPanel(campaign, linkedCharacters, isDm);
   const workbench = renderCampaignWorkbench(campaign, isDm, links, allLinks, campaignMapsForView);
+  const gameLogPanel = renderCampaignGameLog(campaign.id, isDm);
   const characterRows = linkedCharacters.map(({ link, character, ownerLabel }) => {
     const canOpen = Boolean(character);
     const canRemove = isDm || link.owner_user_id === cloudUser.id;
@@ -3329,6 +3579,7 @@ function renderCampaigns() {
       <div class="campaign-party-grid">${partyCards || "<p>No shared character sheets yet.</p>"}</div>
     </section>
     ${mapPanel}
+    ${gameLogPanel}
     <div class="campaign-grid">
       <section class="campaign-panel">
         <h3>Members</h3>
@@ -4496,7 +4747,7 @@ let currentRollContext = null;
 let rollOverlayTimer = null;
 let rollOverlayHideTimer = null;
 // Roll a d20 check/save/skill and show the animated result in place (no page change).
-function rollOnSheet(label, modifier, mode) {
+function rollOnSheet(label, modifier, mode, options = {}) {
   mode = mode || "normal";
   modifier = Number(modifier || 0);
   let d20s = [Math.floor(Math.random() * 20) + 1];
@@ -4510,6 +4761,18 @@ function rollOnSheet(label, modifier, mode) {
   const detail = `1d20${modifier ? signed(modifier) : ""} [${d20s.join(", ")}${mode !== "normal" ? " → " + chosen : ""}]`;
   const entry = { total, detail, label: (label || "Roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
+  if (options.campaignId) {
+    recordCampaignGameLog(options.campaignId, {
+      source: options.source || "sheet",
+      characterId: options.characterId || "",
+      label: entry.label,
+      rolls: d20s,
+      rawTotal: chosen,
+      modifier,
+      total,
+      visibility: options.visibility || "public"
+    });
+  }
   if ($("#dice-result strong")) {
     $("#dice-result strong").textContent = chosen;
     $("#dice-result p").textContent = `${entry.label} - raw ${chosen}${total !== chosen ? ` - total ${total}` : ""} - ${detail}`;
@@ -4808,13 +5071,14 @@ function initEvents() {
     }
     const partyRoll = event.target.closest("[data-campaign-roll-party]");
     if (partyRoll) {
-      const links = campaignCharacters.filter(link => link.campaign_id === partyRoll.dataset.campaignRollParty);
+      const campaignId = partyRoll.dataset.campaignRollParty;
+      const links = campaignCharacters.filter(link => link.campaign_id === campaignId);
       const rolled = links
         .map(link => characters.find(item => item.id === link.character_id && characterOwnerId(item) === link.owner_user_id))
         .filter(Boolean);
       rolled.forEach(character => {
         const stats = derived(character);
-        rollOnSheet(`${character.name} Initiative`, stats.initiative, stats.initiativeAdvantage ? "advantage" : "normal");
+        rollOnSheet(`${character.name} Initiative`, stats.initiative, stats.initiativeAdvantage ? "advantage" : "normal", { campaignId, characterId: character.id, source: "campaign" });
       });
       toast(rolled.length ? `Rolled initiative for ${rolled.length} character${rolled.length === 1 ? "" : "s"}` : "No synced character sheets to roll");
       return;
@@ -4823,7 +5087,8 @@ function initEvents() {
     if (campaignRoll) {
       const character = characters.find(item => item.id === campaignRoll.dataset.campaignRoll && characterOwnerId(item) === campaignRoll.dataset.owner);
       if (!character) { toast("That shared sheet is still syncing"); return; }
-      rollOnSheet(`${character.name} ${campaignRoll.dataset.rollLabel || "Roll"}`, Number(campaignRoll.dataset.modifier || 0), campaignRoll.dataset.rollMode || "normal");
+      const campaign = campaigns.find(item => item.id === activeCampaignId);
+      rollOnSheet(`${character.name} ${campaignRoll.dataset.rollLabel || "Roll"}`, Number(campaignRoll.dataset.modifier || 0), campaignRoll.dataset.rollMode || "normal", { campaignId: campaign?.id || "", characterId: character.id, source: "campaign" });
       return;
     }
     const campaignOpen = event.target.closest("[data-campaign-open-character]");
@@ -4875,6 +5140,7 @@ function initEvents() {
     const mapTool = event.target.closest("[data-map-tool]");
     if (mapTool) {
       selectedMapTool = mapTool.dataset.mapTool || "token";
+      if (selectedMapTool !== "ruler") selectedMapRulerStart = null;
       renderCampaigns();
       return;
     }
@@ -4885,6 +5151,22 @@ function initEvents() {
       renderCampaigns();
       return;
     }
+    const logRefresh = event.target.closest("[data-campaign-log-refresh]");
+    if (logRefresh) {
+      loadCampaigns();
+      return;
+    }
+    const mapSession = event.target.closest("[data-map-session]");
+    if (mapSession) {
+      if (mapSession.disabled) return;
+      setCampaignMapSession(mapSession.dataset.mapId, mapSession.dataset.mapSession);
+      return;
+    }
+    const mapFog = event.target.closest("[data-map-fog]");
+    if (mapFog) {
+      updateCampaignFog(mapFog.dataset.mapId, mapFog.dataset.mapFog);
+      return;
+    }
     const mapTokenSizeButton = event.target.closest("[data-map-token-size]");
     if (mapTokenSizeButton) {
       if (mapTokenSizeButton.disabled) return;
@@ -4892,6 +5174,42 @@ function initEvents() {
       activeMapId = mapTokenSizeButton.dataset.mapId || activeMapId;
       selectedMapTool = "token";
       resizeCampaignMapToken(mapTokenSizeButton.dataset.mapId, mapTokenSizeButton.dataset.tokenId, Number(mapTokenSizeButton.dataset.mapTokenSize || 0));
+      return;
+    }
+    const mapTokenHide = event.target.closest("[data-map-token-toggle-hidden]");
+    if (mapTokenHide) {
+      const map = campaignMapById(mapTokenHide.dataset.mapId);
+      const token = normalizeMapData(map?.data).tokens.find(item => item.id === mapTokenHide.dataset.mapTokenToggleHidden);
+      if (token) updateCampaignMapToken(map.id, token.id, { hidden: !token.hidden }, token.hidden ? "Token revealed" : "Token hidden");
+      return;
+    }
+    const mapTokenRename = event.target.closest("[data-map-token-rename]");
+    if (mapTokenRename) {
+      const map = campaignMapById(mapTokenRename.dataset.mapId);
+      const token = normalizeMapData(map?.data).tokens.find(item => item.id === mapTokenRename.dataset.mapTokenRename);
+      if (!token) return;
+      const nextName = prompt("Token name", token.name || "Token");
+      if (nextName !== null) updateCampaignMapToken(map.id, token.id, { name: String(nextName).trim() || token.name || "Token" }, "Token renamed");
+      return;
+    }
+    const mapTokenColor = event.target.closest("[data-map-token-color]");
+    if (mapTokenColor) {
+      const map = campaignMapById(mapTokenColor.dataset.mapId);
+      const token = normalizeMapData(map?.data).tokens.find(item => item.id === mapTokenColor.dataset.mapTokenColor);
+      if (!token) return;
+      const nextColor = prompt("Border/token color hex", token.color || tokenColor(token.name || "Token"));
+      if (nextColor !== null) updateCampaignMapToken(map.id, token.id, { color: String(nextColor).trim() || token.color || tokenColor(token.name || "Token") }, "Token color updated");
+      return;
+    }
+    const mapTokenDelete = event.target.closest("[data-map-token-delete]");
+    if (mapTokenDelete) {
+      confirmAction({
+        title: "Delete token?",
+        message: "This removes the token from this map, but does not delete the character sheet.",
+        confirmLabel: "Delete token",
+        danger: true,
+        onConfirm: () => deleteCampaignMapToken(mapTokenDelete.dataset.mapId, mapTokenDelete.dataset.mapTokenDelete)
+      });
       return;
     }
     const mapToken = event.target.closest("[data-map-token-select]");
@@ -4913,6 +5231,20 @@ function initEvents() {
       const y = Math.floor((event.clientY - rect.top) / data.gridSize);
       if (canEditCampaign(map.campaign_id) && selectedMapTool === "paint") paintCampaignMapTile(map.id, selectedMapTile, x, y, "paint");
       else if (canEditCampaign(map.campaign_id) && selectedMapTool === "erase") paintCampaignMapTile(map.id, selectedMapTile, x, y, "erase");
+      else if (canEditCampaign(map.campaign_id) && (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase")) updateCampaignFog(map.id, selectedMapTool, x, y);
+      else if (selectedMapTool === "ping") addCampaignMapPing(map.id, x, y);
+      else if (selectedMapTool === "ruler") {
+        if (!selectedMapRulerStart) {
+          selectedMapRulerStart = { mapId: map.id, x, y };
+          toast("Ruler start set. Click a destination square.");
+        } else {
+          const dx = x - selectedMapRulerStart.x;
+          const dy = y - selectedMapRulerStart.y;
+          const distance = Math.round(Math.sqrt(dx * dx + dy * dy) * data.scale.feetPerSquare);
+          toast(`Distance: ${distance} ft`);
+          selectedMapRulerStart = null;
+        }
+      }
       else if (selectedMapToken) moveCampaignMapToken(map.id, selectedMapToken, x, y);
       return;
     }

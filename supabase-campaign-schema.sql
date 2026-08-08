@@ -74,10 +74,27 @@ create table if not exists public.campaign_maps (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.campaign_game_log (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id uuid not null references public.campaigns(id) on delete cascade,
+  actor_user_id uuid not null references auth.users(id) on delete cascade,
+  actor_name text not null default '',
+  character_id text,
+  source text not null default 'sheet',
+  label text not null default 'Roll',
+  rolls jsonb not null default '[]'::jsonb,
+  raw_total integer not null default 0,
+  modifier integer not null default 0,
+  total integer not null default 0,
+  visibility text not null default 'public' check (visibility in ('public', 'dm')),
+  created_at timestamptz not null default now()
+);
+
 alter table public.campaigns enable row level security;
 alter table public.campaign_members enable row level security;
 alter table public.campaign_characters enable row level security;
 alter table public.campaign_maps enable row level security;
+alter table public.campaign_game_log enable row level security;
 
 create or replace function public.is_campaign_member(p_campaign_id uuid)
 returns boolean
@@ -300,16 +317,84 @@ begin
 end;
 $$;
 
+create or replace function public.add_campaign_map_ping(p_map_id uuid, p_x integer, p_y integer, p_label text default '')
+returns public.campaign_maps
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_map public.campaign_maps;
+  map_data jsonb;
+  pings jsonb;
+  columns integer;
+  rows integer;
+  clean_label text;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Sign in required';
+  end if;
+
+  select *
+  into target_map
+  from public.campaign_maps
+  where id = p_map_id;
+
+  if target_map.id is null then
+    raise exception 'Map not found';
+  end if;
+
+  if not public.is_campaign_member(target_map.campaign_id) then
+    raise exception 'Not a campaign member';
+  end if;
+
+  map_data := coalesce(target_map.data, '{}'::jsonb);
+  pings := coalesce(map_data->'pings', '[]'::jsonb);
+  columns := greatest(4, least(80, coalesce((map_data->>'columns')::integer, 24)));
+  rows := greatest(4, least(80, coalesce((map_data->>'rows')::integer, 16)));
+  clean_label := left(coalesce(nullif(trim(p_label), ''), 'Player'), 40);
+
+  pings := (
+    select coalesce(jsonb_agg(value), '[]'::jsonb)
+    from (
+      select value
+      from jsonb_array_elements(pings) as value
+      where coalesce((value->>'time')::bigint, 0) > ((extract(epoch from now()) * 1000)::bigint - 15000)
+      order by coalesce((value->>'time')::bigint, 0) desc
+      limit 11
+    ) recent
+  ) || jsonb_build_array(jsonb_build_object(
+    'id', gen_random_uuid()::text,
+    'x', greatest(0, least(columns - 1, p_x)),
+    'y', greatest(0, least(rows - 1, p_y)),
+    'by', clean_label,
+    'time', (extract(epoch from now()) * 1000)::bigint
+  ));
+
+  map_data := jsonb_set(map_data, '{pings}', pings, true);
+
+  update public.campaign_maps
+  set data = map_data,
+      updated_at = now()
+  where id = target_map.id
+  returning * into target_map;
+
+  return target_map;
+end;
+$$;
+
 revoke all on function public.is_campaign_member(uuid) from public;
 revoke all on function public.is_campaign_dm(uuid) from public;
 revoke all on function public.join_campaign_by_invite(text, text) from public;
 revoke all on function public.move_campaign_map_token(uuid, text, integer, integer) from public;
 revoke all on function public.resize_campaign_map_token(uuid, text, integer) from public;
+revoke all on function public.add_campaign_map_ping(uuid, integer, integer, text) from public;
 grant execute on function public.is_campaign_member(uuid) to authenticated;
 grant execute on function public.is_campaign_dm(uuid) to authenticated;
 grant execute on function public.join_campaign_by_invite(text, text) to authenticated;
 grant execute on function public.move_campaign_map_token(uuid, text, integer, integer) to authenticated;
 grant execute on function public.resize_campaign_map_token(uuid, text, integer) to authenticated;
+grant execute on function public.add_campaign_map_ping(uuid, integer, integer, text) to authenticated;
 
 -- Replace character read/update policies so campaign DMs can access shared sheets.
 drop policy if exists "Users can read their characters" on public.characters;
@@ -507,6 +592,28 @@ using (
   )
 );
 
+drop policy if exists "Campaign members can read game log" on public.campaign_game_log;
+create policy "Campaign members can read game log"
+on public.campaign_game_log for select
+to authenticated
+using (
+  public.is_campaign_member(campaign_id)
+  and (
+    visibility = 'public'
+    or public.is_campaign_dm(campaign_id)
+    or actor_user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Campaign members can add game log entries" on public.campaign_game_log;
+create policy "Campaign members can add game log entries"
+on public.campaign_game_log for insert
+to authenticated
+with check (
+  actor_user_id = (select auth.uid())
+  and public.is_campaign_member(campaign_id)
+);
+
 create index if not exists campaigns_invite_code_idx
 on public.campaigns (invite_code);
 
@@ -518,3 +625,6 @@ on public.campaign_characters (owner_user_id, character_id);
 
 create index if not exists campaign_maps_campaign_idx
 on public.campaign_maps (campaign_id, updated_at desc);
+
+create index if not exists campaign_game_log_campaign_idx
+on public.campaign_game_log (campaign_id, created_at desc);
