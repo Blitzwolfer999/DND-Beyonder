@@ -1340,12 +1340,19 @@ function prepareUserVault(user) {
   if (!user) return;
   writeRecoverySnapshot("before account switch");
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
-  const localCharacters = Array.isArray(characters) ? characters : [];
-  const localCampaigns = Array.isArray(campaigns) ? campaigns : [];
-  const localMemberships = Array.isArray(campaignMemberships) ? campaignMemberships : [];
-  const localCampaignCharacters = Array.isArray(campaignCharacters) ? campaignCharacters : [];
-  const localCampaignMaps = Array.isArray(campaignMaps) ? campaignMaps : [];
-  const localCampaignLogs = Array.isArray(campaignGameLogs) ? campaignGameLogs : [];
+  const snapshots = readJson(RECOVERY_SNAPSHOT_KEY, []).filter(meaningfulState);
+  const snapshotCharacters = snapshots.flatMap(snapshot => Array.isArray(snapshot.characters) ? snapshot.characters : []);
+  const snapshotCampaigns = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaigns) ? snapshot.campaigns : []);
+  const snapshotMemberships = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignMemberships) ? snapshot.campaignMemberships : []);
+  const snapshotCampaignCharacters = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignCharacters) ? snapshot.campaignCharacters : []);
+  const snapshotCampaignMaps = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignMaps) ? snapshot.campaignMaps : []);
+  const snapshotCampaignLogs = snapshots.flatMap(snapshot => Array.isArray(snapshot.campaignGameLogs) ? snapshot.campaignGameLogs : []);
+  const localCharacters = mergeUserVaultCharacters([Array.isArray(characters) ? characters : [], snapshotCharacters], priorOwner || user.id);
+  const localCampaigns = mergeRecordsById(Array.isArray(campaigns) ? campaigns : [], snapshotCampaigns);
+  const localMemberships = mergeRecordsById(Array.isArray(campaignMemberships) ? campaignMemberships : [], snapshotMemberships, member => `${member?.campaign_id}:${member?.user_id}`);
+  const localCampaignCharacters = mergeRecordsById(Array.isArray(campaignCharacters) ? campaignCharacters : [], snapshotCampaignCharacters, link => `${link?.campaign_id}:${link?.owner_user_id}:${link?.character_id}`);
+  const localCampaignMaps = mergeRecordsById(Array.isArray(campaignMaps) ? campaignMaps : [], snapshotCampaignMaps);
+  const localCampaignLogs = mergeRecordsById(Array.isArray(campaignGameLogs) ? campaignGameLogs : [], snapshotCampaignLogs);
   const cached = readJson(`${STORAGE_KEY}.${user.id}`, null);
   const cachedCampaigns = readJson(`${CAMPAIGN_KEY}.${user.id}`, null);
   const cachedMemberships = readJson(`${CAMPAIGN_MEMBER_KEY}.${user.id}`, null);
@@ -1353,6 +1360,7 @@ function prepareUserVault(user) {
   const cachedCampaignMaps = readJson(`${CAMPAIGN_MAP_KEY}.${user.id}`, null);
   const cachedCampaignLogs = readJson(`${CAMPAIGN_LOG_KEY}.${user.id}`, null);
   const cachedDeletions = readJson(`${DELETED_KEY}.${user.id}`, null);
+  const cachedIds = new Set((cached || []).map(character => character?.id).filter(Boolean));
   const canImportLocalVault = !priorOwner || priorOwner === user.id;
   const shouldRecoverLocalVault = canImportLocalVault || ((!cached || !cached.length) && localCharacters.length);
   const shouldClaimLocalCharacters = shouldRecoverLocalVault && (!cached || !cached.length);
@@ -1370,7 +1378,10 @@ function prepareUserVault(user) {
   const recoveredLocalCharacters = localCharacters
     .filter(character => canImportLocalVault || !character._campaignShared)
     .map(character => {
-      const claimCharacter = shouldClaimLocalCharacters && !character._campaignShared;
+      const claimCharacter = !character._campaignShared && (
+        shouldClaimLocalCharacters
+        || (!cachedIds.has(character.id) && character.cloudOwnerId !== user.id)
+      );
       return {
         ...character,
         cloudOwnerId: claimCharacter ? user.id : character.cloudOwnerId || user.id,
