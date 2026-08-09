@@ -234,6 +234,7 @@ const CAMPAIGN_MAP_KEY = "arcanaForge.campaignMaps.v1";
 const CAMPAIGN_LOG_KEY = "arcanaForge.campaignGameLog.v1";
 const RECOVERY_SNAPSHOT_KEY = "arcanaForge.recoverySnapshots.v1";
 const MAX_RECOVERY_SNAPSHOTS = 5;
+const BACKUP_META_KEY = "arcanaForge.cloudBackupMeta.v1";
 const THEME_KEY = "dndb.theme";
 const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
 const BUILDER_STEP_COUNT = 7;
@@ -264,6 +265,7 @@ let accountMode = "signin";
 let cloudClient = null;
 let cloudUser = null;
 let cloudSyncTimer = null;
+let cloudBackupTimer = null;
 let characters = readJson(STORAGE_KEY, []);
 let campaigns = readJson(CAMPAIGN_KEY, []);
 let campaignMemberships = readJson(CAMPAIGN_MEMBER_KEY, []);
@@ -481,6 +483,7 @@ function saveCampaignCache() {
   if (cloudUser) saveJson(`${CAMPAIGN_MAP_KEY}.${cloudUser.id}`, campaignMaps);
   if (cloudUser) saveJson(`${CAMPAIGN_LOG_KEY}.${cloudUser.id}`, campaignGameLogs);
   writeRecoverySnapshot("campaign cache saved");
+  scheduleCloudBackup("campaign cache saved");
 }
 function campaignSetupMessage() {
   return "Campaign tables are not set up yet. Run supabase-campaign-schema.sql in the Supabase SQL Editor, then refresh DND Beyonder.";
@@ -496,6 +499,13 @@ function isMissingSecurityRpc(error) {
   return message.includes("could not find the function")
     || (message.includes("function") && message.includes("does not exist"))
     || (message.includes("schema cache") && message.includes("function"));
+}
+function isMissingBackupSchema(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return message.includes("account_backups")
+    || message.includes("could not find the table")
+    || message.includes("schema cache")
+    || (message.includes("relation") && message.includes("account_backups"));
 }
 function reportCampaignError(error, fallbackMessage, showToast = true) {
   const message = isMissingCampaignSchema(error) ? campaignSetupMessage() : `${fallbackMessage}: ${error.message}`;
@@ -990,6 +1000,7 @@ function persistCharacters() {
   const savedMain = saveJson(STORAGE_KEY, characters);
   const savedUser = cloudUser ? saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters) : true;
   if (savedMain || savedUser) writeRecoverySnapshot("characters saved");
+  if (savedMain || savedUser) scheduleCloudBackup("characters saved");
   if (cloudUser && cloudClient) {
     clearTimeout(cloudSyncTimer);
     cloudSyncTimer = setTimeout(syncCharactersToCloud, 350);
@@ -1168,6 +1179,170 @@ async function syncCampaignsToCloud() {
     setCloudStatus(`Campaign sync failed. Cached campaigns are still local: ${error.message || error}`, true);
     return false;
   }
+}
+function backupFingerprint(payload) {
+  const text = JSON.stringify(payload);
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
+  }
+  return `${text.length}:${hash >>> 0}`;
+}
+function accountBackupPayload() {
+  const ownedCampaignIds = new Set(campaigns
+    .filter(campaign => campaign?.id && campaign.owner_id === cloudUser?.id)
+    .map(campaign => campaign.id));
+  const ownCharacterIds = new Set(ownCharacters().map(character => character.id));
+  const cleanedCharacters = ownCharacters().map(character => ({
+    ...character,
+    cloudOwnerId: cloudUser.id,
+    _campaignShared: undefined,
+    _campaignRole: undefined,
+    _campaignIds: undefined
+  }));
+  return {
+    version: 2,
+    app: "DND Beyonder",
+    userId: cloudUser.id,
+    createdAt: new Date().toISOString(),
+    characters: cleanedCharacters,
+    campaigns: campaigns
+      .filter(campaign => ownedCampaignIds.has(campaign.id))
+      .map(campaign => ({ ...campaign, owner_id: cloudUser.id })),
+    campaignMemberships: campaignMemberships
+      .filter(member => ownedCampaignIds.has(member.campaign_id) || member.user_id === cloudUser.id),
+    campaignCharacters: campaignCharacters
+      .filter(link => (ownedCampaignIds.has(link.campaign_id) && link.owner_user_id === cloudUser.id)
+        || (link.owner_user_id === cloudUser.id && ownCharacterIds.has(link.character_id))),
+    campaignMaps: campaignMaps
+      .filter(map => ownedCampaignIds.has(map.campaign_id))
+      .map(map => ({ ...map, owner_id: cloudUser.id, data: normalizeMapData(map.data) })),
+    deletedCharacters
+  };
+}
+async function createAccountBackup(label = "Automatic backup", options = {}) {
+  if (!cloudUser || !cloudClient) return false;
+  const payload = accountBackupPayload();
+  const fingerprint = backupFingerprint(payload);
+  const metaKey = `${BACKUP_META_KEY}.${cloudUser.id}`;
+  const meta = readJson(metaKey, {});
+  const recent = Date.now() - Number(meta.createdAt || 0) < 60_000;
+  if (!options.force && meta.fingerprint === fingerprint && recent) return true;
+  const { error } = await cloudClient.from("account_backups").insert({
+    user_id: cloudUser.id,
+    label,
+    data: payload
+  });
+  if (error) {
+    const message = isMissingBackupSchema(error)
+      ? "Cloud backups need the updated Supabase schema. Run supabase-campaign-schema.sql, then try Backup now."
+      : `Cloud backup failed: ${error.message}`;
+    setBackupStatus(message, true);
+    return false;
+  }
+  saveJson(metaKey, { fingerprint, createdAt: Date.now() });
+  await pruneAccountBackups();
+  setBackupStatus(`Latest cloud backup: ${new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
+  return true;
+}
+function scheduleCloudBackup(reason = "Automatic backup") {
+  if (!cloudUser || !cloudClient) return;
+  clearTimeout(cloudBackupTimer);
+  cloudBackupTimer = setTimeout(() => {
+    createAccountBackup(reason).catch(error => setBackupStatus(`Cloud backup failed: ${error.message || error}`, true));
+  }, 2500);
+}
+async function pruneAccountBackups(limit = 10) {
+  if (!cloudUser || !cloudClient) return;
+  const { data, error } = await cloudClient.from("account_backups")
+    .select("id, created_at")
+    .order("created_at", { ascending: false })
+    .limit(40);
+  if (error || !Array.isArray(data) || data.length <= limit) return;
+  const oldIds = data.slice(limit).map(row => row.id).filter(Boolean);
+  if (oldIds.length) await cloudClient.from("account_backups").delete().in("id", oldIds);
+}
+function setBackupStatus(message, isError = false) {
+  const status = $("#backup-status");
+  if (!status) return;
+  status.textContent = message || "";
+  status.classList.toggle("error", Boolean(isError));
+}
+async function refreshBackupStatus() {
+  if (!cloudUser || !cloudClient) {
+    setBackupStatus("");
+    return;
+  }
+  const { data, error } = await cloudClient.from("account_backups")
+    .select("id, label, created_at")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) {
+    if (isMissingBackupSchema(error)) setBackupStatus("Cloud backups are not set up yet. Run the updated Supabase schema.", true);
+    return;
+  }
+  const latest = data?.[0];
+  setBackupStatus(latest ? `Latest cloud backup: ${new Date(latest.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : "No cloud backup yet.");
+}
+async function restoreLatestAccountBackup() {
+  if (!cloudUser || !cloudClient) return;
+  const { data, error } = await cloudClient.from("account_backups")
+    .select("id, label, data, created_at")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) {
+    setBackupStatus(isMissingBackupSchema(error) ? "Cloud backups are not set up yet. Run the updated Supabase schema." : `Could not load backup: ${error.message}`, true);
+    return;
+  }
+  const backup = data?.[0]?.data;
+  if (!backup) {
+    setBackupStatus("No cloud backup found for this account.", true);
+    return;
+  }
+  const restoredCharacters = (Array.isArray(backup.characters) ? backup.characters : []).map(character => ({
+    ...character,
+    cloudOwnerId: cloudUser.id,
+    _campaignShared: undefined,
+    _campaignRole: undefined,
+    _campaignIds: undefined,
+    updatedAt: Number(character.updatedAt || Date.now())
+  }));
+  const ownedCampaigns = (Array.isArray(backup.campaigns) ? backup.campaigns : []).map(campaign => ({ ...campaign, owner_id: cloudUser.id }));
+  const ownedCampaignIds = new Set(ownedCampaigns.map(campaign => campaign.id));
+  characters = mergeUserVaultCharacters([characters.filter(character => !isOwnCharacter(character)), restoredCharacters], cloudUser.id);
+  campaigns = mergeRecordsById(ownedCampaigns, campaigns.filter(campaign => campaign.owner_id !== cloudUser.id));
+  campaignMemberships = mergeRecordsById(
+    (Array.isArray(backup.campaignMemberships) ? backup.campaignMemberships : []).filter(member => ownedCampaignIds.has(member.campaign_id) || member.user_id === cloudUser.id),
+    campaignMemberships.filter(member => !ownedCampaignIds.has(member.campaign_id) && member.user_id !== cloudUser.id),
+    member => `${member?.campaign_id}:${member?.user_id}`
+  );
+  ownedCampaignIds.forEach(campaignId => {
+    if (!campaignMemberships.some(member => member.campaign_id === campaignId && member.user_id === cloudUser.id)) {
+      campaignMemberships.push({ campaign_id: campaignId, user_id: cloudUser.id, role: "dm", display_name: accountDisplayName("DM"), joined_at: new Date().toISOString() });
+    }
+  });
+  campaignCharacters = mergeRecordsById(
+    (Array.isArray(backup.campaignCharacters) ? backup.campaignCharacters : []).filter(link => link.owner_user_id === cloudUser.id),
+    campaignCharacters.filter(link => link.owner_user_id !== cloudUser.id),
+    link => `${link?.campaign_id}:${link?.owner_user_id}:${link?.character_id}`
+  );
+  campaignMaps = mergeRecordsById(
+    (Array.isArray(backup.campaignMaps) ? backup.campaignMaps : []).filter(map => ownedCampaignIds.has(map.campaign_id)).map(map => ({ ...map, owner_id: cloudUser.id, data: normalizeMapData(map.data) })),
+    campaignMaps.filter(map => !ownedCampaignIds.has(map.campaign_id))
+  );
+  deletedCharacters = backup.deletedCharacters && typeof backup.deletedCharacters === "object" ? backup.deletedCharacters : {};
+  saveJson(STORAGE_KEY, characters);
+  saveJson(`${STORAGE_KEY}.${cloudUser.id}`, characters);
+  persistDeletedCharacters();
+  saveCampaignCache();
+  await syncCharactersToCloud();
+  await syncCampaignsToCloud();
+  await createAccountBackup("Post-restore backup", { force: true });
+  await loadCampaigns();
+  renderCards($("#vault-search")?.value || "");
+  renderSheet();
+  setBackupStatus(`Restored backup from ${new Date(data[0].created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
+  toast("Cloud backup restored");
 }
 async function loadCloudCharacters() {
   if (!cloudUser || !cloudClient) return;
@@ -6180,10 +6355,30 @@ function initEvents() {
     try {
       await syncCharactersToCloud();
       await syncCampaignsToCloud();
+      await createAccountBackup("Manual sync backup", { force: true });
       await loadCampaigns();
     } finally {
       $("#sync-now").disabled = false;
     }
+  });
+  $("#backup-now").addEventListener("click", async () => {
+    $("#backup-now").disabled = true;
+    try {
+      await syncCharactersToCloud();
+      await syncCampaignsToCloud();
+      await createAccountBackup("Manual backup", { force: true });
+      toast("Cloud backup saved");
+    } finally {
+      $("#backup-now").disabled = false;
+    }
+  });
+  $("#restore-backup").addEventListener("click", () => {
+    confirmAction({
+      title: "Restore latest cloud backup?",
+      message: "This merges the latest account backup into your signed-in vault, then syncs it back to Supabase.",
+      confirmLabel: "Restore backup",
+      onConfirm: () => restoreLatestAccountBackup()
+    });
   });
   $("#sign-out").addEventListener("click", async () => {
     writeRecoverySnapshot("before sign out");
@@ -6200,6 +6395,7 @@ function initEvents() {
       const { error } = await cloudClient.auth.signOut();
       if (error) setCloudStatus(`Supabase sign-out warning: ${error.message}`, true);
     }
+    clearTimeout(cloudBackupTimer);
     cloudUser = null;
     characters = localCharacters;
     campaigns = [];
@@ -6225,6 +6421,7 @@ function initEvents() {
     renderSheet();
     renderCampaigns();
     updateAccount();
+    setBackupStatus("");
     setCloudStatus("Signed out. This browser still has a local copy of the vault.");
     toast("Signed out");
   });
@@ -6331,6 +6528,7 @@ async function handleAccountSubmit(event) {
   await syncCharactersToCloud();
   await syncCampaignsToCloud();
   await loadCampaigns();
+  await createAccountBackup("Sign-in backup");
   $("#account-modal").classList.add("hidden");
   toast(`Welcome, ${displayName}`);
 }
@@ -6343,12 +6541,16 @@ function updateAccount() {
   $("#account-form").classList.toggle("hidden", signedIn);
   $("#account-modes").classList.toggle("hidden", signedIn);
   $("#sync-now").classList.toggle("hidden", !signedIn);
+  $("#backup-now").classList.toggle("hidden", !signedIn);
+  $("#restore-backup").classList.toggle("hidden", !signedIn);
   $("#sign-out").classList.toggle("hidden", !signedIn);
   $("#account-description").textContent = signedIn
     ? `Signed in as ${cloudUser.email}. Character changes synchronize to this account.`
     : cloudConfigured()
       ? "Sign in to keep this vault synchronized across devices. A local copy remains available offline."
       : "Cloud sync is ready for configuration. Until Supabase settings are added, characters remain in this browser.";
+  if (signedIn) refreshBackupStatus();
+  else setBackupStatus("");
   if (!signedIn) setAccountMode(accountMode);
 }
 
@@ -6372,6 +6574,7 @@ async function initCloud() {
     await syncCharactersToCloud();
     await syncCampaignsToCloud();
     await loadCampaigns();
+    await createAccountBackup("Session backup");
   }
   cloudClient.auth.onAuthStateChange((_event, session) => {
     const nextUser = session?.user || null;
@@ -6383,6 +6586,7 @@ async function initCloud() {
       await syncCharactersToCloud();
       await syncCampaignsToCloud();
       await loadCampaigns();
+      await createAccountBackup("Session backup");
     }, 0);
   });
   window.addEventListener("online", () => {

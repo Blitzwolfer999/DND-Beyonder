@@ -90,11 +90,20 @@ create table if not exists public.campaign_game_log (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.account_backups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  label text not null default 'Automatic backup',
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
 alter table public.campaigns enable row level security;
 alter table public.campaign_members enable row level security;
 alter table public.campaign_characters enable row level security;
 alter table public.campaign_maps enable row level security;
 alter table public.campaign_game_log enable row level security;
+alter table public.account_backups enable row level security;
 
 create or replace function public.is_campaign_member(p_campaign_id uuid)
 returns boolean
@@ -697,6 +706,24 @@ with check (
   and public.is_campaign_member(campaign_id)
 );
 
+drop policy if exists "Users can read their account backups" on public.account_backups;
+create policy "Users can read their account backups"
+on public.account_backups for select
+to authenticated
+using (user_id = (select auth.uid()));
+
+drop policy if exists "Users can create their account backups" on public.account_backups;
+create policy "Users can create their account backups"
+on public.account_backups for insert
+to authenticated
+with check (user_id = (select auth.uid()));
+
+drop policy if exists "Users can delete their account backups" on public.account_backups;
+create policy "Users can delete their account backups"
+on public.account_backups for delete
+to authenticated
+using (user_id = (select auth.uid()));
+
 create index if not exists campaigns_invite_code_idx
 on public.campaigns (invite_code);
 
@@ -711,3 +738,6 @@ on public.campaign_maps (campaign_id, updated_at desc);
 
 create index if not exists campaign_game_log_campaign_idx
 on public.campaign_game_log (campaign_id, created_at desc);
+
+create index if not exists account_backups_user_created_idx
+on public.account_backups (user_id, created_at desc);

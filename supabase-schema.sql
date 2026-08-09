@@ -73,9 +73,18 @@ create table if not exists public.campaign_characters (
   primary key (campaign_id, owner_user_id, character_id)
 );
 
+create table if not exists public.account_backups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  label text not null default 'Automatic backup',
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
 alter table public.campaigns enable row level security;
 alter table public.campaign_members enable row level security;
 alter table public.campaign_characters enable row level security;
+alter table public.account_backups enable row level security;
 
 drop policy if exists "Users can read their characters" on public.characters;
 create policy "Users can read owned or campaign characters"
@@ -265,6 +274,24 @@ using (
   )
 );
 
+drop policy if exists "Users can read their account backups" on public.account_backups;
+create policy "Users can read their account backups"
+on public.account_backups for select
+to authenticated
+using (user_id = (select auth.uid()));
+
+drop policy if exists "Users can create their account backups" on public.account_backups;
+create policy "Users can create their account backups"
+on public.account_backups for insert
+to authenticated
+with check (user_id = (select auth.uid()));
+
+drop policy if exists "Users can delete their account backups" on public.account_backups;
+create policy "Users can delete their account backups"
+on public.account_backups for delete
+to authenticated
+using (user_id = (select auth.uid()));
+
 create or replace function public.ensure_campaign_dm_membership(p_campaign_id uuid, p_display_name text default '')
 returns void
 language plpgsql
@@ -313,3 +340,6 @@ on public.campaign_members (user_id);
 
 create index if not exists campaign_characters_owner_idx
 on public.campaign_characters (owner_user_id, character_id);
+
+create index if not exists account_backups_user_created_idx
+on public.account_backups (user_id, created_at desc);
