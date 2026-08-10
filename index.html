@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=account-backups-1">
+  <link rel="stylesheet" href="styles.css?v=map-grid-toggle-1">
 </head>
 <body>
   <div class="app-shell">
@@ -114,7 +114,7 @@
               <span class="method-badge">Recommended for new players</span>
               <span class="method-icon">✦</span>
               <strong>Quick Build</strong>
-              <small>Choose a class, origin, and name. Smart defaults create a complete level-1 character.</small>
+              <small>Choose a class, origin, level, and name. Smart defaults create a complete playable character.</small>
               <em>Start quick build →</em>
             </button>
             <button type="button" class="creation-method" data-creation-method="standard">
@@ -126,6 +126,13 @@
             </button>
           </div>
           <div class="creation-method-grid extra-methods">
+            <button type="button" class="creation-method" data-creation-method="prebuild">
+              <span class="method-badge">Choose the basics</span>
+              <span class="method-icon">PB</span>
+              <strong>Custom Prebuild</strong>
+              <small>Pick class, subclass, species, and level. DND Beyonder fills in a solid playable sheet.</small>
+              <em>Build from choices</em>
+            </button>
             <button type="button" class="creation-method" data-creation-method="premade">
               <span class="method-badge">Play now</span>
               <span class="method-icon">P</span>
@@ -143,10 +150,32 @@
           </div>
         </section>
 
+        <section class="prebuild-builder hidden" id="prebuild-builder">
+          <div class="quick-builder-head">
+            <button type="button" class="text-button" data-creation-method="choose">Back to methods</button>
+            <div><span class="eyebrow">CUSTOM PREBUILD</span><h2>Pick the shape, get a playable sheet</h2><p>Select class, subclass, species, and level. The app chooses strong defaults for stats, skills, spells, equipment, and level bonuses.</p></div>
+            <button type="button" class="button ghost small" id="prebuild-surprise">Surprise me</button>
+          </div>
+          <div class="prebuild-layout">
+            <form class="prebuild-controls" id="prebuild-form">
+              <label>Class<select id="prebuild-class"></select></label>
+              <label>Subclass<select id="prebuild-subclass"></select><small id="prebuild-subclass-note"></small></label>
+              <label>Species<select id="prebuild-species"></select></label>
+              <label>Level<input id="prebuild-level" type="number" min="1" max="20" value="3"></label>
+              <label>Background<select id="prebuild-background"></select><small>Recommended automatically, but you can change it.</small></label>
+              <label>Character name<input id="prebuild-name" maxlength="40" placeholder="Enter a name or generate one"></label>
+              <button type="button" class="button ghost small" id="prebuild-name-generator">Generate a name</button>
+              <label>Player name <small>optional</small><input id="prebuild-player" maxlength="40" placeholder="Your name"></label>
+              <button type="button" class="button primary" id="prebuild-create">Create prebuilt character</button>
+            </form>
+            <article class="quick-summary prebuild-summary" id="prebuild-summary" aria-live="polite"></article>
+          </div>
+        </section>
+
         <section class="quick-builder hidden" id="quick-builder">
           <div class="quick-builder-head">
             <button type="button" class="text-button" data-creation-method="choose">← Creation methods</button>
-            <div><span class="eyebrow">QUICK BUILD · LEVEL 1</span><h2>Ready, set, start your story</h2><p>Make the inspiring choices. We will handle the rule-heavy ones.</p></div>
+            <div><span class="eyebrow">QUICK BUILD</span><h2>Ready, set, start your story</h2><p>Make the inspiring choices. We will handle the rule-heavy ones, including higher-level defaults.</p></div>
             <button type="button" class="button ghost small" id="quick-surprise">Surprise me</button>
           </div>
           <div class="quick-progress" aria-label="Quick build progress">
@@ -165,6 +194,7 @@
             <div class="quick-origin-grid">
               <label>Species<select id="quick-species"></select><small id="quick-species-description"></small></label>
               <label>Background<select id="quick-background"></select><small id="quick-background-description"></small></label>
+              <label>Starting level<input id="quick-level" type="number" min="1" max="20" value="1"><small>Choose level 1 for a brand-new hero, or start higher with scaled spells, HP, ASIs, and features.</small></label>
             </div>
             <article class="quick-tip"><strong>Why is a background recommended?</strong><p>The recommendation supports your class’s important abilities and provides useful starting skills. You can freely choose another.</p></article>
           </div>
@@ -595,6 +625,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=account-backups-1"></script>
+  <script src="app.js?v=map-grid-toggle-1"></script>
 </body>
 </html>

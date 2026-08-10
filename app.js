@@ -257,6 +257,8 @@ let activeCharacterId = null;
 let activeSheetSection = "overview";
 let quickStep = 1;
 let quickClass = "Fighter";
+let prebuildClass = "Fighter";
+let prebuildSubclass = "";
 let drawing = false;
 let drawEnabled = false;
 let portraitData = "";
@@ -519,6 +521,7 @@ function normalizeMapData(data = {}) {
     columns: Math.min(80, Math.max(4, Number(data.columns || 24))),
     rows: Math.min(80, Math.max(4, Number(data.rows || 16))),
     gridSize: Math.min(72, Math.max(28, Number(data.gridSize || 44))),
+    gridEnabled: data.gridEnabled !== false,
     background: String(data.background || ""),
     backgroundFit: data.backgroundFit || "cover",
     scale: data.scale && typeof data.scale === "object" ? {
@@ -685,6 +688,7 @@ async function createCampaignMap(campaignId, values) {
     columns: values.columns,
     rows: values.rows,
     gridSize: values.gridSize,
+    gridEnabled: values.gridEnabled === "on",
     background: campaignMapImageDraft || String(values.background || "").trim(),
     session: { state: "draft", updatedAt: new Date().toISOString() }
   });
@@ -712,6 +716,7 @@ async function updateCampaignMapSettings(mapId, values) {
     columns: values.columns,
     rows: values.rows,
     gridSize: values.gridSize,
+    gridEnabled: values.gridEnabled === "on",
     background: campaignMapImageDraft || String(values.background || "").trim() || map.data?.background || ""
   });
   campaignMapImageDraft = "";
@@ -2150,41 +2155,179 @@ function quickDefaultSubclass(className) {
   return options.some(item => item.name === preferred) ? preferred : options[0]?.name || "";
 }
 
+function defaultSubclassFor(className, level = 1) {
+  const options = subclassEntries(className, edition);
+  const preferred = {
+    "2014:Barbarian": "Path of the Berserker",
+    "2024:Barbarian": "Path of the Berserker",
+    "2014:Bard": "College of Lore",
+    "2024:Bard": "College of Lore",
+    "2014:Cleric": "Life Domain",
+    "2024:Cleric": "Life Domain",
+    "2014:Druid": "Circle of the Land",
+    "2024:Druid": "Circle of the Land",
+    "2014:Fighter": "Champion",
+    "2024:Fighter": "Champion",
+    "2014:Monk": "Way of the Open Hand",
+    "2024:Monk": "Warrior of the Open Hand",
+    "2014:Paladin": "Oath of Devotion",
+    "2024:Paladin": "Oath of Devotion",
+    "2014:Ranger": "Hunter",
+    "2024:Ranger": "Hunter",
+    "2014:Rogue": "Thief",
+    "2024:Rogue": "Thief",
+    "2014:Sorcerer": "Draconic Bloodline",
+    "2024:Sorcerer": "Draconic Sorcery",
+    "2014:Warlock": "The Fiend",
+    "2024:Warlock": "Fiend Patron",
+    "2014:Wizard": "School of Evocation",
+    "2024:Wizard": "Evoker",
+    "2014:Artificer": "Alchemist",
+    "2024:Artificer": "Alchemist",
+    "2014:Blood Hunter": "Order of the Ghostslayer",
+    "2024:Blood Hunter": "Order of the Ghostslayer"
+  }[`${edition}:${className}`];
+  const chosen = options.find(item => item.name === preferred)?.name || options[0]?.name || "";
+  return Number(level || 1) >= subclassLevel(className, edition) ? chosen : chosen;
+}
+
+function prebuildAsiCount(className, level) {
+  const baseLevels = [4, 8, 12, 16, 19];
+  let count = baseLevels.filter(unlock => level >= unlock).length;
+  if (className === "Fighter") count += [6, 14].filter(unlock => level >= unlock).length;
+  if (className === "Rogue" && level >= 10) count += 1;
+  return count;
+}
+
+function prebuildAsiBonuses(className, level, baseAbilities, originBonuses) {
+  const profile = QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter;
+  const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
+  let points = prebuildAsiCount(className, Number(level || 1)) * 2;
+  const order = [...profile.abilities, ...ABILITIES].filter((ability, index, list) => list.indexOf(ability) === index);
+  while (points > 0) {
+    const target = order.find(ability =>
+      Number(baseAbilities[ability] || 10) + Number(originBonuses[ability] || 0) + Number(bonuses[ability] || 0) < 20
+    );
+    if (!target) break;
+    bonuses[target] += 1;
+    points -= 1;
+  }
+  return bonuses;
+}
+
+function prebuildSubclassChoices(subclass, level) {
+  const choices = {};
+  (SUBCLASS_CHOICE_RULES[subclass] || []).forEach(choice => {
+    if (Number(level || 1) < Number(choice.level || 1)) return;
+    if (choice.editions && !choice.editions.includes(edition)) return;
+    if (choice.options?.length) choices[choice.key] = choice.options[0];
+  });
+  return choices;
+}
+
+function prebuildClassChoices(className, level, profile) {
+  return {
+    weaponMastery: (profile.masteries || []).slice(0, weaponMasteryCount(className, level, edition)),
+    fightingStyle: ["Fighter", "Paladin", "Ranger"].includes(className) && level >= (className === "Fighter" ? 1 : 2) ? profile.fightingStyle || "Defense" : "",
+    fightingStyles: [],
+    divineOrder: edition === "2024" && className === "Cleric" ? "Protector" : "",
+    primalOrder: edition === "2024" && className === "Druid" ? "Magician" : "",
+    blessedStrikes: edition === "2024" && className === "Cleric" && level >= 7 ? "Divine Strike" : "",
+    elementalFury: edition === "2024" && className === "Druid" && level >= 7 ? "Potent Spellcasting" : "",
+    invocations: className === "Warlock"
+      ? ["Agonizing Blast", "Eldritch Mind", "Repelling Blast", "Pact of the Tome", "Fiendish Vigor"].slice(0, Object.entries(LEVEL_CHOICE_RULES[edition]?.Warlock?.invocations || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0))
+      : [],
+    metamagic: className === "Sorcerer"
+      ? ["Careful Spell", "Quickened Spell", "Twinned Spell", "Subtle Spell", "Empowered Spell"].slice(0, Object.entries(LEVEL_CHOICE_RULES[edition]?.Sorcerer?.metamagic || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0))
+      : []
+  };
+}
+
+function prebuildSpellChoices(className, level, subclass, characterData) {
+  const lists = spellListsFor(edition, className, subclass) || {};
+  const profile = QUICK_BUILD_PROFILES[className] || {};
+  const allowed = maxSpellLevel(className, level, edition, subclass);
+  const cantripLimit = cantripLimitFor(className, level, edition, subclass);
+  const spellLimit = spellLimitFor(className, level, edition, subclass, characterData);
+  const chosen = [];
+  const addUnique = (name, spellLevel) => {
+    if (!name || chosen.some(spell => spell.name === name)) return;
+    chosen.push({ name, level: Number(spellLevel) });
+  };
+  const cantrips = lists[0] || [];
+  const preferredCantrips = (profile.spells || []).filter(name => cantrips.includes(name));
+  [...preferredCantrips, ...cantrips].slice(0, Math.max(0, cantripLimit)).forEach(name => addUnique(name, 0));
+  const leveledPool = [];
+  for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
+    (lists[spellLevel] || []).forEach(name => leveledPool.push({ name, level: spellLevel }));
+  }
+  const preferred = (profile.spells || [])
+    .map(name => leveledPool.find(spell => spell.name === name))
+    .filter(Boolean);
+  [...preferred, ...leveledPool].forEach(spell => {
+    if (chosen.filter(item => item.level > 0).length < Math.max(0, spellLimit)) addUnique(spell.name, spell.level);
+  });
+  return chosen;
+}
+
+function prebuildProgressionHistory(className, subclass, level) {
+  const classRows = (CLASS_FEATURES[edition]?.[className] || [])
+    .filter(([featureLevel]) => featureLevel <= level)
+    .map(([featureLevel, name]) => ({ level: featureLevel, choices: {}, features: [`${className}: ${name}`], summary: `${className} feature gained.` }));
+  const subclassRows = subclass ? resolvedSubclassFeatures(edition, className, subclass)
+    .filter(([featureLevel]) => featureLevel <= level)
+    .map(([featureLevel, name]) => ({ level: featureLevel, choices: {}, features: [`${subclass}: ${name}`], summary: `${subclass} feature gained.` })) : [];
+  return [...classRows, ...subclassRows].sort((a, b) => a.level - b.level);
+}
+
 function quickSelections() {
   const profile = QUICK_BUILD_PROFILES[quickClass];
   const species = $("#quick-species")?.value || (edition === "2024" ? "Human" : "Human");
   const background = $("#quick-background")?.value || profile.backgrounds[edition];
-  return { profile, species, background };
+  const level = Math.max(1, Math.min(20, Number($("#quick-level")?.value || 1)));
+  if ($("#quick-level")) $("#quick-level").value = level;
+  return { profile, species, background, level };
 }
 
-function buildQuickCharacter(preview = false) {
-  const { profile, species, background } = quickSelections();
-  const baseAbilities = quickAbilityScores(quickClass);
-  const origin = quickOrigin(quickClass, species, background);
-  const skills = quickSkillChoices(quickClass, background);
-  const subclass = quickDefaultSubclass(quickClass);
+function prebuildSelections() {
+  const className = $("#prebuild-class")?.value || prebuildClass || "Fighter";
+  const profile = QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter;
+  const level = Math.max(1, Math.min(20, Number($("#prebuild-level")?.value || 1)));
+  const subclass = $("#prebuild-subclass")?.value || prebuildSubclass || defaultSubclassFor(className, level);
+  const species = $("#prebuild-species")?.value || "Human";
+  const background = $("#prebuild-background")?.value || profile.backgrounds[edition] || "Soldier";
+  return { className, profile, level, subclass, species, background };
+}
+
+function buildPrebuiltCharacter(preview = false) {
+  const { className, profile, level, subclass, species, background } = prebuildSelections();
+  const baseAbilities = quickAbilityScores(className);
+  const origin = quickOrigin(className, species, background);
+  const asiBonuses = prebuildAsiBonuses(className, level, baseAbilities, origin.originBonuses);
   const finalAbilities = Object.fromEntries(ABILITIES.map(ability => [
     ability,
-    Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0)
+    Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0) + Number(asiBonuses[ability] || 0)
   ]));
-  const masteryCount = weaponMasteryCount(quickClass, 1, edition);
-  const spells = quickSpellChoices(quickClass);
+  const skills = quickSkillChoices(className, background);
   const feats = origin.originFeat ? [origin.originFeat] : [];
+  const classChoices = prebuildClassChoices(className, level, profile);
+  const subclassChoices = prebuildSubclassChoices(subclass, level);
+  const spellSeed = { className, level, edition, subclass, ...finalAbilities };
   const character = {
-    id: preview ? "quick-preview" : crypto.randomUUID(),
-    name: $("#quick-name")?.value.trim() || generateQuickName(false),
-    player: $("#quick-player")?.value.trim() || "",
+    id: preview ? "prebuild-preview" : crypto.randomUUID(),
+    name: $("#prebuild-name")?.value.trim() || generateQuickName(false),
+    player: $("#prebuild-player")?.value.trim() || "",
     pronouns: "",
-    level: 1,
+    level,
     edition,
     species,
     background,
     alignment: "Unaligned",
     campaign: "",
-    className: quickClass,
+    className,
     subclass,
     customSubclass: "",
-    classes: [{ name: quickClass, level: 1, subclass, customSubclass: "", subclassChoices: {} }],
+    classes: [{ name: className, level, subclass, customSubclass: "", subclassChoices }],
     ...finalAbilities,
     baseAbilities,
     originBonuses: origin.originBonuses,
@@ -2198,29 +2341,172 @@ function buildQuickCharacter(preview = false) {
     featAbilityChoices: {},
     featBonuses: Object.fromEntries(ABILITIES.map(ability => [ability, 0])),
     asi: {},
-    asiBonuses: Object.fromEntries(ABILITIES.map(ability => [ability, 0])),
+    asiBonuses,
     skillProficiencies: skills.skillProficiencies,
     backgroundSkills: skills.backgroundSkills,
     expertise: skills.expertise,
-    weaponMastery: (profile.masteries || []).slice(0, masteryCount),
-    fightingStyle: quickClass === "Fighter" ? profile.fightingStyle || "Defense" : "",
-    fightingStyles: [],
-    divineOrder: edition === "2024" && quickClass === "Cleric" ? "Protector" : "",
-    primalOrder: edition === "2024" && quickClass === "Druid" ? "Magician" : "",
-    invocations: edition === "2024" && quickClass === "Warlock" ? ["Pact of the Tome"] : [],
-    subclassChoices: subclass === "Draconic Bloodline" ? { draconicAncestry: "Fire" } : {},
+    weaponMastery: classChoices.weaponMastery,
+    fightingStyle: classChoices.fightingStyle,
+    fightingStyles: classChoices.fightingStyles,
+    divineOrder: classChoices.divineOrder,
+    primalOrder: classChoices.primalOrder,
+    blessedStrikes: classChoices.blessedStrikes,
+    elementalFury: classChoices.elementalFury,
+    invocations: classChoices.invocations,
+    metamagic: classChoices.metamagic,
+    subclassChoices,
+    spells: prebuildSpellChoices(className, level, subclass, spellSeed),
+    customSpells: "",
+    customFeats: "",
+    inventory: quickInventory(className),
+    currency: { cp: 0, sp: 0, ep: 0, gp: 10 + Math.max(0, level - 1) * 5, pp: 0 },
+    portrait: "",
+    backstory: `${profile.tagline} This custom prebuild was generated at level ${level} with solid default choices. Everything remains editable from the sheet and level-up tools.`,
+    acOverride: "",
+    hpOverride: "",
+    resourceUsage: {},
+    conditions: [],
+    progressionHistory: prebuildProgressionHistory(className, subclass, level),
+    prebuilt: true,
+    quickBuilt: true,
+    updatedAt: Date.now()
+  };
+  character.currentHp = derived(character).hp;
+  return character;
+}
+
+function renderPrebuildOptions(resetBackground = false) {
+  const classSelect = $("#prebuild-class");
+  const subclassSelect = $("#prebuild-subclass");
+  const speciesSelect = $("#prebuild-species");
+  const backgroundSelect = $("#prebuild-background");
+  if (!classSelect || !subclassSelect || !speciesSelect || !backgroundSelect) return;
+  const priorClass = classSelect.value || prebuildClass;
+  classSelect.innerHTML = Object.keys(RULES.classes).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  prebuildClass = RULES.classes[priorClass] ? priorClass : prebuildClass;
+  classSelect.value = prebuildClass;
+  const level = Math.max(1, Math.min(20, Number($("#prebuild-level")?.value || 3)));
+  $("#prebuild-level").value = level;
+  const subclassOptions = subclassEntries(prebuildClass, edition);
+  const defaultSubclass = defaultSubclassFor(prebuildClass, level);
+  subclassSelect.innerHTML = subclassOptions.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)} - ${escapeHtml(item.source)}</option>`).join("") || `<option value="">No subclass</option>`;
+  if (!subclassOptions.some(item => item.name === prebuildSubclass)) prebuildSubclass = defaultSubclass;
+  subclassSelect.value = subclassOptions.some(item => item.name === prebuildSubclass) ? prebuildSubclass : subclassOptions[0]?.name || "";
+  const unlock = subclassLevel(prebuildClass, edition);
+  $("#prebuild-subclass-note").textContent = level >= unlock
+    ? `${prebuildSubclass || subclassSelect.value || "Subclass"} features are active at this level.`
+    : `This class activates subclass features at level ${unlock}; the choice is saved as the planned path.`;
+  const speciesValue = speciesSelect.value || "Human";
+  const species = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]);
+  speciesSelect.innerHTML = species.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
+  speciesSelect.value = species.some(item => item.name === speciesValue) ? speciesValue : "Human";
+  const profile = QUICK_BUILD_PROFILES[prebuildClass] || QUICK_BUILD_PROFILES.Fighter;
+  const preferredBackground = profile.backgrounds[edition] || "Soldier";
+  const backgroundValue = resetBackground ? preferredBackground : backgroundSelect.value || preferredBackground;
+  const backgrounds = customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]);
+  backgroundSelect.innerHTML = backgrounds.map(item =>
+    `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.name === preferredBackground ? " - recommended" : ""}</option>`
+  ).join("");
+  backgroundSelect.value = backgrounds.some(item => item.name === backgroundValue) ? backgroundValue : backgrounds[0]?.name || "";
+  renderPrebuildSummary();
+}
+
+function renderPrebuildSummary() {
+  const summary = $("#prebuild-summary");
+  if (!summary || !$("#prebuild-class")?.value) return;
+  const character = buildPrebuiltCharacter(true);
+  const stats = derived(character);
+  const primary = QUICK_BUILD_PROFILES[character.className]?.abilities?.[0] || "STR";
+  const spellNames = character.spells.map(spell => spell.name);
+  const featureCount = (CLASS_FEATURES[edition]?.[character.className] || []).filter(([level]) => level <= character.level).length
+    + (character.subclass ? resolvedSubclassFeatures(edition, character.className, character.subclass).filter(([level]) => level <= character.level).length : 0);
+  summary.innerHTML = `
+    <div class="quick-summary-title"><span>${RULES.classes[character.className]?.icon || "PB"}</span><div><small>LEVEL ${character.level} ${edition === "2024" ? "5.5e" : "5e"} PREBUILD</small><h3>${escapeHtml(character.species)} ${escapeHtml(character.subclass || character.className)}</h3><p>${escapeHtml(character.background)} background</p></div></div>
+    <div class="quick-summary-stats">
+      <span><small>AC</small><strong>${stats.ac}</strong></span>
+      <span><small>HP</small><strong>${stats.hp}</strong></span>
+      <span><small>${primary}</small><strong>${character[primary]}</strong></span>
+    </div>
+    <div class="quick-summary-section"><strong>Ability scores</strong><p>${ABILITIES.map(ability => `${ability} ${character[ability]}`).join(" &middot; ")}</p></div>
+    <div class="quick-summary-section"><strong>Core proficiencies</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
+    ${character.weaponMastery?.length ? `<div class="quick-summary-section"><strong>Weapon masteries</strong><p>${escapeHtml(character.weaponMastery.join(", "))}</p></div>` : ""}
+    ${character.fightingStyle ? `<div class="quick-summary-section"><strong>Fighting style</strong><p>${escapeHtml(character.fightingStyle)}</p></div>` : ""}
+    ${spellNames.length ? `<div class="quick-summary-section"><strong>Spells selected</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p></div>` : ""}
+    <div class="quick-summary-section"><strong>Features ready</strong><p>${featureCount} class/subclass feature${featureCount === 1 ? "" : "s"} will appear on the sheet for level ${character.level}.</p></div>
+    <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 7).map(item => `${item.quantity > 1 ? `${item.quantity}x ` : ""}${item.name}`).join(", ")}</p></div>
+    <p class="quick-summary-note">Generated choices are solid defaults. You can edit spells, ASIs, items, and level-up details after creation.</p>`;
+}
+
+function buildQuickCharacter(preview = false) {
+  const { profile, species, background, level } = quickSelections();
+  const baseAbilities = quickAbilityScores(quickClass);
+  const origin = quickOrigin(quickClass, species, background);
+  const asiBonuses = prebuildAsiBonuses(quickClass, level, baseAbilities, origin.originBonuses);
+  const skills = quickSkillChoices(quickClass, background);
+  const subclass = defaultSubclassFor(quickClass, level);
+  const subclassChoices = prebuildSubclassChoices(subclass, level);
+  const finalAbilities = Object.fromEntries(ABILITIES.map(ability => [
+    ability,
+    Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0) + Number(asiBonuses[ability] || 0)
+  ]));
+  const classChoices = prebuildClassChoices(quickClass, level, profile);
+  const spellSeed = { className: quickClass, level, edition, subclass, ...finalAbilities };
+  const spells = prebuildSpellChoices(quickClass, level, subclass, spellSeed);
+  const feats = origin.originFeat ? [origin.originFeat] : [];
+  const character = {
+    id: preview ? "quick-preview" : crypto.randomUUID(),
+    name: $("#quick-name")?.value.trim() || generateQuickName(false),
+    player: $("#quick-player")?.value.trim() || "",
+    pronouns: "",
+    level,
+    edition,
+    species,
+    background,
+    alignment: "Unaligned",
+    campaign: "",
+    className: quickClass,
+    subclass,
+    customSubclass: "",
+    classes: [{ name: quickClass, level, subclass, customSubclass: "", subclassChoices }],
+    ...finalAbilities,
+    baseAbilities,
+    originBonuses: origin.originBonuses,
+    originFeat: origin.originFeat,
+    originFeatChoice: origin.originFeatChoice,
+    speciesVariant: origin.speciesVariant || "",
+    backgroundAbilityMode: origin.backgroundAbilityMode || "",
+    backgroundPrimary: origin.backgroundPrimary || "",
+    backgroundSecondary: origin.backgroundSecondary || "",
+    feats,
+    featAbilityChoices: {},
+    featBonuses: Object.fromEntries(ABILITIES.map(ability => [ability, 0])),
+    asi: {},
+    asiBonuses,
+    skillProficiencies: skills.skillProficiencies,
+    backgroundSkills: skills.backgroundSkills,
+    expertise: skills.expertise,
+    weaponMastery: classChoices.weaponMastery,
+    fightingStyle: classChoices.fightingStyle,
+    fightingStyles: classChoices.fightingStyles,
+    divineOrder: classChoices.divineOrder,
+    primalOrder: classChoices.primalOrder,
+    blessedStrikes: classChoices.blessedStrikes,
+    elementalFury: classChoices.elementalFury,
+    invocations: classChoices.invocations,
+    metamagic: classChoices.metamagic,
+    subclassChoices,
     spells,
     customSpells: "",
     customFeats: "",
     inventory: quickInventory(quickClass),
     currency: { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 },
     portrait: "",
-    backstory: `${profile.tagline} This quick-build character is ready to play and can be fully customized from the character sheet.`,
+    backstory: `${profile.tagline} This quick-build character was generated at level ${level} with smart defaults and can be fully customized from the character sheet.`,
     acOverride: "",
     hpOverride: "",
     resourceUsage: {},
     conditions: [],
-    progressionHistory: [],
+    progressionHistory: prebuildProgressionHistory(quickClass, subclass, level),
     quickBuilt: true,
     updatedAt: Date.now()
   };
@@ -2267,8 +2553,10 @@ function renderQuickSummary() {
   const character = buildQuickCharacter(true);
   const stats = derived(character);
   const spellNames = character.spells.map(spell => spell.name);
+  const featureCount = (CLASS_FEATURES[edition]?.[quickClass] || []).filter(([level]) => level <= character.level).length
+    + (character.subclass ? resolvedSubclassFeatures(edition, quickClass, character.subclass).filter(([level]) => level <= character.level).length : 0);
   summary.innerHTML = `
-    <div class="quick-summary-title"><span>${RULES.classes[quickClass].icon}</span><div><small>LEVEL 1 ${edition === "2024" ? "5.5e" : "5e"}</small><h3>${escapeHtml(character.species)} ${escapeHtml(quickClass)}</h3><p>${escapeHtml(character.background)} background</p></div></div>
+    <div class="quick-summary-title"><span>${RULES.classes[quickClass].icon}</span><div><small>LEVEL ${character.level} ${edition === "2024" ? "5.5e" : "5e"}</small><h3>${escapeHtml(character.species)} ${escapeHtml(character.subclass || quickClass)}</h3><p>${escapeHtml(character.background)} background</p></div></div>
     <div class="quick-summary-stats">
       <span><small>AC</small><strong>${stats.ac}</strong></span>
       <span><small>HP</small><strong>${stats.hp}</strong></span>
@@ -2276,7 +2564,10 @@ function renderQuickSummary() {
     </div>
     <div class="quick-summary-section"><strong>Automatic ability scores</strong><p>${ABILITIES.map(ability => `${ability} ${character[ability]}`).join(" · ")}</p></div>
     <div class="quick-summary-section"><strong>Trained skills</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
-    ${spellNames.length ? `<div class="quick-summary-section"><strong>Starting spells</strong><p>${escapeHtml(spellNames.join(", "))}</p></div>` : ""}
+    ${character.weaponMastery?.length ? `<div class="quick-summary-section"><strong>Weapon masteries</strong><p>${escapeHtml(character.weaponMastery.join(", "))}</p></div>` : ""}
+    ${character.fightingStyle ? `<div class="quick-summary-section"><strong>Fighting style</strong><p>${escapeHtml(character.fightingStyle)}</p></div>` : ""}
+    ${spellNames.length ? `<div class="quick-summary-section"><strong>Selected spells</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p></div>` : ""}
+    <div class="quick-summary-section"><strong>Features ready</strong><p>${featureCount} class/subclass feature${featureCount === 1 ? "" : "s"} will appear on the sheet for level ${character.level}.</p></div>
     <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 6).map(item => `${item.quantity > 1 ? `${item.quantity}× ` : ""}${item.name}`).join(", ")}</p></div>
     <p class="quick-summary-note">Every choice remains editable after creation.</p>`;
 }
@@ -2307,6 +2598,14 @@ function initializeQuickBuilder() {
   setQuickStep(1);
 }
 
+function initializePrebuildBuilder() {
+  prebuildClass = RULES.classes[prebuildClass] ? prebuildClass : "Fighter";
+  prebuildSubclass = defaultSubclassFor(prebuildClass, Number($("#prebuild-level")?.value || 3));
+  renderPrebuildOptions(true);
+  if (!$("#prebuild-name")?.value) $("#prebuild-name").value = generateQuickName(false);
+  renderPrebuildSummary();
+}
+
 function showCreationMethod(method) {
   if (method === "random") {
     initializeQuickBuilder();
@@ -2317,16 +2616,19 @@ function showCreationMethod(method) {
   const quick = method === "quick";
   const standard = method === "standard";
   const premade = method === "premade";
+  const prebuild = method === "prebuild";
   $("#creation-methods").classList.toggle("hidden", !choosing);
   $("#quick-builder").classList.toggle("hidden", !quick);
+  $("#prebuild-builder")?.classList.toggle("hidden", !prebuild);
   $("#premade-builder")?.classList.toggle("hidden", !premade);
   $("#standard-builder").classList.toggle("hidden", !standard);
-  $("#builder-eyebrow").textContent = choosing ? "CHARACTER CREATOR" : quick ? "BEGINNER QUICK BUILD" : premade ? "PREMADE HEROES" : "FULL CHARACTER CREATOR";
-  $("#builder-title").textContent = choosing ? "Build your adventurer" : quick ? "Create a hero in minutes" : premade ? "Claim a ready character" : "Build every detail";
+  $("#builder-eyebrow").textContent = choosing ? "CHARACTER CREATOR" : quick ? "BEGINNER QUICK BUILD" : prebuild ? "CUSTOM PREBUILD" : premade ? "PREMADE HEROES" : "FULL CHARACTER CREATOR";
+  $("#builder-title").textContent = choosing ? "Build your adventurer" : quick ? "Create a hero in minutes" : prebuild ? "Generate a leveled hero" : premade ? "Claim a ready character" : "Build every detail";
   $("#builder-description").textContent = choosing
     ? "Choose a fast guided build or take full control."
-    : quick ? "Level 1, smart defaults, and no rules expertise required." : premade ? "Pick a playable hero, then edit anything from the sheet." : "Every choice updates your sheet as you go.";
+    : quick ? "Pick a starting level, smart defaults, and no rules expertise required." : prebuild ? "Pick the core concept and let DND Beyonder create a solid playable sheet." : premade ? "Pick a playable hero, then edit anything from the sheet." : "Every choice updates your sheet as you go.";
   if (quick) initializeQuickBuilder();
+  if (prebuild) initializePrebuildBuilder();
   if (premade) renderPremadeHeroes();
   if (standard) setStep(currentStep);
 }
@@ -2368,17 +2670,51 @@ function createQuickCharacter() {
   toast(`${character.name} is ready to adventure`);
 }
 
+function createPrebuiltCharacter() {
+  const character = buildPrebuiltCharacter();
+  if (!character.name.trim()) {
+    $("#prebuild-name")?.focus();
+    toast("Give your prebuilt hero a name");
+    return;
+  }
+  clearCharacterDeletion(character.id);
+  characters.unshift(character);
+  activeCharacterId = character.id;
+  persistCharacters();
+  renderCards();
+  renderSheet();
+  navigate("sheet");
+  toast(`${character.name} is ready at level ${character.level}`);
+}
+
+function surprisePrebuild() {
+  const classes = Object.keys(RULES.classes);
+  prebuildClass = classes[Math.floor(Math.random() * classes.length)] || "Fighter";
+  const level = 1 + Math.floor(Math.random() * 20);
+  if ($("#prebuild-level")) $("#prebuild-level").value = level;
+  prebuildSubclass = defaultSubclassFor(prebuildClass, level);
+  renderPrebuildOptions(true);
+  const speciesOptions = [...($("#prebuild-species")?.options || [])];
+  if (speciesOptions.length) $("#prebuild-species").value = speciesOptions[Math.floor(Math.random() * speciesOptions.length)].value;
+  if ($("#prebuild-name")) $("#prebuild-name").value = generateQuickName(false);
+  if ($("#prebuild-player")) $("#prebuild-player").value = "";
+  renderPrebuildSummary();
+}
+
 function buildPremadeCharacter(hero, preview = false) {
   if (!hero) return null;
   const previousQuickClass = quickClass;
+  const previousQuickLevel = $("#quick-level")?.value || "1";
   quickClass = hero.className;
   renderQuickOrigin(true);
   if ($("#quick-species")) $("#quick-species").value = hero.species;
   if ($("#quick-background")) $("#quick-background").value = hero.background;
+  if ($("#quick-level")) $("#quick-level").value = Math.max(1, Math.min(20, Number(hero.level || 1)));
   if ($("#quick-name")) $("#quick-name").value = hero.name;
   if ($("#quick-player")) $("#quick-player").value = "";
   const character = buildQuickCharacter(preview);
   quickClass = previousQuickClass;
+  if ($("#quick-level")) $("#quick-level").value = previousQuickLevel;
   character.id = preview ? `premade-${hero.key}` : crypto.randomUUID();
   character.name = hero.name;
   character.level = Number(hero.level || 1);
@@ -2428,6 +2764,7 @@ function createRandomCharacter() {
   const classNames = Object.keys(RULES.classes);
   quickClass = classNames[Math.floor(Math.random() * classNames.length)] || "Fighter";
   renderQuickOrigin(true);
+  if ($("#quick-level")) $("#quick-level").value = 1;
   const speciesOptions = [...($("#quick-species")?.options || [])];
   const backgroundOptions = [...($("#quick-background")?.options || [])];
   if (speciesOptions.length) $("#quick-species").value = speciesOptions[Math.floor(Math.random() * speciesOptions.length)].value;
@@ -3904,15 +4241,24 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label>Rows<input name="rows" type="number" min="4" max="80" value="16"></label>
         <label>Grid size<input name="gridSize" type="number" min="28" max="72" value="44"></label>
       </div>
+      <label class="map-grid-toggle"><input name="gridEnabled" type="checkbox" checked><span><strong>Show tactical grid</strong><small>Turn this off for theater maps, city art, or free-position scenes.</small></span></label>
       <label>Image URL<input name="background" placeholder="Paste a map image URL, or upload below"></label>
       <label>Upload map image<input type="file" accept="image/*" data-campaign-map-upload><small class="field-hint" data-map-upload-status>No image selected</small></label>
       <button class="button primary small" type="submit">Create map</button>
     </form>
   </details>` : "";
   if (!activeMap) {
-    return `<section class="campaign-panel campaign-map-panel">
-      <div class="campaign-panel-head">
-        <div><h3>Encounter maps</h3><p>${isDm ? "Create a grid map, upload art, and place party tokens." : "The DM has not shared a battle map yet."}</p></div>
+    return `<section class="campaign-panel campaign-map-panel campaign-map-room">
+      <div class="campaign-map-hero">
+        <div>
+          <span class="eyebrow">MAP ROOM</span>
+          <h3>Encounter maps</h3>
+          <p>${isDm ? "Create a grid map, upload art, and place party tokens." : "The DM has not shared a battle map yet."}</p>
+        </div>
+        <div class="campaign-map-status">
+          <strong>Draft</strong>
+          <small>No active map</small>
+        </div>
       </div>
       ${createForm || "<p>No active battle map yet.</p>"}
     </section>`;
@@ -3922,8 +4268,9 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const playerCanSeeMap = isDm || sessionState === "live";
   const allTiles = [...BUILT_IN_MAP_TILES, ...data.customTiles];
   if (!allTiles.some(tile => tile.id === selectedMapTile)) selectedMapTile = allTiles[0]?.id || "stone-floor";
+  const sessionLabel = sessionState === "live" ? "Live" : sessionState === "paused" ? "Paused" : sessionState === "ended" ? "Ended" : "Draft";
   const sessionControls = isDm ? `<div class="map-session-controls">
-    <span class="tag">${sessionState === "live" ? "Live" : sessionState === "paused" ? "Paused" : sessionState === "ended" ? "Ended" : "Draft"}</span>
+    <span class="tag">${sessionLabel}</span>
     <button type="button" data-map-session="live" data-map-id="${escapeHtml(activeMap.id)}">${sessionState === "live" ? "Restart" : "Start"} session</button>
     <button type="button" data-map-session="paused" data-map-id="${escapeHtml(activeMap.id)}" ${sessionState === "live" ? "" : "disabled"}>Pause</button>
     <button type="button" data-map-session="ended" data-map-id="${escapeHtml(activeMap.id)}">End</button>
@@ -3974,7 +4321,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       <button type="button" class="map-token-pick" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"}>
         <span class="map-token-avatar" style="--token:${escapeHtml(token.color)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</span>
         <strong>${escapeHtml(label)}</strong>
-        <small>${isDm ? hiddenText : canMove ? "Click, then choose a square" : "DM controlled"}</small>
+        <small>${isDm ? hiddenText : canMove ? data.gridEnabled ? "Click, then choose a square" : "Click, then choose a spot" : "DM controlled"}</small>
       </button>
       <div class="map-token-size-row">
         <small>Token size: ${size}x${size}</small>
@@ -4016,6 +4363,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label>Rows<input name="rows" type="number" min="4" max="80" value="${data.rows}"></label>
         <label>Grid size<input name="gridSize" type="number" min="28" max="72" value="${data.gridSize}"></label>
       </div>
+      <label class="map-grid-toggle"><input name="gridEnabled" type="checkbox" ${data.gridEnabled ? "checked" : ""}><span><strong>Show tactical grid</strong><small>${data.gridEnabled ? "Grid lines are visible and token movement snaps to squares." : "Grid lines are hidden and token movement uses free positioning."}</small></span></label>
       <label>Image URL<input name="background" value="${escapeHtml(data.background)}"></label>
       <label>Replace uploaded image<input type="file" accept="image/*" data-campaign-map-upload><small class="field-hint" data-map-upload-status>No new image selected</small></label>
       <div class="map-control-row">
@@ -4024,12 +4372,23 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       </div>
     </form>
   </details>` : "";
-  return `<section class="campaign-panel campaign-map-panel">
-    <div class="campaign-panel-head">
-      <div><h3>Encounter maps</h3><p>${isDm ? "Run a gridded battle map, control visibility, and manage a live table view." : "When the DM starts the session, select your token and click a square to move it."}</p></div>
+  return `<section class="campaign-panel campaign-map-panel campaign-map-room">
+    <div class="campaign-map-hero">
+      <div>
+        <span class="eyebrow">MAP ROOM</span>
+        <h3>${escapeHtml(activeMap.name)}</h3>
+        <p>${isDm ? "Run the table from a dark tactical workspace: start the session, control fog, place tokens, ping, measure, and track play." : "The live table appears here when the DM starts the session. You can move tokens connected to your own character."}</p>
+      </div>
+      <div class="campaign-map-status">
+        <span class="map-live-dot ${sessionState === "live" ? "live" : ""}"></span>
+        <strong>${escapeHtml(sessionLabel)}</strong>
+        <small>${data.columns} x ${data.rows} ${data.gridEnabled ? "grid" : "free map"} &middot; ${data.tokens.length} token${data.tokens.length === 1 ? "" : "s"}</small>
+      </div>
+    </div>
+    <div class="map-room-command-bar">
+      <div class="campaign-map-tabs">${mapTabs}</div>
       ${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}
     </div>
-    <div class="campaign-map-tabs">${mapTabs}</div>
     ${sessionControls}
     ${createForm}
     ${settingsForm}
@@ -4039,10 +4398,10 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace">
       <aside class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</aside>
       <div class="battle-map-shell">
-        <div class="battle-map-board" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;">
+        <div class="battle-map-board ${data.gridEnabled ? "" : "gridless"}" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;">
           ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : `<div class="battle-map-empty">No map art uploaded</div>`}
           <div class="battle-map-tiles">${paintedTiles}</div>
-          <div class="battle-map-grid" aria-hidden="true"></div>
+          ${data.gridEnabled ? `<div class="battle-map-grid" aria-hidden="true"></div>` : ""}
           <div class="battle-map-fog ${isDm ? "dm-fog" : ""}" aria-hidden="true">${fogCells}</div>
           ${tokenButtons}
           <div class="battle-map-pings" aria-hidden="true">${pings}</div>
@@ -4057,7 +4416,7 @@ function renderCampaignWorkbench(campaign, isDm, visibleLinks, allLinks, maps) {
   const totalShared = allLinks.length;
   const mapCount = maps.length;
   if (isDm) {
-    return `<section class="campaign-workbench dm">
+    return `<section class="campaign-workbench dm campaign-command-grid">
       <article>
         <small>DM Control</small>
         <strong>${totalShared} shared sheet${totalShared === 1 ? "" : "s"}</strong>
@@ -4071,14 +4430,14 @@ function renderCampaignWorkbench(campaign, isDm, visibleLinks, allLinks, maps) {
         <button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button>
       </article>
       <article>
-        <small>Encounter</small>
+        <small>Live Table</small>
         <strong>${mapCount} map${mapCount === 1 ? "" : "s"}</strong>
         <p>Create a battle map, add party tokens, paint tiles, and run movement from one screen.</p>
         <button type="button" class="button ghost small" data-campaign-focus="maps">Open maps</button>
       </article>
     </section>`;
   }
-  return `<section class="campaign-workbench player">
+  return `<section class="campaign-workbench player campaign-command-grid">
     <article>
       <small>Your Access</small>
       <strong>${sharedCount} shared sheet${sharedCount === 1 ? "" : "s"}</strong>
@@ -4204,6 +4563,9 @@ function renderCampaigns() {
   const mapPanel = renderCampaignMapPanel(campaign, linkedCharacters, isDm);
   const workbench = renderCampaignWorkbench(campaign, isDm, links, allLinks, campaignMapsForView);
   const gameLogPanel = renderCampaignGameLog(campaign.id, isDm);
+  const liveMap = campaignMapsForView.map(map => ({ map, data: normalizeMapData(map.data) })).find(entry => entry.data.session.state === "live");
+  const campaignStatus = liveMap ? `Live map: ${liveMap.map.name}` : campaignMapsForView.length ? `${campaignMapsForView.length} map${campaignMapsForView.length === 1 ? "" : "s"} ready` : "No map yet";
+  const sharedSummary = `${allLinks.length} shared sheet${allLinks.length === 1 ? "" : "s"}`;
   const characterRows = linkedCharacters.map(({ link, character, ownerLabel }) => {
     const canOpen = Boolean(character);
     const canRemove = isDm || link.owner_user_id === cloudUser.id;
@@ -4216,18 +4578,26 @@ function renderCampaigns() {
     </div>`;
   }).join("");
   $("#campaign-detail").innerHTML = `
-    <div class="campaign-detail-head">
+    <div class="campaign-detail-head campaign-hero-panel ${isDm ? "dm" : "player"}">
       <div>
         <span class="eyebrow">${isDm ? "DM VIEW" : "PLAYER VIEW"}</span>
         <h2>${escapeHtml(campaign.name)}</h2>
         <p>${escapeHtml(campaign.description || "No campaign notes yet.")}</p>
+        <div class="campaign-hero-meta">
+          <span>${escapeHtml(sharedSummary)}</span>
+          <span>${members.length} member${members.length === 1 ? "" : "s"}</span>
+          <span>${escapeHtml(campaignStatus)}</span>
+        </div>
       </div>
-      ${isDm ? `<div class="campaign-dm-actions"><div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">Copy invite</button></div><button type="button" class="button primary small" data-campaign-roll-party="${escapeHtml(campaign.id)}">Roll party initiative</button>${isOwner ? `<button type="button" class="button ghost small danger-button" data-campaign-delete="${escapeHtml(campaign.id)}">Delete campaign</button>` : ""}</div>` : ""}
+      <div class="campaign-dm-actions">
+        <div class="invite-code"><span>${escapeHtml(campaign.invite_code)}</span><button type="button" class="button ghost small" data-copy-invite="${escapeHtml(campaign.invite_code)}">${isDm ? "Copy invite" : "Copy code"}</button></div>
+        ${isDm ? `<button type="button" class="button primary small" data-campaign-roll-party="${escapeHtml(campaign.id)}">Roll party initiative</button>${isOwner ? `<button type="button" class="button ghost small danger-button" data-campaign-delete="${escapeHtml(campaign.id)}">Delete campaign</button>` : ""}` : `<button type="button" class="button primary small" data-campaign-focus="share">Share a character</button>`}
+      </div>
     </div>
     ${workbench}
     <section class="campaign-panel campaign-party-panel">
       <div class="campaign-panel-head">
-        <div><h3>${isDm ? "DM table" : "Party sheets"}</h3><p>${isDm ? "Open sheets, roll checks, adjust HP, rest, and manage equipment from one screen." : "Open the sheets shared with this campaign."}</p></div>
+        <div><span class="eyebrow">PARTY ROSTER</span><h3>${isDm ? "DM table" : "Your campaign sheets"}</h3><p>${isDm ? "Open sheets, roll checks, adjust HP, rest, and manage equipment from one screen." : "Open the sheets you have shared with this campaign."}</p></div>
       </div>
       <div class="campaign-party-grid">${partyCards || "<p>No shared character sheets yet.</p>"}</div>
     </section>
@@ -5608,6 +5978,19 @@ function initEvents() {
       createPremadeCharacter(premadeCreate.dataset.premadeCreate);
       return;
     }
+    if (event.target.closest("#prebuild-create")) {
+      createPrebuiltCharacter();
+      return;
+    }
+    if (event.target.closest("#prebuild-surprise")) {
+      surprisePrebuild();
+      return;
+    }
+    if (event.target.closest("#prebuild-name-generator")) {
+      if ($("#prebuild-name")) $("#prebuild-name").value = generateQuickName(false);
+      renderPrebuildSummary();
+      return;
+    }
     const helpChipEl = event.target.closest(".help-chip");
     if (helpChipEl) { event.preventDefault(); showHelpPopover(helpChipEl); return; }
     if (!event.target.closest(".help-popover")) hideHelpPopover();
@@ -5902,11 +6285,15 @@ function initEvents() {
       if (!map) return;
       const data = normalizeMapData(map.data);
       const rect = mapBoard.getBoundingClientRect();
-      const x = Math.floor((event.clientX - rect.left) / data.gridSize);
-      const y = Math.floor((event.clientY - rect.top) / data.gridSize);
-      if (canEditCampaign(map.campaign_id) && selectedMapTool === "paint") paintCampaignMapTile(map.id, selectedMapTile, x, y, "paint");
-      else if (canEditCampaign(map.campaign_id) && selectedMapTool === "erase") paintCampaignMapTile(map.id, selectedMapTile, x, y, "erase");
-      else if (canEditCampaign(map.campaign_id) && (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase")) updateCampaignFog(map.id, selectedMapTool, x, y);
+      const rawX = (event.clientX - rect.left) / data.gridSize;
+      const rawY = (event.clientY - rect.top) / data.gridSize;
+      const x = data.gridEnabled ? Math.floor(rawX) : rawX;
+      const y = data.gridEnabled ? Math.floor(rawY) : rawY;
+      const cellX = Math.floor(rawX);
+      const cellY = Math.floor(rawY);
+      if (canEditCampaign(map.campaign_id) && selectedMapTool === "paint") paintCampaignMapTile(map.id, selectedMapTile, cellX, cellY, "paint");
+      else if (canEditCampaign(map.campaign_id) && selectedMapTool === "erase") paintCampaignMapTile(map.id, selectedMapTile, cellX, cellY, "erase");
+      else if (canEditCampaign(map.campaign_id) && (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase")) updateCampaignFog(map.id, selectedMapTool, cellX, cellY);
       else if (selectedMapTool === "ping") addCampaignMapPing(map.id, x, y);
       else if (selectedMapTool === "ruler") {
         if (!selectedMapRulerStart) {
@@ -5958,6 +6345,23 @@ function initEvents() {
     }
     const sheetRoll = event.target.closest("[data-sheet-roll]");
     if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.rollMode || "normal"); return; }
+  });
+  document.addEventListener("change", event => {
+    const target = event.target.closest("#prebuild-class, #prebuild-subclass, #prebuild-species, #prebuild-background, #prebuild-level");
+    if (!target) return;
+    if (target.id === "prebuild-class") {
+      prebuildClass = target.value;
+      prebuildSubclass = defaultSubclassFor(prebuildClass, Number($("#prebuild-level")?.value || 1));
+      renderPrebuildOptions(true);
+      return;
+    }
+    if (target.id === "prebuild-subclass") prebuildSubclass = target.value;
+    if (target.id === "prebuild-level") renderPrebuildOptions(false);
+    else renderPrebuildSummary();
+  });
+  document.addEventListener("input", event => {
+    if (event.target.closest("#prebuild-name, #prebuild-player")) renderPrebuildSummary();
+    if (event.target.closest("#prebuild-level")) renderPrebuildOptions(false);
   });
   form.addEventListener("input", event => {
     if (ABILITIES.includes(event.target.name)) {
@@ -6213,6 +6617,7 @@ function initEvents() {
   $$(".edition-toggle button").forEach(button => button.addEventListener("click", () => {
     edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
     if (!$("#quick-builder").classList.contains("hidden")) initializeQuickBuilder();
+    if (!$("#prebuild-builder")?.classList.contains("hidden")) initializePrebuildBuilder();
     if (!$("#premade-builder")?.classList.contains("hidden")) renderPremadeHeroes();
   }));
   $("#quick-next").addEventListener("click", () => setQuickStep(quickStep + 1));
@@ -6222,6 +6627,8 @@ function initEvents() {
   $("#quick-create").addEventListener("click", createQuickCharacter);
   $("#quick-species").addEventListener("change", renderQuickOrigin);
   $("#quick-background").addEventListener("change", renderQuickOrigin);
+  $("#quick-level")?.addEventListener("input", renderQuickSummary);
+  $("#quick-level")?.addEventListener("change", renderQuickSummary);
   $("#quick-name").addEventListener("input", renderQuickSummary);
   form.addEventListener("submit", event => {
     event.preventDefault();
