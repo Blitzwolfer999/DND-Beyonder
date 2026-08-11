@@ -5132,13 +5132,6 @@ function renderSheet() {
         `<div class="sheet-spell"><strong>${escapeHtml(spell.name)}</strong><br><small>${spell.className ? `${escapeHtml(spell.className)} · ` : ""}${spell.level === 0 ? "Cantrip" : spell.level === "Custom" ? "Custom" : `Level ${spell.level}`}</small>${ruleDetails(spellDescription(spell.name, c.edition, EXPANDED_SPELL_SOURCES[c.edition]?.[spell.name] || ""))}</div>`
       ).join("") || "<p>No spells selected.</p>"}</div>
     </section>` : ""}
-    ${(c.progressionHistory || []).length ? `<section class="sheet-panel sheet-wide ${sectionClass("features")}">
-      <h2>Level-up history</h2>
-      <div class="feature-grid">${[...c.progressionHistory].reverse().map(entry => {
-        const choiceText = Object.entries(entry.choices || {}).map(([name, value]) => `${name}: ${Array.isArray(value) ? value.join(", ") : value}`).join(" · ");
-        return `<article class="feature-card"><small>LEVEL ${entry.level}</small><strong>${escapeHtml(entry.hpMethod || "Level gained")}</strong>${choiceText ? `<p>${escapeHtml(choiceText)}</p>` : ""}</article>`;
-      }).join("")}</div>
-    </section>` : ""}
   </div>`;
 }
 
@@ -5473,7 +5466,7 @@ function openLevelUp(id, targetClass = "") {
     ${levelCantripChoices(context, targetClassLevel)}
     ${levelSpellChoices(context, targetClassLevel)}
     ${mysticArcanumChoices(context, targetClassLevel)}
-    <div class="level-up-summary"><strong>Ready to advance?</strong><br>This saves a progression record and updates the character to level ${targetLevel}. Direct Edit remains available afterward.</div>`;
+    <div class="level-up-summary"><strong>Ready to advance?</strong><br>This updates the character to level ${targetLevel}. Direct Edit remains available afterward.</div>`;
   updateLevelFeatAbilityOptions(context);
   $("#level-up-modal").classList.remove("hidden");
 }
