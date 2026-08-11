@@ -1717,6 +1717,46 @@ function ruleDetails(description) {
   return `<details class="rule-detail"><summary>Read description</summary><p>${escapeHtml(cleanedDescription)}</p></details>`;
 }
 
+function spellLevelLabel(spell) {
+  if (spell.level === "Custom") return "Custom spell";
+  const level = Number(spell.level || 0);
+  return level === 0 ? "Cantrip" : `Level ${level}`;
+}
+
+function spellPreview(name, rulesEdition, source = "") {
+  const summary = contentSummary("spells", name);
+  if (summary) return summary;
+  const full = cleanRuleDescription(spellDescription(name, rulesEdition, source));
+  let body = full.replace(/^Level\s+\d+\s+[A-Za-z ]+\s+Casting Time:\s*/i, "Casting Time: ");
+  const durationIndex = body.indexOf("Duration:");
+  if (durationIndex >= 0) {
+    body = body.slice(durationIndex + "Duration:".length).trim();
+    body = body
+      .replace(/^Instantaneous\s+/, "")
+      .replace(/^Special\s+/, "")
+      .replace(/^Concentration,\s+up to\s+\d+\s+[a-z]+\s+/, "")
+      .replace(/^Up to\s+\d+\s+[a-z]+\s+/, "")
+      .replace(/^\d+\s+[a-z]+\s+/, "");
+  }
+  const sentence = body.match(/.*?[.!?](?:\s|$)/)?.[0]?.trim() || body.trim();
+  return sentence.length > 210 ? `${sentence.slice(0, 207).trim()}...` : sentence;
+}
+
+function renderSpellCard(spell, character) {
+  const source = EXPANDED_SPELL_SOURCES[character.edition]?.[spell.name] || "";
+  const classText = spell.className ? spell.className : "Character";
+  const fullDescription = spellDescription(spell.name, character.edition, source);
+  return `<article class="sheet-spell-card">
+    <div class="spell-card-head">
+      <div><small>${escapeHtml(spellLevelLabel(spell))}</small><strong>${escapeHtml(spell.name)}</strong></div>
+      <span>${escapeHtml(classText)}</span>
+    </div>
+    <p>${escapeHtml(spellPreview(spell.name, character.edition, source))}</p>
+    ${source ? `<em>${escapeHtml(source)}</em>` : ""}
+    ${ruleDetails(fullDescription)}
+  </article>`;
+}
+
 const OPEN_FEATURE_SUMMARIES = {
   "Ability Score Improvement / Feat": "Increase ability scores or choose an eligible feat, following the advancement rules for this level.",
   "Epic Boon": "Choose an Epic Boon feat for which the character qualifies.",
@@ -1956,6 +1996,127 @@ function setPortraitFromCanvas() {
 function speciesDescription(name) {
   return (typeof CONTENT_SUMMARIES !== "undefined" && CONTENT_SUMMARIES.species && CONTENT_SUMMARIES.species[name]) || "";
 }
+
+const SPECIES_TRAIT_SUMMARIES = {
+  Aarakocra: ["Flight", "Talons", "Wind Caller"],
+  Aasimar: ["Celestial Resistance", "Healing Hands", "Light Bearer"],
+  Autognome: ["Constructed Resilience", "Mechanical Nature", "Specialized Design"],
+  Boggart: ["Small and Sly", "Fey Mischief", "Scavenger's Knack"],
+  Bugbear: ["Long-Limbed", "Powerful Build", "Sneaky"],
+  Centaur: ["Charge", "Hooves", "Equine Build"],
+  Changeling: ["Shapechanger", "Changeling Instincts", "Unsettling Visage"],
+  Custom: ["Custom Traits", "Flexible Origin", "Table-Defined Features"],
+  Dara: ["Remembered Glyphs", "Tree-Born Nature", "Obojima Heritage"],
+  "Deep Gnome": ["Superior Darkvision", "Gnomish Cunning", "Svirfneblin Camouflage"],
+  Dhampir: ["Deathless Nature", "Spider Climb", "Vampiric Bite"],
+  Dragonborn: ["Breath Weapon", "Damage Resistance", "Draconic Ancestry"],
+  Duergar: ["Superior Darkvision", "Dwarven Resilience", "Duergar Magic"],
+  Dwarf: ["Darkvision", "Dwarven Resilience", "Dwarven Toughness"],
+  Eladrin: ["Fey Step", "Darkvision", "Keen Senses"],
+  Elf: ["Darkvision", "Fey Ancestry", "Trance"],
+  Faerie: ["Flight", "Fey Magic", "Small Stature"],
+  Fairy: ["Flight", "Fairy Magic", "Fey Creature"],
+  Firbolg: ["Firbolg Magic", "Hidden Step", "Powerful Build"],
+  Flamekin: ["Fire Resistance", "Living Flame", "Obojima Heritage"],
+  "Genasi (Air)": ["Unending Breath", "Lightning Resistance", "Mingle with the Wind"],
+  "Genasi (Earth)": ["Earth Walk", "Merge with Stone", "Sturdy Frame"],
+  "Genasi (Fire)": ["Darkvision", "Fire Resistance", "Reach to the Blaze"],
+  "Genasi (Water)": ["Amphibious", "Acid Resistance", "Swim Speed"],
+  Giff: ["Hippo Build", "Astral Spark", "Firearms Mastery"],
+  Githyanki: ["Astral Knowledge", "Githyanki Psionics", "Martial Prodigy"],
+  Githzerai: ["Mental Discipline", "Githzerai Psionics", "Psychic Resilience"],
+  Gnome: ["Darkvision", "Gnomish Cunning", "Small Stature"],
+  Goblin: ["Fury of the Small", "Nimble Escape", "Darkvision"],
+  Goliath: ["Giant Ancestry", "Powerful Build", "Mountain Born"],
+  Grung: ["Amphibious", "Poisonous Skin", "Standing Leap"],
+  Hadozee: ["Dexterous Feet", "Glide", "Hadozee Resilience"],
+  "Half-Elf": ["Darkvision", "Fey Ancestry", "Skill Versatility"],
+  "Half-Orc": ["Darkvision", "Relentless Endurance", "Savage Attacks"],
+  Halfling: ["Lucky", "Brave", "Halfling Nimbleness"],
+  Harengon: ["Hare-Trigger", "Leporine Senses", "Rabbit Hop"],
+  Hexblood: ["Eerie Token", "Hex Magic", "Fey-Touched Nature"],
+  Hobgoblin: ["Fey Gift", "Fortune from the Many", "Darkvision"],
+  Human: ["Resourceful", "Skillful", "Versatile"],
+  Kalashtar: ["Dual Mind", "Mind Link", "Psychic Resistance"],
+  Kender: ["Fearless", "Kender Aptitude", "Taunt"],
+  Kenku: ["Expert Duplication", "Kenku Recall", "Mimicry"],
+  Khoravar: ["Dual Heritage", "Skill Versatility", "Social Flexibility"],
+  Kobold: ["Draconic Cry", "Kobold Legacy", "Darkvision"],
+  Leonin: ["Daunting Roar", "Hunter's Instincts", "Claws"],
+  Locathah: ["Leviathan Will", "Limited Amphibiousness", "Natural Armor"],
+  "Lorwyn Changeling": ["Shapechanger", "Fey Nature", "Many Masks"],
+  Loxodon: ["Powerful Build", "Natural Armor", "Trunk"],
+  Lupin: ["Keen Smell", "Pack Instincts", "Loyal Companion"],
+  Lizardfolk: ["Bite", "Natural Armor", "Hungry Jaws"],
+  Minotaur: ["Horns", "Hammering Horns", "Labyrinthine Recall"],
+  Nakudama: ["Amphibious Spirit", "Community Storyteller", "Obojima Heritage"],
+  "Obojima Elf": ["Fey Ancestry", "Spirit-Touched Culture", "Obojima Heritage"],
+  Orc: ["Adrenaline Rush", "Darkvision", "Relentless Endurance"],
+  Owlin: ["Flight", "Darkvision", "Silent Feathers"],
+  Plasmoid: ["Amorphous", "Hold Breath", "Natural Resilience"],
+  Reborn: ["Deathless Nature", "Knowledge from a Past Life", "Sleepless"],
+  Rimekin: ["Cold Resistance", "Winter-Born", "Hardy Spirit"],
+  Satyr: ["Magic Resistance", "Mirthful Leaps", "Ram"],
+  "Sea Elf": ["Child of the Sea", "Friend of the Sea", "Trance"],
+  "Shadar-Kai": ["Blessing of the Raven Queen", "Necrotic Resistance", "Trance"],
+  Shifter: ["Shifting", "Bestial Instincts", "Darkvision"],
+  "Simic Hybrid": ["Animal Enhancement", "Darkvision", "Hybrid Adaptation"],
+  Tabaxi: ["Cat's Claws", "Feline Agility", "Cat's Talent"],
+  "Thri-kreen": ["Chameleon Carapace", "Secondary Arms", "Thri-kreen Telepathy"],
+  Tiefling: ["Darkvision", "Fiendish Legacy", "Otherworldly Presence"],
+  Tortle: ["Natural Armor", "Shell Defense", "Claws"],
+  Triton: ["Amphibious", "Control Air and Water", "Guardian of the Depths"],
+  Vedalken: ["Vedalken Dispassion", "Tireless Precision", "Partially Amphibious"],
+  Verdan: ["Black Blood Healing", "Limited Telepathy", "Persuasive"],
+  Warforged: ["Constructed Resilience", "Integrated Protection", "Specialized Design"],
+  "Yuan-Ti": ["Magic Resistance", "Poison Resilience", "Serpentine Spellcasting"]
+};
+
+function speciesTraitSummary(name, speciesName) {
+  const lower = String(name || "").toLowerCase();
+  if (lower.includes("darkvision")) return "You can see in dim light and darkness better than most creatures.";
+  if (lower.includes("flight")) return "You have a flying speed or limited winged movement granted by your species.";
+  if (lower.includes("breath weapon")) return "Exhale destructive elemental energy tied to your ancestry.";
+  if (lower.includes("damage resistance") || lower.includes("resistance")) return "You resist a damage type or harmful condition associated with your heritage.";
+  if (lower.includes("ancestry")) return "Your supernatural lineage grants defenses, senses, or magic tied to that ancestry.";
+  if (lower.includes("trance")) return "You rest through a meditative trance rather than sleeping normally.";
+  if (lower.includes("lucky")) return "Your luck can turn a failed d20 moment into another chance.";
+  if (lower.includes("powerful build")) return "You count as larger when carrying, pushing, dragging, or lifting.";
+  if (lower.includes("shapechanger")) return "You can alter your appearance, making disguise and identity fluid.";
+  if (lower.includes("legacy") || lower.includes("magic") || lower.includes("spellcasting")) return "Your species grants innate magic or a small list of spells.";
+  if (lower.includes("heritage")) return `${speciesName} carries cultural and supernatural traits from its setting.`;
+  return `${name} is a ${speciesName} trait. Check your table's source text for exact timing, limits, and uses.`;
+}
+
+function speciesTraitCards(character) {
+  const speciesName = character.species || "Custom";
+  const cards = [];
+  const summary = speciesDescription(speciesName);
+  if (summary) cards.push({ name: speciesName, source: "Species", description: summary });
+  if (character.edition === "2014" && character.speciesVariant) {
+    cards.push({
+      name: character.speciesVariant,
+      source: "Species version",
+      description: `${character.speciesVariant} determines the 2014 species ability increases and lineage traits used by this character.`
+    });
+  }
+  const bonusText = ABILITIES
+    .filter(ability => Number(character.originBonuses?.[ability] || 0))
+    .map(ability => `${ability} ${signed(Number(character.originBonuses[ability]))}`)
+    .join(", ");
+  if (bonusText) {
+    cards.push({
+      name: "Origin ability increases",
+      source: character.edition === "2024" ? "Background ability bonuses" : "Species ability bonuses",
+      description: `${bonusText}. These increases are already included in the ability scores shown on the sheet.`
+    });
+  }
+  (SPECIES_TRAIT_SUMMARIES[speciesName] || ["Species Traits"]).forEach(name => {
+    cards.push({ name, source: speciesName, description: speciesTraitSummary(name, speciesName) });
+  });
+  return cards;
+}
+
 function backgroundDescription(name) {
   return (typeof CONTENT_SUMMARIES !== "undefined" && CONTENT_SUMMARIES.backgrounds && CONTENT_SUMMARIES.backgrounds[name]) || "";
 }
@@ -5115,6 +5276,7 @@ function renderSheet() {
   const feats = [...(c.feats || []), ...String(c.customFeats || "").split(",").map(x => x.trim()).filter(Boolean)];
   const customSpells = String(c.customSpells || "").split(",").map(x => x.trim()).filter(Boolean).map(name => ({ name, level: "Custom" }));
   const spells = [...(c.spells || []).map(spell => typeof spell === "string" ? { name: spell, level: 0 } : spell), ...customSpells];
+  const speciesTraits = speciesTraitCards(c);
   const characterChoices = [];
   const addChoice = (name, source, description = "") => {
     if (name) characterChoices.push({ name, source, description });
@@ -5187,7 +5349,7 @@ function renderSheet() {
   <nav class="sheet-tabs" aria-label="Character sheet sections">
     <button type="button" class="${activeSheetSection === "overview" ? "active" : ""}" data-sheet-section="overview">Overview</button>
     <button type="button" class="${activeSheetSection === "inventory" ? "active" : ""}" data-sheet-section="inventory">Inventory</button>
-    <button type="button" class="${activeSheetSection === "features" ? "active" : ""}" data-sheet-section="features">Features</button>
+    <button type="button" class="${activeSheetSection === "features" ? "active" : ""}" data-sheet-section="features">Features & Traits</button>
     ${hasSpellcasting ? `<button type="button" class="${activeSheetSection === "spells" ? "active" : ""}" data-sheet-section="spells">Spells</button>` : ""}
   </nav>
   <div class="sheet-body">
@@ -5225,6 +5387,12 @@ function renderSheet() {
     </section>` : ""}
     ${renderInventorySection(c, sectionClass("inventory"))}
     <section class="sheet-panel sheet-wide ${sectionClass("features")}">
+      <h2>Species Traits</h2>
+      <div class="feature-grid">${speciesTraits.map(trait =>
+        `<article class="feature-card trait-card"><small>${escapeHtml(trait.source)}</small><strong>${escapeHtml(trait.name)}</strong>${ruleDetails(trait.description)}</article>`
+      ).join("") || "<p>No species traits are recorded for this character.</p>"}</div>
+    </section>
+    <section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Class & subclass features</h2>
       <div class="feature-grid">${[...classFeatures, ...subclassFeatures].map(feature =>
         `<article class="feature-card"><small>${escapeHtml(feature.className)} ${feature.level} · ${escapeHtml(feature.source)}</small><strong>${escapeHtml(feature.name)}</strong>${ruleDetails(featureDescription(c.edition, feature.source, feature.name, feature.className))}</article>`
@@ -5251,7 +5419,7 @@ function renderSheet() {
         const attack = d.prof + modifier(c[ability]);
         return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${8 + attack} · ${signed(attack)} attack</span>`;
       }).join("")}<span><strong>Selected:</strong> ${spells.length}</span></div>
-      <div class="sheet-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell =>
+      <div class="sheet-spells polished-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell => renderSpellCard(spell, c) ||
         `<div class="sheet-spell"><strong>${escapeHtml(spell.name)}</strong><br><small>${spell.className ? `${escapeHtml(spell.className)} · ` : ""}${spell.level === 0 ? "Cantrip" : spell.level === "Custom" ? "Custom" : `Level ${spell.level}`}</small>${ruleDetails(spellDescription(spell.name, c.edition, EXPANDED_SPELL_SOURCES[c.edition]?.[spell.name] || ""))}</div>`
       ).join("") || "<p>No spells selected.</p>"}</div>
     </section>` : ""}
