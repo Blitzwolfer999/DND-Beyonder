@@ -1723,37 +1723,155 @@ function spellLevelLabel(spell) {
   return level === 0 ? "Cantrip" : `Level ${level}`;
 }
 
-function spellPreview(name, rulesEdition, source = "") {
-  const summary = contentSummary("spells", name);
-  if (summary) return summary;
-  const full = cleanRuleDescription(spellDescription(name, rulesEdition, source));
-  let body = full.replace(/^Level\s+\d+\s+[A-Za-z ]+\s+Casting Time:\s*/i, "Casting Time: ");
-  const durationIndex = body.indexOf("Duration:");
-  if (durationIndex >= 0) {
-    body = body.slice(durationIndex + "Duration:".length).trim();
-    body = body
-      .replace(/^Instantaneous\s+/, "")
-      .replace(/^Special\s+/, "")
-      .replace(/^Concentration,\s+up to\s+\d+\s+[a-z]+\s+/, "")
-      .replace(/^Up to\s+\d+\s+[a-z]+\s+/, "")
-      .replace(/^\d+\s+[a-z]+\s+/, "");
+function titleCaseWords(value = "") {
+  return String(value).toLowerCase().replace(/\b[a-z]/g, char => char.toUpperCase());
+}
+
+function plainRuleText(description) {
+  return cleanRuleDescription(description)
+    .replace(/([A-Za-z])\s+-\s*([A-Za-z])/g, "$1$2")
+    .replace(/([A-Za-z])\s*-\s+([A-Za-z])/g, "$1$2")
+    .replace(/#{2,6}\s*/g, "")
+    .replace(/\*{1,3}/g, "")
+    .replace(/\s+\|\s+/g, " | ")
+    .trim();
+}
+
+function splitSpellText(description) {
+  const full = plainRuleText(description);
+  const result = { meta: {}, body: full };
+  if (!full) return result;
+  let headerMatch = full.match(/^Level\s+(\d+|Custom)\s+([A-Za-z ]+?)(?:\s+\([^)]+\))?\s+Casting Time:\s*/i);
+  if (!headerMatch) {
+    headerMatch = full.match(/^([A-Za-z ]+)\s+Cantrip(?:\s+\([^)]+\))?\s+Casting Time:\s*/i);
+    if (headerMatch) headerMatch = [headerMatch[0], "0", headerMatch[1]];
   }
-  const sentence = body.match(/.*?[.!?](?:\s|$)/)?.[0]?.trim() || body.trim();
-  return sentence.length > 210 ? `${sentence.slice(0, 207).trim()}...` : sentence;
+  if (!headerMatch) return result;
+
+  result.meta.level = headerMatch[1];
+  result.meta.school = titleCaseWords(headerMatch[2]);
+  let rest = full.slice(headerMatch[0].length).trim();
+  const rangeIndex = rest.indexOf(" Range:");
+  if (rangeIndex >= 0) {
+    result.meta.castingTime = rest.slice(0, rangeIndex).trim();
+    rest = rest.slice(rangeIndex + " Range:".length).trim();
+  }
+  const durationIndex = rest.indexOf(" Duration:");
+  if (durationIndex >= 0) {
+    const rangeText = rest.slice(0, durationIndex).trim();
+    const componentsIndex = rangeText.indexOf(" Components:");
+    if (componentsIndex >= 0) {
+      result.meta.range = rangeText.slice(0, componentsIndex).trim();
+      result.meta.components = rangeText.slice(componentsIndex + " Components:".length).trim();
+    } else {
+      result.meta.range = rangeText;
+    }
+    rest = rest.slice(durationIndex + " Duration:".length).trim();
+  }
+
+  const durationMatch = rest.match(/^(Instantaneous|Special|Until dispelled(?: or triggered)?|Concentration,\s*up to\s*\d+\s+\w+|Up to\s*\d+\s+\w+|\d+\s+\w+)(?:\s+|$)/i);
+  if (durationMatch) {
+    result.meta.duration = durationMatch[1].trim();
+    rest = rest.slice(durationMatch[0].length).trim();
+  }
+  result.body = rest || full;
+  return result;
+}
+
+function uniqueList(items, limit = 4) {
+  const seen = new Set();
+  return items
+    .map(item => String(item || "").trim())
+    .filter(item => {
+      const key = item.toLowerCase();
+      if (!item || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit);
+}
+
+function spellMechanicsFromBody(body = "") {
+  const text = plainRuleText(body);
+  const damageTypes = ["acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder", "healing"];
+  const saves = uniqueList([...text.matchAll(/\b(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+saving throw/gi)].map(match => `${titleCaseWords(match[1])} save`), 3);
+  const attacks = [];
+  if (/\branged spell attack\b/i.test(text)) attacks.push("Ranged spell attack");
+  if (/\bmelee spell attack\b/i.test(text)) attacks.push("Melee spell attack");
+  if (!attacks.length && /\bspell attack\b/i.test(text)) attacks.push("Spell attack");
+
+  const dice = uniqueList([...text.matchAll(/\b\d+d\d+(?:\s*\+\s*(?:\d+|your spellcasting ability modifier|your ability modifier))?\b/gi)].map(match => {
+    const nearby = text.slice(Math.max(0, match.index - 45), match.index + 90).toLowerCase();
+    const type = damageTypes.find(item => nearby.includes(`${item} damage`) || nearby.includes(`${item} hit points`));
+    return type ? `${match[0]} ${type}` : match[0];
+  }), 5);
+
+  const areaCandidates = uniqueList([
+    ...[...text.matchAll(/\b\d+[- ]foot[- ](?:radius\s+)?(?:sphere|cone|cube|cylinder|line|emanation|wall)\b/gi)].map(match => match[0]),
+    ...[...text.matchAll(/\b\d+\s+feet?\s+(?:radius|long|high|wide|thick|diameter)\b/gi)].map(match => match[0]),
+    ...[...text.matchAll(/\b\d+[- ]foot[- ]radius\b/gi)].map(match => match[0])
+  ].map(item => item.replace(/-/g, " ")), 8);
+  const areas = areaCandidates
+    .filter((item, index, list) => !list.some((other, otherIndex) => otherIndex !== index && other.toLowerCase().includes(item.toLowerCase())))
+    .slice(0, 4);
+
+  return {
+    saveAttack: uniqueList([...saves, ...attacks], 4).join(", "),
+    dice: dice.join(", "),
+    area: areas.join(", ")
+  };
+}
+
+function spellEffectText(name, rulesEdition, source = "") {
+  const full = spellDescription(name, rulesEdition, source);
+  const { body } = splitSpellText(full);
+  const fallback = contentSummary("spells", name);
+  const effect = plainRuleText(body || fallback || full);
+  if (!effect) return "No spell effect text is available yet.";
+  return effect.length > 650 ? `${effect.slice(0, 647).trim()}...` : effect;
+}
+
+function renderSpellMeta(label, value) {
+  if (!value) return "";
+  return `<span class="spell-meta"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`;
+}
+
+function spellRuleDetails(description) {
+  const cleanedDescription = plainRuleText(description);
+  if (!cleanedDescription) return "";
+  return `<details class="rule-detail"><summary>Full spell text</summary><p>${escapeHtml(cleanedDescription)}</p></details>`;
 }
 
 function renderSpellCard(spell, character) {
   const source = EXPANDED_SPELL_SOURCES[character.edition]?.[spell.name] || "";
   const classText = spell.className ? spell.className : "Character";
   const fullDescription = spellDescription(spell.name, character.edition, source);
+  const parsed = splitSpellText(fullDescription);
+  const mechanics = spellMechanicsFromBody(parsed.body);
+  const spellSchool = parsed.meta.school || (spell.level === "Custom" ? "Custom" : "");
+  const spellRange = parsed.meta.range || "";
+  const spellDuration = parsed.meta.duration || "";
+  const spellCastingTime = parsed.meta.castingTime || "";
+  const spellComponents = parsed.meta.components || "";
+  const meta = [
+    renderSpellMeta("School", spellSchool),
+    renderSpellMeta("Casting", spellCastingTime),
+    renderSpellMeta("Range", spellRange),
+    renderSpellMeta("Duration", spellDuration),
+    renderSpellMeta("Components", spellComponents),
+    renderSpellMeta("Save / Attack", mechanics.saveAttack),
+    renderSpellMeta("Dice", mechanics.dice),
+    renderSpellMeta("Area / Size", mechanics.area)
+  ].join("");
   return `<article class="sheet-spell-card">
     <div class="spell-card-head">
       <div><small>${escapeHtml(spellLevelLabel(spell))}</small><strong>${escapeHtml(spell.name)}</strong></div>
       <span>${escapeHtml(classText)}</span>
     </div>
-    <p>${escapeHtml(spellPreview(spell.name, character.edition, source))}</p>
+    ${meta ? `<div class="spell-meta-grid">${meta}</div>` : ""}
+    <p class="spell-effect"><strong>Effect.</strong> ${escapeHtml(spellEffectText(spell.name, character.edition, source))}</p>
     ${source ? `<em>${escapeHtml(source)}</em>` : ""}
-    ${ruleDetails(fullDescription)}
+    ${spellRuleDetails(fullDescription)}
   </article>`;
 }
 
@@ -5419,9 +5537,7 @@ function renderSheet() {
         const attack = d.prof + modifier(c[ability]);
         return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${8 + attack} · ${signed(attack)} attack</span>`;
       }).join("")}<span><strong>Selected:</strong> ${spells.length}</span></div>
-      <div class="sheet-spells polished-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell => renderSpellCard(spell, c) ||
-        `<div class="sheet-spell"><strong>${escapeHtml(spell.name)}</strong><br><small>${spell.className ? `${escapeHtml(spell.className)} · ` : ""}${spell.level === 0 ? "Cantrip" : spell.level === "Custom" ? "Custom" : `Level ${spell.level}`}</small>${ruleDetails(spellDescription(spell.name, c.edition, EXPANDED_SPELL_SOURCES[c.edition]?.[spell.name] || ""))}</div>`
-      ).join("") || "<p>No spells selected.</p>"}</div>
+      <div class="sheet-spells polished-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell => renderSpellCard(spell, c)).join("") || "<p>No spells selected.</p>"}</div>
     </section>` : ""}
   </div>`;
 }
