@@ -690,11 +690,14 @@ textarea { resize: vertical; }
 .spell-manager-level h4 { margin: 0 0 6px; color: var(--gold-dark); font: 700 12px Cinzel, serif; text-transform: uppercase; }
 .spell-manager-level > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
 .spell-manager-option { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 10px; border: 1px solid #ded1bd; border-radius: 10px; background: rgba(255,255,255,.72); cursor: pointer; }
+.spell-manager-option > label { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; cursor: pointer; }
+.spell-manager-option > .button { min-height: 30px; padding: 0 9px; flex: 0 0 auto; font-size: 10px; }
 .spell-manager-option input { width: auto; accent-color: var(--red); }
 .spell-manager-option span { display: grid; gap: 1px; }
 .spell-manager-option strong { color: var(--ink); font-size: 12px; }
 .spell-manager-option small { color: var(--muted); font-size: 10px; }
 .spell-manager-option.selected { border-color: #b95650; background: #fff1e9; box-shadow: inset 3px 0 var(--red); }
+.spell-manager-option.available { border-style: dashed; background: rgba(255,255,255,.42); }
 .spell-manager-option.locked { opacity: .55; cursor: not-allowed; }
 .spell-manager-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .wizard-spellbook { margin-top: 18px; border: 1px solid #d8c9b3; border-radius: 12px; background: #fffaf1; }

@@ -2718,6 +2718,7 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
   for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
     (lists[spellLevel] || []).forEach(name => leveledPool.push({ name, level: spellLevel }));
   }
+  if (className === "Wizard") leveledPool.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
   addFromPool(leveledPool, Math.max(0, spellTarget - existingLeveled));
   if (className === "Warlock") {
     const arcanumLevel = ({ 11: 6, 13: 7, 15: 8, 17: 9 })[classLevelValue];
@@ -2742,6 +2743,25 @@ function prebuildSpellChoices(className, level, subclass, characterData) {
   const cantrips = lists[0] || [];
   const preferredCantrips = (profile.spells || []).filter(name => cantrips.includes(name));
   [...preferredCantrips, ...cantrips].slice(0, Math.max(0, cantripLimit)).forEach(name => addUnique(name, 0));
+  if (className === "Wizard") {
+    const addWizardSpells = (classLevel, amount) => {
+      const maximum = maxSpellLevel(className, classLevel, edition, subclass);
+      const pool = Object.entries(lists)
+        .filter(([spellLevel]) => Number(spellLevel) > 0 && Number(spellLevel) <= maximum)
+        .flatMap(([spellLevel, names]) => names.map(name => ({ name, level: Number(spellLevel) })))
+        .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+      const preferred = (profile.spells || []).map(name => pool.find(spell => spell.name === name)).filter(Boolean);
+      for (const spell of [...preferred, ...pool]) {
+        if (amount <= 0) break;
+        const before = chosen.length;
+        addUnique(spell.name, spell.level);
+        if (chosen.length > before) amount -= 1;
+      }
+    };
+    addWizardSpells(1, 6);
+    for (let classLevel = 2; classLevel <= level; classLevel += 1) addWizardSpells(classLevel, 2);
+    return chosen;
+  }
   const leveledPool = [];
   for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
     (lists[spellLevel] || []).forEach(name => leveledPool.push({ name, level: spellLevel }));
@@ -5556,8 +5576,6 @@ function renderConditionPicker(character) {
 
 function spellManagerPool(character, className) {
   const entry = classEntry(character, className) || { level: 1 };
-  const policy = spellPreparationPolicy(character.edition, className, classSubclassName(character, className));
-  if (policy === "spellbook") return classSpellRecords(character, className, true);
   const lists = spellListsFor(character.edition, className, classSubclassName(character, className)) || {};
   const allowed = maxSpellLevel(className, entry.level, character.edition, classSubclassName(character, className));
   return Object.entries(lists)
@@ -5585,7 +5603,8 @@ function openSpellManager(characterId, className) {
     className,
     policy,
     original: new Set(names),
-    draft: new Set(names)
+    draft: new Set(names),
+    bookDraft: new Set(classSpellRecords(character, className, true).map(spell => spell.name))
   };
   activeSheetSection = "spells";
   renderSheet();
@@ -5620,6 +5639,13 @@ function saveSpellManager() {
     }
   }
   if (spellManagerState.policy === "spellbook") {
+    const bookNames = [...spellManagerState.bookDraft].filter(name => available.has(name));
+    if (selected.some(name => !spellManagerState.bookDraft.has(name))) {
+      toast("Prepared Wizard spells must be in the spellbook");
+      return;
+    }
+    const preservedBook = characterSpellRecords(character).filter(spell => spell.className !== entry.name || Number(spell.level || 0) === 0);
+    character.spells = [...preservedBook, ...bookNames.map(name => available.get(name))];
     const otherClasses = (character.preparedSpells || []).filter(prepared => preparedEntryClass(prepared, character) !== entry.name);
     character.preparedSpells = [...otherClasses, ...selected.map(name => ({ name, className: entry.name }))];
     character.preparedSpellClasses = [...new Set([...(character.preparedSpellClasses || []), entry.name])];
@@ -5642,6 +5668,7 @@ function renderSpellManagerPanel(character) {
   const pool = spellManagerPool(character, entry.name);
   const limit = preparedSpellLimitFor(entry.name, entry.level, character.edition, classSubclassName(character, entry.name), withClassContext(character, entry.name, entry.level));
   const selectedCount = spellManagerState.draft.size;
+  const managesSpellbook = spellManagerState.policy === "spellbook";
   const groups = new Map();
   pool.forEach(spell => {
     if (!groups.has(spell.level)) groups.set(spell.level, []);
@@ -5649,15 +5676,17 @@ function renderSpellManagerPanel(character) {
   });
   return `<section class="spell-manager-panel">
     <div class="spell-manager-head">
-      <div><span class="eyebrow">MANAGE SPELLS</span><h3>${escapeHtml(entry.name)} prepared spells</h3><p>${escapeHtml(spellPreparationRuleText(character, entry.name))}</p></div>
+      <div><span class="eyebrow">MANAGE SPELLS</span><h3>${escapeHtml(entry.name)} prepared spells</h3><p>${escapeHtml(spellPreparationRuleText(character, entry.name))}${managesSpellbook ? " Add any eligible spell below to your spellbook before preparing it." : ""}</p></div>
       <strong class="spell-manager-count ${selectedCount === limit ? "complete" : ""}">${selectedCount}/${limit}</strong>
     </div>
     <div class="spell-manager-levels">${[...groups.entries()].sort((a, b) => a[0] - b[0]).map(([level, spells]) => `<div class="spell-manager-level">
       <h4>Level ${level}</h4>
       <div>${spells.sort((a, b) => a.name.localeCompare(b.name)).map(spell => {
         const checked = spellManagerState.draft.has(spell.name);
+        const inBook = !managesSpellbook || spellManagerState.bookDraft.has(spell.name);
         const capped = !checked && selectedCount >= limit;
-        return `<label class="spell-manager-option ${checked ? "selected" : ""} ${capped ? "locked" : ""}"><input type="checkbox" data-manage-spell="${escapeHtml(spell.name)}" ${checked ? "checked" : ""} ${capped ? "disabled" : ""}><span><strong>${escapeHtml(spell.name)}</strong><small>${checked ? "Prepared" : spellManagerState.policy === "spellbook" ? "In spellbook" : "Available"}</small></span></label>`;
+        if (managesSpellbook) return `<article class="spell-manager-option ${checked ? "selected" : ""} ${!inBook ? "available" : ""}"><label><input type="checkbox" data-manage-spell="${escapeHtml(spell.name)}" ${checked ? "checked" : ""} ${!inBook || capped ? "disabled" : ""}><span><strong>${escapeHtml(spell.name)}</strong><small>${checked ? "Prepared" : inBook ? "In spellbook" : "Available to add"}</small></span></label><button type="button" class="button small ghost" data-spellbook-spell="${escapeHtml(spell.name)}">${inBook ? "Remove" : "Add"}</button></article>`;
+        return `<label class="spell-manager-option ${checked ? "selected" : ""} ${capped ? "locked" : ""}"><input type="checkbox" data-manage-spell="${escapeHtml(spell.name)}" ${checked ? "checked" : ""} ${capped ? "disabled" : ""}><span><strong>${escapeHtml(spell.name)}</strong><small>${checked ? "Prepared" : "Available"}</small></span></label>`;
       }).join("")}</div>
     </div>`).join("")}</div>
     <div class="spell-manager-actions"><button type="button" class="button ghost" data-spell-manager-cancel>Cancel</button><button type="button" class="button primary" data-spell-manager-save>Save prepared spells</button></div>
@@ -6898,6 +6927,18 @@ function initEvents() {
     }
     if (event.target.closest("[data-spell-manager-cancel]")) { closeSpellManager(); return; }
     if (event.target.closest("[data-spell-manager-save]")) { saveSpellManager(); return; }
+    const spellbookSpell = event.target.closest("[data-spellbook-spell]");
+    if (spellbookSpell && spellManagerState?.policy === "spellbook") {
+      const name = spellbookSpell.dataset.spellbookSpell;
+      if (spellManagerState.bookDraft.has(name)) {
+        spellManagerState.bookDraft.delete(name);
+        spellManagerState.draft.delete(name);
+      } else {
+        spellManagerState.bookDraft.add(name);
+      }
+      renderSheet();
+      return;
+    }
     const managedSpell = event.target.closest("[data-manage-spell]");
     if (managedSpell && spellManagerState) {
       const name = managedSpell.dataset.manageSpell;
