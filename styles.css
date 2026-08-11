@@ -643,6 +643,27 @@ textarea { resize: vertical; }
   font-size: 11px;
   line-height: 1.25;
 }
+.spell-dice-fact small { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.spell-dice-fact small em { color: var(--gold-dark); font-size: 8px; letter-spacing: 0; text-transform: none; }
+.spell-roll-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.spell-dice-roll,
+.spell-attack-roll {
+  min-height: 29px;
+  padding: 5px 8px;
+  color: #6f3512;
+  border: 1px solid #c9a66d;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fffaf0, #f0dfbe);
+  box-shadow: 0 1px 1px rgba(45, 31, 16, .08);
+  font: 800 10px/1.2 "DM Sans", sans-serif;
+  cursor: pointer;
+}
+.spell-dice-roll:hover,
+.spell-attack-roll:hover { border-color: var(--red); background: #fff7e6; transform: translateY(-1px); }
+.spell-dice-roll:focus-visible,
+.spell-attack-roll:focus-visible { outline: 3px solid rgba(147, 38, 34, .24); outline-offset: 1px; }
+.spell-attack-roll { display: flex; align-items: center; justify-content: space-between; gap: 7px; width: 100%; text-align: left; }
+.spell-attack-roll strong { color: var(--red); font-size: 11px; }
 .sheet-spell-card p { margin: 0; color: var(--muted); line-height: 1.45; }
 .sheet-spell-card .spell-effect {
   color: #354154;
@@ -1979,6 +2000,7 @@ body { background: var(--paper); }
 .roll-info span { display: block; margin-top: 2px; font-size: 12px; color: #9aa39a; }
 .roll-total { flex: 0 0 auto; min-width: 46px; text-align: center; font: 700 34px Cinzel, serif; color: #fff; }
 .roll-adv { display: flex; gap: 8px; }
+.roll-adv[hidden] { display: none; }
 .roll-adv button { flex: 1; padding: 7px 10px; font-size: 12px; font-weight: 600; color: var(--gold); background: rgba(185, 138, 62, .08); border: 1px solid var(--gold-dark); border-radius: 9px; cursor: pointer; }
 .roll-adv button:hover { background: rgba(185, 138, 62, .18); }
 .roll-overlay.crit { border-color: #4caf72; }
@@ -2273,6 +2295,16 @@ html[data-theme="dark"] .spell-fact {
 html[data-theme="dark"] .spell-fact small { color: #ff9f9b; }
 html[data-theme="dark"] .spell-fact strong,
 html[data-theme="dark"] .sheet-spell-card .spell-effect strong { color: var(--ink); }
+html[data-theme="dark"] .spell-dice-fact small em { color: #f3d48f; }
+html[data-theme="dark"] .spell-dice-roll,
+html[data-theme="dark"] .spell-attack-roll {
+  color: #f8e7c4;
+  border-color: #80633a;
+  background: linear-gradient(180deg, #2e271c, #211b14);
+}
+html[data-theme="dark"] .spell-dice-roll:hover,
+html[data-theme="dark"] .spell-attack-roll:hover { border-color: #ff9f9b; background: #38291d; }
+html[data-theme="dark"] .spell-attack-roll strong { color: #ff9f9b; }
 html[data-theme="dark"] .sheet-spell-card .rule-detail { border-top-color: rgba(255, 255, 255, .1); }
 html[data-theme="dark"] .sheet-spell-card p { color: var(--muted); }
 html[data-theme="dark"] .sheet-spell-card em { color: #f3d48f; }

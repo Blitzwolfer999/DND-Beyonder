@@ -1836,6 +1836,46 @@ function renderSpellFact(label, value) {
   return `<span class="spell-fact"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`;
 }
 
+function spellcastingModifierForSpell(character, spell) {
+  const className = spell.className && spell.className !== "Character" ? spell.className : primaryClassName(character);
+  const context = withClassContext(character, className, classLevel(character, className) || characterTotalLevel(character));
+  return modifier(character[spellcastingAbility(context)]);
+}
+
+function spellRollOptions(value, spell, character) {
+  if (!value || /^none$/i.test(String(value).trim())) return [];
+  const spellcastingModifier = spellcastingModifierForSpell(character, spell);
+  const options = [];
+  String(value).split(/\s*,\s*/).forEach(part => {
+    const expression = /(\d+)\s*d\s*(\d+)(?:\s*\+\s*(\d+|your spellcasting ability modifier|your ability modifier))?/gi;
+    for (const match of part.matchAll(expression)) {
+      const count = Math.max(1, Number(match[1]));
+      const sides = Math.max(2, Number(match[2]));
+      const modifierText = String(match[3] || "");
+      const rollModifier = /^\d+$/.test(modifierText) ? Number(modifierText) : modifierText ? spellcastingModifier : 0;
+      const suffix = part.slice(Number(match.index || 0) + match[0].length).trim();
+      const formula = `${count}d${sides}${rollModifier ? signed(rollModifier) : ""}`;
+      const label = `${formula}${suffix ? ` ${suffix}` : ""}`;
+      const key = `${count}:${sides}:${rollModifier}:${suffix.toLowerCase()}`;
+      if (!options.some(option => option.key === key)) options.push({ key, count, sides, modifier: rollModifier, label });
+    }
+  });
+  return options;
+}
+
+function renderSpellDiceFact(value, spell, character) {
+  const options = spellRollOptions(value, spell, character);
+  if (!options.length) return renderSpellFact("Dice", value);
+  const buttons = options.map(option => `<button type="button" class="spell-dice-roll" data-spell-roll data-count="${option.count}" data-sides="${option.sides}" data-modifier="${option.modifier}" data-roll-label="${escapeHtml(`${spell.name} - ${option.label}`)}" aria-label="Roll ${escapeHtml(option.label)} for ${escapeHtml(spell.name)}">${escapeHtml(option.label)}</button>`).join("");
+  return `<span class="spell-fact spell-dice-fact"><small>Dice <em>Click to roll</em></small><span class="spell-roll-list">${buttons}</span></span>`;
+}
+
+function renderSpellHitSaveFact(value, spell, character) {
+  if (!value || !/spell attack/i.test(value)) return renderSpellFact("Hit / Save", value);
+  const attackModifier = derived(character).prof + spellcastingModifierForSpell(character, spell);
+  return `<span class="spell-fact spell-attack-fact"><small>Hit / Save</small><button type="button" class="spell-attack-roll" data-sheet-roll="${escapeHtml(`${spell.name} spell attack`)}" data-modifier="${attackModifier}">${escapeHtml(value)} <strong>${signed(attackModifier)}</strong></button></span>`;
+}
+
 function spellRuleDetails(description) {
   const cleanedDescription = plainRuleText(description);
   if (!cleanedDescription) return "";
@@ -1884,8 +1924,8 @@ function renderSpellCard(spell, character) {
     renderSpellFact("Cast", data.castingTime),
     renderSpellFact("Range", data.range),
     renderSpellFact("Duration", data.duration),
-    renderSpellFact("Hit / Save", data.saveAttack),
-    renderSpellFact("Dice", data.dice),
+    renderSpellHitSaveFact(data.saveAttack, spell, character),
+    renderSpellDiceFact(data.dice, spell, character),
     renderSpellFact("Damage / Effect", data.damageEffect),
     renderSpellFact("Area", data.area),
     renderSpellFact("Components", data.components)
@@ -6433,7 +6473,10 @@ function showRollOverlay(r) {
   const rolls = Array.isArray(r.rolls) ? r.rolls : Array.isArray(r.d20s) ? r.d20s : [r.chosen];
   const faceValue = Number(r.faceValue ?? r.chosen ?? r.total);
   const animationMax = Math.max(sides, faceValue || sides);
-  currentRollContext = { label: r.label, modifier: r.modifier, sides };
+  const allowsRollMode = sides === 20 && Number(r.count || 1) === 1;
+  currentRollContext = allowsRollMode ? { label: r.label, modifier: r.modifier, sides } : null;
+  const rollModeControls = overlay.querySelector(".roll-adv");
+  if (rollModeControls) rollModeControls.hidden = !allowsRollMode;
   $("#roll-overlay-label").textContent = r.label;
   const parts = [r.d20s.length > 1 ? `rolled ${r.d20s.join(" & ")} → ${r.chosen}` : `d${sides}`];
   parts[0] = rolls.length > 1 ? `rolled ${rolls.join(" & ")} -> ${r.chosen}` : `rolled ${faceValue} on d${sides}`;
@@ -6903,6 +6946,11 @@ function initEvents() {
     }
     const sheetRoll = event.target.closest("[data-sheet-roll]");
     if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.rollMode || "normal"); return; }
+    const spellRoll = event.target.closest("[data-spell-roll]");
+    if (spellRoll) {
+      roll(Number(spellRoll.dataset.sides), Number(spellRoll.dataset.count), Number(spellRoll.dataset.modifier || 0), spellRoll.dataset.rollLabel || "Spell roll", "normal");
+      return;
+    }
   });
   document.addEventListener("change", event => {
     const target = event.target.closest("#prebuild-class, #prebuild-subclass, #prebuild-species, #prebuild-background, #prebuild-level");
