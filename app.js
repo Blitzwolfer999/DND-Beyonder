@@ -2155,8 +2155,8 @@ function quickDefaultSubclass(className) {
   return options.some(item => item.name === preferred) ? preferred : options[0]?.name || "";
 }
 
-function defaultSubclassFor(className, level = 1) {
-  const options = subclassEntries(className, edition);
+function defaultSubclassFor(className, level = 1, rulesEdition = edition) {
+  const options = subclassEntries(className, rulesEdition);
   const preferred = {
     "2014:Barbarian": "Path of the Berserker",
     "2024:Barbarian": "Path of the Berserker",
@@ -2186,9 +2186,9 @@ function defaultSubclassFor(className, level = 1) {
     "2024:Artificer": "Alchemist",
     "2014:Blood Hunter": "Order of the Ghostslayer",
     "2024:Blood Hunter": "Order of the Ghostslayer"
-  }[`${edition}:${className}`];
+  }[`${rulesEdition}:${className}`];
   const chosen = options.find(item => item.name === preferred)?.name || options[0]?.name || "";
-  return Number(level || 1) >= subclassLevel(className, edition) ? chosen : chosen;
+  return Number(level || 1) >= subclassLevel(className, rulesEdition) ? chosen : chosen;
 }
 
 function prebuildAsiCount(className, level) {
@@ -2241,6 +2241,126 @@ function prebuildClassChoices(className, level, profile) {
       ? ["Careful Spell", "Quickened Spell", "Twinned Spell", "Subtle Spell", "Empowered Spell"].slice(0, Object.entries(LEVEL_CHOICE_RULES[edition]?.Sorcerer?.metamagic || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0))
       : []
   };
+}
+
+function preferredAbilityOrder(className) {
+  const profile = QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter || {};
+  return [...(profile.abilities || []), ...ABILITIES].filter((ability, index, list) => list.indexOf(ability) === index);
+}
+
+function nextAsiSlotKey(asi = {}) {
+  return String(Object.keys(asi || {}).reduce((max, key) => Math.max(max, Number(key)), -1) + 1);
+}
+
+function autoAsiPlan(className, level, baseAbilities, originBonuses) {
+  const bonuses = prebuildAsiBonuses(className, level, baseAbilities, originBonuses);
+  return { bonuses, asi: asiStateFromBonuses(bonuses) };
+}
+
+function eligibleAdvancementFeats(character, className, classLevelValue) {
+  return (FEATS[character.edition] || []).filter(feat =>
+    !feat.category.includes("Fighting Style")
+    && feat.name !== "Ability Score Improvement"
+    && featEligible(feat, classLevelValue, className, character.edition)
+    && (character.edition !== "2024" || feat.category === "General" || (classLevelValue >= 19 && feat.category === "Epic Boon"))
+    && !(character.feats || []).includes(feat.name)
+  );
+}
+
+function applyAutoAbilityIncrease(character, className, choices, maximum = 20) {
+  const order = preferredAbilityOrder(className);
+  const target = order.find(ability => Number(character[ability] || 10) < maximum);
+  if (!target) return false;
+  character[target] = Math.min(maximum, Number(character[target] || 10) + 1);
+  character.asiBonuses = { ...(character.asiBonuses || Object.fromEntries(ABILITIES.map(ability => [ability, 0]))) };
+  character.asiBonuses[target] = Number(character.asiBonuses[target] || 0) + 1;
+  choices.advancement = choices.advancement ? `${choices.advancement}, ${target} +1` : `${target} +1`;
+  return target;
+}
+
+function applyAutoFeat(character, className, classLevelValue, choices) {
+  const feats = eligibleAdvancementFeats(character, className, classLevelValue);
+  const feat = feats.find(item => item.category === "Epic Boon") || feats[0];
+  if (!feat) return false;
+  character.feats = [...new Set([...(character.feats || []), feat.name])];
+  character.featAbilityChoices = { ...(character.featAbilityChoices || {}) };
+  character.featBonuses = { ...(character.featBonuses || Object.fromEntries(ABILITIES.map(ability => [ability, 0]))) };
+  const abilityOptionsList = featAbilityOptions(feat, character.edition);
+  const ability = preferredAbilityOrder(className).find(option => abilityOptionsList.includes(option)) || abilityOptionsList[0];
+  if (ability) {
+    const maximum = feat.category === "Epic Boon" ? 30 : 20;
+    character[ability] = Math.min(maximum, Number(character[ability] || 10) + 1);
+    character.featAbilityChoices[feat.name] = ability;
+    character.featBonuses[ability] = Number(character.featBonuses[ability] || 0) + 1;
+  }
+  character.asi = character.asi && Object.keys(character.asi).length ? JSON.parse(JSON.stringify(character.asi)) : asiStateFromBonuses(character.asiBonuses);
+  character.asi[nextAsiSlotKey(character.asi)] = { mode: "feat", one: "", two: "", feat: feat.name };
+  choices.advancement = `Feat: ${feat.name}${ability ? ` (${ability} +1)` : ""}`;
+  return true;
+}
+
+function applyAutoAdvancement(character, className, classLevelValue, choices) {
+  if (!advancementLevelsFor(className).includes(classLevelValue)) return;
+  if (character.edition === "2024" && classLevelValue >= 19 && applyAutoFeat(character, className, classLevelValue, choices)) return;
+  character.asi = character.asi && Object.keys(character.asi).length ? JSON.parse(JSON.stringify(character.asi)) : asiStateFromBonuses(character.asiBonuses);
+  const first = applyAutoAbilityIncrease(character, className, choices);
+  const second = applyAutoAbilityIncrease(character, className, choices);
+  if (first || second) {
+    character.asi[nextAsiSlotKey(character.asi)] = { mode: "asi", one: first || "", two: second || "" };
+    return;
+  }
+  applyAutoFeat(character, className, classLevelValue, choices);
+}
+
+function autoSpellChoicesForClass(character, className, classLevelValue) {
+  const subclass = classSubclassName(character, className);
+  const lists = spellListsFor(character.edition, className, subclass) || {};
+  const profile = QUICK_BUILD_PROFILES[className] || {};
+  const additions = [];
+  const existingNames = new Set((character.spells || []).map(spell => typeof spell === "string" ? spell : spell.name));
+  const addUnique = (name, spellLevel) => {
+    if (!name || existingNames.has(name)) return false;
+    const record = { name, className, level: Number(spellLevel) };
+    additions.push(record);
+    existingNames.add(name);
+    return true;
+  };
+  const addFromPool = (pool, amount) => {
+    const ordered = [
+      ...(profile.spells || []).map(name => pool.find(spell => spell.name === name)).filter(Boolean),
+      ...pool
+    ].filter((spell, index, list) => spell && list.findIndex(item => item.name === spell.name) === index);
+    for (const spell of ordered) {
+      if (amount <= 0) break;
+      if (addUnique(spell.name, spell.level)) amount -= 1;
+    }
+  };
+  const cantripTarget = cantripLimitFor(className, classLevelValue, character.edition, subclass);
+  const existingCantrips = (character.spells || []).filter(spell =>
+    (typeof spell === "string" ? 0 : Number(spell.level || 0)) === 0
+    && (typeof spell === "string" || !spell.className || spell.className === className)
+  ).length;
+  addFromPool((lists[0] || []).map(name => ({ name, level: 0 })), Math.max(0, cantripTarget - existingCantrips));
+  const allowed = maxSpellLevel(className, classLevelValue, character.edition, subclass);
+  const spellTarget = spellLimitFor(className, classLevelValue, character.edition, subclass, withClassContext(character, className, classLevelValue));
+  const existingLeveled = (character.spells || []).filter(spell =>
+    typeof spell !== "string"
+    && Number(spell.level || 0) > 0
+    && (!spell.className || spell.className === className)
+    && Number(spell.level || 0) <= allowed
+  ).length;
+  const leveledPool = [];
+  for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
+    (lists[spellLevel] || []).forEach(name => leveledPool.push({ name, level: spellLevel }));
+  }
+  addFromPool(leveledPool, Math.max(0, spellTarget - existingLeveled));
+  if (className === "Warlock") {
+    const arcanumLevel = ({ 11: 6, 13: 7, 15: 8, 17: 9 })[classLevelValue];
+    if (arcanumLevel) {
+      addFromPool((SPELL_LISTS[character.edition]?.Warlock?.[arcanumLevel] || []).map(name => ({ name, level: arcanumLevel })), 1);
+    }
+  }
+  return additions;
 }
 
 function prebuildSpellChoices(className, level, subclass, characterData) {
@@ -2303,7 +2423,8 @@ function buildPrebuiltCharacter(preview = false) {
   const { className, profile, level, subclass, species, background } = prebuildSelections();
   const baseAbilities = quickAbilityScores(className);
   const origin = quickOrigin(className, species, background);
-  const asiBonuses = prebuildAsiBonuses(className, level, baseAbilities, origin.originBonuses);
+  const asiPlan = autoAsiPlan(className, level, baseAbilities, origin.originBonuses);
+  const asiBonuses = asiPlan.bonuses;
   const finalAbilities = Object.fromEntries(ABILITIES.map(ability => [
     ability,
     Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0) + Number(asiBonuses[ability] || 0)
@@ -2340,7 +2461,7 @@ function buildPrebuiltCharacter(preview = false) {
     feats,
     featAbilityChoices: {},
     featBonuses: Object.fromEntries(ABILITIES.map(ability => [ability, 0])),
-    asi: {},
+    asi: asiPlan.asi,
     asiBonuses,
     skillProficiencies: skills.skillProficiencies,
     backgroundSkills: skills.backgroundSkills,
@@ -2441,7 +2562,8 @@ function buildQuickCharacter(preview = false) {
   const { profile, species, background, level } = quickSelections();
   const baseAbilities = quickAbilityScores(quickClass);
   const origin = quickOrigin(quickClass, species, background);
-  const asiBonuses = prebuildAsiBonuses(quickClass, level, baseAbilities, origin.originBonuses);
+  const asiPlan = autoAsiPlan(quickClass, level, baseAbilities, origin.originBonuses);
+  const asiBonuses = asiPlan.bonuses;
   const skills = quickSkillChoices(quickClass, background);
   const subclass = defaultSubclassFor(quickClass, level);
   const subclassChoices = prebuildSubclassChoices(subclass, level);
@@ -2480,7 +2602,7 @@ function buildQuickCharacter(preview = false) {
     feats,
     featAbilityChoices: {},
     featBonuses: Object.fromEntries(ABILITIES.map(ability => [ability, 0])),
-    asi: {},
+    asi: asiPlan.asi,
     asiBonuses,
     skillProficiencies: skills.skillProficiencies,
     backgroundSkills: skills.backgroundSkills,
@@ -2499,7 +2621,7 @@ function buildQuickCharacter(preview = false) {
     customSpells: "",
     customFeats: "",
     inventory: quickInventory(quickClass),
-    currency: { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 },
+    currency: { cp: 0, sp: 0, ep: 0, gp: 10 + Math.max(0, level - 1) * 5, pp: 0 },
     portrait: "",
     backstory: `${profile.tagline} This quick-build character was generated at level ${level} with smart defaults and can be fully customized from the character sheet.`,
     acOverride: "",
@@ -5043,6 +5165,7 @@ function renderSheet() {
     <div class="sheet-header-actions">
       ${canControl ? `<button class="button ghost" data-edit="${c.id}">Edit character</button>
       <button class="button ghost" data-delevel="${c.id}" ${characterTotalLevel(c) <= 1 ? "disabled" : ""}>${characterTotalLevel(c) <= 1 ? "Minimum level" : "Delevel"}</button>
+      <button class="button ghost" data-auto-level="${c.id}" ${characterTotalLevel(c) >= 20 ? "disabled" : ""}>Auto level</button>
       <button class="button primary" data-level-up="${c.id}" ${characterTotalLevel(c) >= 20 ? "disabled" : ""}>${characterTotalLevel(c) >= 20 ? "Maximum level" : "Level up"}</button>` : `<span class="tag">View only</span>`}
     </div>
   </div>
@@ -5539,6 +5662,118 @@ function delevelCharacter(id) {
       toast(`${updated.name} returned to level ${updated.level}`);
     }
   });
+}
+
+function autoLevelCharacter(id, targetClass = "") {
+  const character = characters.find(item => item.id === id);
+  if (!character) return;
+  if (!canControlCharacter(character)) { toast("Only the owner or campaign DM can auto level this sheet"); return; }
+  if (characterTotalLevel(character) >= 20) { toast("This character is already level 20"); return; }
+  const availableClasses = Object.keys(RULES.classes);
+  const levelClass = targetClass && availableClasses.includes(targetClass) ? targetClass : primaryClassName(character);
+  const targetLevel = characterTotalLevel(character) + 1;
+  const before = progressionSnapshot(character);
+  const updated = characterWithClassLevelGain(character, levelClass);
+  const targetClassLevel = classLevel(updated, levelClass);
+  const cls = RULES.classes[levelClass];
+  const previousHp = derived(character).hp;
+  const fixedGain = Math.max(1, Math.ceil(cls.hit / 2) + 1 + modifier(character.CON));
+  const choices = { autoLevel: true };
+  updated.level = targetLevel;
+  if (character.hpOverride) updated.hpOverride = previousHp + fixedGain;
+  const subclassUnlock = subclassLevel(levelClass, updated.edition);
+  const existingSubclass = classSubclassName(updated, levelClass);
+  if (targetClassLevel >= subclassUnlock && !existingSubclass) {
+    const selectedSubclass = defaultSubclassFor(levelClass, targetClassLevel, updated.edition);
+    if (selectedSubclass) {
+      setClassEntry(updated, levelClass, { subclass: selectedSubclass, customSubclass: "" });
+      if (levelClass === updated.className) updated.subclass = selectedSubclass;
+      choices.subclass = selectedSubclass;
+    }
+  }
+  const selectedEntry = classEntry(updated, levelClass) || {};
+  const selectedSubclass = classSubclassName(updated, levelClass);
+  const subclassChoices = { ...(selectedEntry.subclassChoices || {}) };
+  (SUBCLASS_CHOICE_RULES[selectedSubclass] || []).forEach(choice => {
+    if (targetClassLevel < Number(choice.level || 1)) return;
+    if (choice.editions && !choice.editions.includes(updated.edition)) return;
+    if (!subclassChoices[choice.key] && choice.options?.length) subclassChoices[choice.key] = choice.options[0];
+  });
+  if (Object.keys(subclassChoices).length) {
+    setClassEntry(updated, levelClass, { subclassChoices });
+    if (levelClass === updated.className) updated.subclassChoices = subclassChoices;
+    choices.subclassChoices = { ...subclassChoices };
+  }
+  const profile = QUICK_BUILD_PROFILES[levelClass] || QUICK_BUILD_PROFILES.Fighter;
+  const classChoices = prebuildClassChoices(levelClass, targetClassLevel, profile);
+  const masteryTarget = weaponMasteryCount(levelClass, targetClassLevel, updated.edition);
+  const masteryPool = [...(profile.masteries || []), ...weaponMasteryOptions(levelClass)];
+  const mastery = [...new Set([...(updated.weaponMastery || []), ...masteryPool])].slice(0, masteryTarget);
+  if (mastery.length > (updated.weaponMastery || []).length) choices.weaponMastery = mastery.filter(name => !(updated.weaponMastery || []).includes(name));
+  updated.weaponMastery = mastery;
+  if (classChoices.fightingStyle && !updated.fightingStyle) {
+    updated.fightingStyle = classChoices.fightingStyle;
+    choices.fightingStyle = classChoices.fightingStyle;
+  }
+  ["divineOrder", "primalOrder", "blessedStrikes", "elementalFury"].forEach(name => {
+    if (classChoices[name] && !updated[name]) {
+      updated[name] = classChoices[name];
+      choices[name] = classChoices[name];
+    }
+  });
+  ["invocations", "metamagic"].forEach(name => {
+    const targetValues = classChoices[name] || [];
+    const current = updated[name] || [];
+    const additions = targetValues.filter(value => !current.includes(value));
+    if (additions.length) {
+      updated[name] = [...current, ...additions];
+      choices[name] = additions;
+    }
+  });
+  const levelRules = LEVEL_CHOICE_RULES[updated.edition]?.[levelClass] || {};
+  const expertiseCount = Number(levelRules.expertise?.[targetClassLevel] || 0);
+  if (expertiseCount) {
+    const trained = [...proficientSkills(updated)];
+    const additions = trained.filter(skill => !(updated.expertise || []).includes(skill)).slice(0, expertiseCount);
+    if (additions.length) {
+      updated.expertise = [...new Set([...(updated.expertise || []), ...additions])];
+      choices.expertise = additions;
+    }
+  }
+  if (updated.edition === "2024" && levelClass === "Barbarian" && targetClassLevel === 3) {
+    const trained = proficientSkills(updated);
+    const skill = CLASS_SKILLS.Barbarian.options.find(option => !trained.has(option));
+    if (skill) {
+      updated.skillProficiencies = [...new Set([...(updated.skillProficiencies || []), skill])];
+      choices.skillProficiencies = [skill];
+    }
+  }
+  applyAutoAdvancement(updated, levelClass, targetClassLevel, choices);
+  const spellAdditions = autoSpellChoicesForClass(updated, levelClass, targetClassLevel);
+  if (spellAdditions.length) {
+    updated.spells = [...(updated.spells || []), ...spellAdditions];
+    choices.spells = spellAdditions.map(spell => spell.name);
+  }
+  const gained = levelFeatures(character, targetLevel, levelClass).map(feature => `${feature.source}: ${feature.name}`);
+  updated.progressionHistory = [...(updated.progressionHistory || []), {
+    level: targetLevel,
+    className: levelClass,
+    classLevel: targetClassLevel,
+    date: new Date().toISOString(),
+    hpMethod: `Auto fixed (+${fixedGain} HP)`,
+    gained,
+    choices,
+    before
+  }];
+  updated.updatedAt = Date.now();
+  const index = characters.findIndex(item => item.id === updated.id);
+  characters[index] = updated;
+  activeCharacterId = updated.id;
+  persistCharacters();
+  renderCards();
+  renderSheet();
+  navigate("sheet");
+  toast(`${updated.name} auto-leveled to ${targetLevel} (${levelClass} ${targetClassLevel})`);
 }
 
 function completeLevelUp(event) {
@@ -6314,6 +6549,7 @@ function initEvents() {
     const card = event.target.closest("[data-character-id]");
     if (card && !event.target.closest(".card-actions")) { activeCharacterId = card.dataset.characterId; navigate("sheet"); }
     const edit = event.target.closest("[data-edit]"); if (edit) editCharacter(edit.dataset.edit);
+    const autoLevel = event.target.closest("[data-auto-level]"); if (autoLevel && !autoLevel.disabled) autoLevelCharacter(autoLevel.dataset.autoLevel);
     const levelUp = event.target.closest("[data-level-up]"); if (levelUp && !levelUp.disabled) openLevelUp(levelUp.dataset.levelUp);
     const delevel = event.target.closest("[data-delevel]"); if (delevel && !delevel.disabled) delevelCharacter(delevel.dataset.delevel);
     const del = event.target.closest("[data-delete]");
