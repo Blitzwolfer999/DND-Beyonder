@@ -2785,6 +2785,18 @@ function prebuildProgressionHistory(className, subclass, level) {
   return [...classRows, ...subclassRows].sort((a, b) => a.level - b.level);
 }
 
+function spellLevelCoverage(spells) {
+  const counts = new Map();
+  (spells || []).forEach(spell => {
+    const level = Number(spell.level || 0);
+    counts.set(level, (counts.get(level) || 0) + 1);
+  });
+  return [...counts.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([level, count]) => `${level === 0 ? "Cantrips" : `Level ${level}`}: ${count}`)
+    .join(" · ");
+}
+
 function quickSelections() {
   const profile = QUICK_BUILD_PROFILES[quickClass];
   const species = $("#quick-species")?.value || (edition === "2024" ? "Human" : "Human");
@@ -2925,6 +2937,7 @@ function renderPrebuildSummary() {
   const stats = derived(character);
   const primary = QUICK_BUILD_PROFILES[character.className]?.abilities?.[0] || "STR";
   const spellNames = character.spells.map(spell => spell.name);
+  const spellCoverage = spellLevelCoverage(character.spells);
   const featureCount = (CLASS_FEATURES[edition]?.[character.className] || []).filter(([level]) => level <= character.level).length
     + (character.subclass ? resolvedSubclassFeatures(edition, character.className, character.subclass).filter(([level]) => level <= character.level).length : 0);
   summary.innerHTML = `
@@ -2938,7 +2951,7 @@ function renderPrebuildSummary() {
     <div class="quick-summary-section"><strong>Core proficiencies</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
     ${character.weaponMastery?.length ? `<div class="quick-summary-section"><strong>Weapon masteries</strong><p>${escapeHtml(character.weaponMastery.join(", "))}</p></div>` : ""}
     ${character.fightingStyle ? `<div class="quick-summary-section"><strong>Fighting style</strong><p>${escapeHtml(character.fightingStyle)}</p></div>` : ""}
-    ${spellNames.length ? `<div class="quick-summary-section"><strong>Spells selected</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p></div>` : ""}
+    ${spellNames.length ? `<div class="quick-summary-section"><strong>Spells selected</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p><small>${escapeHtml(spellCoverage)}</small></div>` : ""}
     <div class="quick-summary-section"><strong>Features ready</strong><p>${featureCount} class/subclass feature${featureCount === 1 ? "" : "s"} will appear on the sheet for level ${character.level}.</p></div>
     <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 7).map(item => `${item.quantity > 1 ? `${item.quantity}x ` : ""}${item.name}`).join(", ")}</p></div>
     <p class="quick-summary-note">Generated choices are solid defaults. You can edit spells, ASIs, items, and level-up details after creation.</p>`;
@@ -3062,6 +3075,7 @@ function renderQuickSummary() {
   const character = buildQuickCharacter(true);
   const stats = derived(character);
   const spellNames = character.spells.map(spell => spell.name);
+  const spellCoverage = spellLevelCoverage(character.spells);
   const featureCount = (CLASS_FEATURES[edition]?.[quickClass] || []).filter(([level]) => level <= character.level).length
     + (character.subclass ? resolvedSubclassFeatures(edition, quickClass, character.subclass).filter(([level]) => level <= character.level).length : 0);
   summary.innerHTML = `
@@ -3075,7 +3089,7 @@ function renderQuickSummary() {
     <div class="quick-summary-section"><strong>Trained skills</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
     ${character.weaponMastery?.length ? `<div class="quick-summary-section"><strong>Weapon masteries</strong><p>${escapeHtml(character.weaponMastery.join(", "))}</p></div>` : ""}
     ${character.fightingStyle ? `<div class="quick-summary-section"><strong>Fighting style</strong><p>${escapeHtml(character.fightingStyle)}</p></div>` : ""}
-    ${spellNames.length ? `<div class="quick-summary-section"><strong>Selected spells</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p></div>` : ""}
+    ${spellNames.length ? `<div class="quick-summary-section"><strong>Selected spells</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p><small>${escapeHtml(spellCoverage)}</small></div>` : ""}
     <div class="quick-summary-section"><strong>Features ready</strong><p>${featureCount} class/subclass feature${featureCount === 1 ? "" : "s"} will appear on the sheet for level ${character.level}.</p></div>
     <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 6).map(item => `${item.quantity > 1 ? `${item.quantity}× ` : ""}${item.name}`).join(", ")}</p></div>
     <p class="quick-summary-note">Every choice remains editable after creation.</p>`;
@@ -3864,6 +3878,19 @@ function preparedEntryClass(entry, character) {
   return typeof entry === "string" ? primaryClassName(character) : entry.className || primaryClassName(character);
 }
 
+function defaultWizardPreparedNames(book, limit) {
+  const selected = [];
+  const add = name => {
+    if (name && selected.length < limit && !selected.includes(name)) selected.push(name);
+  };
+  const leveled = (book || []).filter(spell => Number(spell.level || 0) > 0);
+  const levels = [...new Set(leveled.map(spell => Number(spell.level)))].sort((a, b) => b - a);
+  levels.forEach(level => add(leveled.filter(spell => Number(spell.level) === level).sort((a, b) => a.name.localeCompare(b.name))[0]?.name));
+  (QUICK_BUILD_PROFILES.Wizard.spells || []).forEach(add);
+  leveled.slice().sort((a, b) => Number(b.level) - Number(a.level) || a.name.localeCompare(b.name)).forEach(spell => add(spell.name));
+  return selected;
+}
+
 function preparedNamesForClass(character, className) {
   const stored = (character.preparedSpells || [])
     .filter(entry => preparedEntryClass(entry, character) === className)
@@ -3872,7 +3899,7 @@ function preparedNamesForClass(character, className) {
   if ((character.preparedSpellClasses || []).includes(className)) return new Set(stored);
   const entry = classEntry(character, className) || { level: character.level || 1 };
   const limit = preparedSpellLimitFor(className, entry.level, character.edition, classSubclassName(character, className), withClassContext(character, className, entry.level));
-  return new Set(classSpellRecords(character, className, true).slice(0, limit).map(spell => spell.name));
+  return new Set(defaultWizardPreparedNames(classSpellRecords(character, className, true), limit));
 }
 
 function reconcilePreparedSpells(character, previous = null) {
