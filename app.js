@@ -1822,18 +1822,18 @@ function spellMechanicsFromBody(body = "") {
   };
 }
 
-function spellEffectText(name, rulesEdition, source = "") {
+function spellEffectText(name, rulesEdition, source = "", limit = 560) {
   const full = spellDescription(name, rulesEdition, source);
   const { body } = splitSpellText(full);
   const fallback = contentSummary("spells", name);
   const effect = plainRuleText(body || fallback || full);
   if (!effect) return "No spell effect text is available yet.";
-  return effect.length > 650 ? `${effect.slice(0, 647).trim()}...` : effect;
+  return effect.length > limit ? `${effect.slice(0, limit - 3).trim()}...` : effect;
 }
 
-function renderSpellMeta(label, value) {
+function renderSpellFact(label, value) {
   if (!value) return "";
-  return `<span class="spell-meta"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`;
+  return `<span class="spell-fact"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></span>`;
 }
 
 function spellRuleDetails(description) {
@@ -1842,37 +1842,79 @@ function spellRuleDetails(description) {
   return `<details class="rule-detail"><summary>Full spell text</summary><p>${escapeHtml(cleanedDescription)}</p></details>`;
 }
 
-function renderSpellCard(spell, character) {
+function spellLevelSortValue(spell) {
+  if (spell.level === "Custom") return 99;
+  return Number(spell.level || 0);
+}
+
+function spellGroupLabel(level) {
+  if (level === 0) return "Cantrips";
+  if (level === 99) return "Custom Spells";
+  return `Level ${level} Spells`;
+}
+
+function spellDisplayData(spell, character) {
   const source = EXPANDED_SPELL_SOURCES[character.edition]?.[spell.name] || "";
-  const classText = spell.className ? spell.className : "Character";
   const fullDescription = spellDescription(spell.name, character.edition, source);
   const parsed = splitSpellText(fullDescription);
   const mechanics = spellMechanicsFromBody(parsed.body);
-  const spellSchool = parsed.meta.school || (spell.level === "Custom" ? "Custom" : "");
-  const spellRange = parsed.meta.range || "";
-  const spellDuration = parsed.meta.duration || "";
-  const spellCastingTime = parsed.meta.castingTime || "";
-  const spellComponents = parsed.meta.components || "";
-  const meta = [
-    renderSpellMeta("School", spellSchool),
-    renderSpellMeta("Casting", spellCastingTime),
-    renderSpellMeta("Range", spellRange),
-    renderSpellMeta("Duration", spellDuration),
-    renderSpellMeta("Components", spellComponents),
-    renderSpellMeta("Save / Attack", mechanics.saveAttack),
-    renderSpellMeta("Dice", mechanics.dice),
-    renderSpellMeta("Area / Size", mechanics.area)
+  return {
+    source,
+    fullDescription,
+    parsed,
+    mechanics,
+    classText: spell.className || "Character",
+    school: parsed.meta.school || (spell.level === "Custom" ? "Custom" : ""),
+    castingTime: parsed.meta.castingTime || "",
+    range: parsed.meta.range || "",
+    duration: parsed.meta.duration || "",
+    components: parsed.meta.components || "",
+    saveAttack: mechanics.saveAttack || "None",
+    dice: mechanics.dice || "None",
+    area: mechanics.area || "Single target / see text",
+    effect: spellEffectText(spell.name, character.edition, source)
+  };
+}
+
+function renderSpellCard(spell, character) {
+  const data = spellDisplayData(spell, character);
+  const facts = [
+    renderSpellFact("Cast", data.castingTime),
+    renderSpellFact("Range", data.range),
+    renderSpellFact("Duration", data.duration),
+    renderSpellFact("Hit / Save", data.saveAttack),
+    renderSpellFact("Dice", data.dice),
+    renderSpellFact("Area", data.area),
+    renderSpellFact("Components", data.components)
   ].join("");
-  return `<article class="sheet-spell-card">
-    <div class="spell-card-head">
-      <div><small>${escapeHtml(spellLevelLabel(spell))}</small><strong>${escapeHtml(spell.name)}</strong></div>
-      <span>${escapeHtml(classText)}</span>
+  return `<article class="sheet-spell-card spellbook-row">
+    <div class="spellbook-main">
+      <div class="spell-card-head">
+        <div><small>${escapeHtml(spellLevelLabel(spell))}${data.school ? ` · ${escapeHtml(data.school)}` : ""}</small><strong>${escapeHtml(spell.name)}</strong></div>
+        <span>${escapeHtml(data.classText)}</span>
+      </div>
+      <p class="spell-effect"><strong>Effect.</strong> ${escapeHtml(data.effect)}</p>
     </div>
-    ${meta ? `<div class="spell-meta-grid">${meta}</div>` : ""}
-    <p class="spell-effect"><strong>Effect.</strong> ${escapeHtml(spellEffectText(spell.name, character.edition, source))}</p>
-    ${source ? `<em>${escapeHtml(source)}</em>` : ""}
-    ${spellRuleDetails(fullDescription)}
+    <div class="spell-fact-grid">${facts}</div>
+    ${spellRuleDetails(data.fullDescription)}
   </article>`;
+}
+
+function renderSpellBook(spells, character) {
+  const sorted = [...spells].sort((a,b) => spellLevelSortValue(a) - spellLevelSortValue(b) || a.name.localeCompare(b.name));
+  if (!sorted.length) return `<div class="spellbook-empty"><p>No spells selected.</p></div>`;
+  const groups = new Map();
+  sorted.forEach(spell => {
+    const level = spellLevelSortValue(spell);
+    if (!groups.has(level)) groups.set(level, []);
+    groups.get(level).push(spell);
+  });
+  return `<div class="spellbook">
+    ${[...groups.entries()].map(([level, entries]) => `<section class="spellbook-level">
+      <header class="spellbook-level-head"><h3>${escapeHtml(spellGroupLabel(level))}</h3><span>${entries.length} selected</span></header>
+      <div class="sheet-spells polished-spells">${entries.map(spell => renderSpellCard(spell, character)).join("")}</div>
+    </section>`).join("")}
+  </div>`;
 }
 
 const OPEN_FEATURE_SUMMARIES = {
@@ -5537,7 +5579,7 @@ function renderSheet() {
         const attack = d.prof + modifier(c[ability]);
         return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${8 + attack} · ${signed(attack)} attack</span>`;
       }).join("")}<span><strong>Selected:</strong> ${spells.length}</span></div>
-      <div class="sheet-spells polished-spells">${spells.sort((a,b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell => renderSpellCard(spell, c)).join("") || "<p>No spells selected.</p>"}</div>
+      ${renderSpellBook(spells, c)}
     </section>` : ""}
   </div>`;
 }
