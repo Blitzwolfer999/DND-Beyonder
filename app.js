@@ -1858,20 +1858,22 @@ function spellDisplayData(spell, character) {
   const fullDescription = spellDescription(spell.name, character.edition, source);
   const parsed = splitSpellText(fullDescription);
   const mechanics = spellMechanicsFromBody(parsed.body);
+  const metadata = (typeof SPELL_METADATA !== "undefined" && descriptionMatch(SPELL_METADATA, spell.name)) || {};
   return {
     source,
     fullDescription,
     parsed,
     mechanics,
     classText: spell.className || "Character",
-    school: parsed.meta.school || (spell.level === "Custom" ? "Custom" : ""),
-    castingTime: parsed.meta.castingTime || "",
-    range: parsed.meta.range || "",
-    duration: parsed.meta.duration || "",
-    components: parsed.meta.components || "",
-    saveAttack: mechanics.saveAttack || "None",
-    dice: mechanics.dice || "None",
-    area: mechanics.area || "Single target / see text",
+    school: parsed.meta.school || metadata.school || (spell.level === "Custom" ? "Custom" : ""),
+    castingTime: parsed.meta.castingTime || metadata.castingTime || "",
+    range: parsed.meta.range || metadata.range || "",
+    duration: parsed.meta.duration || metadata.duration || "",
+    components: parsed.meta.components || metadata.components || "",
+    saveAttack: mechanics.saveAttack || metadata.saveAttack || "None",
+    dice: mechanics.dice || metadata.dice || "None",
+    area: mechanics.area || metadata.area || "Single target / see effect",
+    damageEffect: metadata.damageEffect || "",
     effect: spellEffectText(spell.name, character.edition, source)
   };
 }
@@ -1884,6 +1886,7 @@ function renderSpellCard(spell, character) {
     renderSpellFact("Duration", data.duration),
     renderSpellFact("Hit / Save", data.saveAttack),
     renderSpellFact("Dice", data.dice),
+    renderSpellFact("Damage / Effect", data.damageEffect),
     renderSpellFact("Area", data.area),
     renderSpellFact("Components", data.components)
   ].join("");
