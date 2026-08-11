@@ -253,6 +253,7 @@ let abilityMethod = "standard";
 let levelingCharacterId = null;
 let levelUpClassName = "";
 let inventoryCharacterId = null;
+let spellManagerState = null;
 let activeCharacterId = null;
 let activeSheetSection = "overview";
 let quickStep = 1;
@@ -1945,7 +1946,7 @@ function renderSpellCard(spell, character) {
 
 function renderSpellBook(spells, character) {
   const sorted = [...spells].sort((a,b) => spellLevelSortValue(a) - spellLevelSortValue(b) || a.name.localeCompare(b.name));
-  if (!sorted.length) return `<div class="spellbook-empty"><p>No spells selected.</p></div>`;
+  if (!sorted.length) return `<div class="spellbook-empty"><p>No spells are ready to cast.</p></div>`;
   const groups = new Map();
   sorted.forEach(spell => {
     const level = spellLevelSortValue(spell);
@@ -1954,7 +1955,7 @@ function renderSpellBook(spells, character) {
   });
   return `<div class="spellbook">
     ${[...groups.entries()].map(([level, entries]) => `<section class="spellbook-level">
-      <header class="spellbook-level-head"><h3>${escapeHtml(spellGroupLabel(level))}</h3><span>${entries.length} selected</span></header>
+      <header class="spellbook-level-head"><h3>${escapeHtml(spellGroupLabel(level))}</h3><span>${entries.length} ready</span></header>
       <div class="sheet-spells polished-spells">${entries.map(spell => renderSpellCard(spell, character)).join("")}</div>
     </section>`).join("")}
   </div>`;
@@ -2856,6 +2857,7 @@ function buildPrebuiltCharacter(preview = false) {
     quickBuilt: true,
     updatedAt: Date.now()
   };
+  reconcilePreparedSpells(character);
   character.currentHp = derived(character).hp;
   return character;
 }
@@ -2996,6 +2998,7 @@ function buildQuickCharacter(preview = false) {
     quickBuilt: true,
     updatedAt: Date.now()
   };
+  reconcilePreparedSpells(character);
   character.currentHp = derived(character).hp;
   return character;
 }
@@ -3771,6 +3774,9 @@ function spellProgressionFor(rulesEdition, className, subclass = "") {
 
 function spellLimitFor(className, level, rulesEdition, subclass = "", data = {}) {
   const targetLevel = Number(level || 1);
+  if (rulesEdition === "2014" && className === "Artificer") {
+    return Math.max(1, Math.floor(targetLevel / 2) + modifier(data.INT));
+  }
   const progression = spellProgressionFor(rulesEdition, className, subclass);
   if (progression?.totals) return Number(progression.totals[targetLevel - 1] || 0);
   if (progression?.perLevel) return Math.max(0, 6 + (Math.max(1, targetLevel) - 1) * Number(progression.perLevel));
@@ -3790,8 +3796,98 @@ function spellLimitLabel(className, rulesEdition, subclass = "") {
   if (progression?.mode === "spellbook") return "Spellbook";
   if (progression?.mode === "known") return "Known spells";
   if (progression?.mode === "prepared") return "Prepared spells";
-  if (rulesEdition === "2014" && ["Cleric", "Druid", "Paladin"].includes(className)) return "Prepared spells";
+  if (rulesEdition === "2014" && ["Cleric", "Druid", "Paladin", "Artificer"].includes(className)) return "Prepared spells";
   return "Spells";
+}
+
+const WIZARD_2024_PREPARED_TOTALS = [4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22];
+
+function spellPreparationPolicy(rulesEdition, className, subclass = "") {
+  if (className === "Wizard") return "spellbook";
+  if (["Eldritch Knight", "Arcane Trickster", "Order of the Profane Soul"].includes(subclass)) return "level";
+  if (rulesEdition === "2014") {
+    if (["Bard", "Ranger", "Sorcerer", "Warlock"].includes(className)) return "level";
+    if (["Cleric", "Druid", "Paladin", "Artificer"].includes(className)) return "long-rest-all";
+  }
+  if (["Bard", "Sorcerer", "Warlock"].includes(className)) return "level";
+  if (["Paladin", "Ranger"].includes(className)) return "long-rest-one";
+  if (["Cleric", "Druid", "Artificer"].includes(className)) return "long-rest-all";
+  return "level";
+}
+
+function preparedSpellLimitFor(className, level, rulesEdition, subclass = "", data = {}) {
+  const targetLevel = Math.max(1, Number(level || 1));
+  if (className === "Wizard") {
+    if (rulesEdition === "2024") return Number(WIZARD_2024_PREPARED_TOTALS[targetLevel - 1] || 0);
+    return Math.max(1, targetLevel + modifier(data.INT));
+  }
+  return spellLimitFor(className, targetLevel, rulesEdition, subclass, data);
+}
+
+function spellRecordClass(spell, character) {
+  return typeof spell === "string" ? primaryClassName(character) : spell.className || primaryClassName(character);
+}
+
+function characterSpellRecords(character) {
+  return (character.spells || []).map(spell => typeof spell === "string"
+    ? { name: spell, level: 0, className: primaryClassName(character) }
+    : { ...spell, className: spell.className || primaryClassName(character) });
+}
+
+function classSpellRecords(character, className, leveledOnly = false) {
+  return characterSpellRecords(character).filter(spell =>
+    spell.className === className && (!leveledOnly || Number(spell.level || 0) > 0)
+  );
+}
+
+function preparedEntryClass(entry, character) {
+  return typeof entry === "string" ? primaryClassName(character) : entry.className || primaryClassName(character);
+}
+
+function preparedNamesForClass(character, className) {
+  const stored = (character.preparedSpells || [])
+    .filter(entry => preparedEntryClass(entry, character) === className)
+    .map(entry => typeof entry === "string" ? entry : entry.name)
+    .filter(Boolean);
+  if ((character.preparedSpellClasses || []).includes(className)) return new Set(stored);
+  const entry = classEntry(character, className) || { level: character.level || 1 };
+  const limit = preparedSpellLimitFor(className, entry.level, character.edition, classSubclassName(character, className), withClassContext(character, className, entry.level));
+  return new Set(classSpellRecords(character, className, true).slice(0, limit).map(spell => spell.name));
+}
+
+function reconcilePreparedSpells(character, previous = null) {
+  const prior = previous || character;
+  const preserved = (character.preparedSpells || []).filter(entry => {
+    const className = preparedEntryClass(entry, character);
+    return className !== "Wizard";
+  });
+  const preparedClasses = new Set(character.preparedSpellClasses || []);
+  classBreakdown(character).forEach(entry => {
+    if (spellPreparationPolicy(character.edition, entry.name, classSubclassName(character, entry.name)) !== "spellbook") return;
+    const book = classSpellRecords(character, entry.name, true);
+    const available = new Set(book.map(spell => spell.name));
+    const previousNames = preparedNamesForClass(prior, entry.name);
+    const limit = preparedSpellLimitFor(entry.name, entry.level, character.edition, classSubclassName(character, entry.name), withClassContext(character, entry.name, entry.level));
+    const selected = [...previousNames].filter(name => available.has(name)).slice(0, limit);
+    book.forEach(spell => {
+      if (selected.length < limit && !selected.includes(spell.name)) selected.push(spell.name);
+    });
+    selected.forEach(name => preserved.push({ name, className: entry.name }));
+    preparedClasses.add(entry.name);
+  });
+  character.preparedSpells = preserved;
+  character.preparedSpellClasses = [...preparedClasses];
+  return character;
+}
+
+function spellPreparationRuleText(character, className) {
+  const policy = spellPreparationPolicy(character.edition, className, classSubclassName(character, className));
+  if (policy === "spellbook") return character.edition === "2024"
+    ? "Prepare spells from your spellbook after a Long Rest. At Wizard 5, Memorize Spell also lets you replace one after a Short Rest."
+    : "Prepare spells from your spellbook after a Long Rest.";
+  if (policy === "long-rest-all") return "Change any prepared spells after a Long Rest.";
+  if (policy === "long-rest-one") return "Replace one prepared spell after a Long Rest.";
+  return character.edition === "2024" ? "Replace one prepared spell when you gain a level in this class." : "Replace one known spell when you gain a level in this class.";
 }
 
 function spellLimitContext() {
@@ -3913,6 +4009,10 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   const cantripText = `Cantrips ${counts.cantrips}/${cantripLimit}${nextCantripLevel ? ` (next at level ${nextCantripLevel})` : ""}`;
   const spellLimitText = spellLimit ? `${spellLabel} ${counts.spells}/${spellLimit}` : "No leveled spells available yet";
   $("#spell-guidance").textContent = `${selectedClass} spell list - ${cantripText} - ${spellLimitText} - spell levels through ${allowed} are available at character level ${level}.`;
+  const editingCharacter = characters.find(character => character.id === activeCharacterId && !isDemoCharacter(character));
+  if (editingCharacter && spellPreparationPolicy(edition, selectedClass, selectedSubclass) === "level") {
+    $("#spell-guidance").textContent += ` Leveled spells are locked here; replace one when you gain a ${selectedClass} level.`;
+  }
   $("#spell-level-tabs").innerHTML = Object.keys(lists).filter(key => lists[key].length).map(key =>
     `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? "Cantrip" : key}</button>`
   ).join("");
@@ -3929,6 +4029,8 @@ function renderSpellList() {
   const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
   const { cantripLimit, spellLimit } = spellLimitContext();
   const counts = selectedSpellCounts();
+  const editingCharacter = characters.find(character => character.id === activeCharacterId && !isDemoCharacter(character));
+  const levelChangeOnly = Boolean(editingCharacter && spellPreparationPolicy(edition, selectedClass, selectedSubclass) === "level");
   const rows = [];
   Object.entries(lists).forEach(([spellLevel, spells]) => {
     if (!query && Number(spellLevel) !== selectedSpellLevel) return;
@@ -3938,10 +4040,11 @@ function renderSpellList() {
     const locked = spell.level > allowed;
     const checked = selectedSpellNames.has(spell.name);
     const capped = !checked && !locked && (spell.level === 0 ? counts.cantrips >= cantripLimit : counts.spells >= spellLimit);
+    const levelLocked = levelChangeOnly && spell.level > 0;
     const source = EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || "";
     const description = spellDescription(spell.name, edition, source);
-    return `<article class="choice-option ${locked || capped ? "locked" : ""}"><label>
-      <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${checked ? "checked" : ""} ${locked || capped ? "disabled" : ""}>
+    return `<article class="choice-option ${locked || capped || levelLocked ? "locked" : ""}"><label>
+      <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${checked ? "checked" : ""} ${locked || capped || levelLocked ? "disabled" : ""}>
       <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${locked ? ` · available when this spell level is reached` : ""}</small></span>
     </label>${ruleDetails(description)}</article>`;
   };
@@ -4159,7 +4262,7 @@ function formData() {
   const lists = spellListsFor(edition, selectedClass, data.subclass) || {};
   data.spells = [...selectedSpellNames].map(name => {
     const spellLevel = Object.entries(lists).find(([, names]) => names.includes(name))?.[0] ?? 0;
-    return { name, level: Number(spellLevel) };
+    return { name, level: Number(spellLevel), className: selectedClass };
   });
   const asiBonuses = asiAbilityBonuses(selectedAsi);
   data.asi = JSON.parse(JSON.stringify(selectedAsi));
@@ -4185,6 +4288,10 @@ function formData() {
   data.level = Number(data.level || 1);
   const existing = characters.find(character => character.id === activeCharacterId);
   if (existing?.classes?.length > 1) {
+    data.spells = [
+      ...(existing.spells || []).filter(spell => spellRecordClass(spell, existing) !== data.className),
+      ...data.spells
+    ];
     data.classes = classBreakdown(existing).map(entry =>
       entry.name === data.className
         ? { ...entry, subclass: data.subclass || entry.subclass || "", customSubclass: data.customSubclass || "", subclassChoices: { ...(entry.subclassChoices || {}), ...(data.subclassChoices || {}) } }
@@ -4209,6 +4316,7 @@ function formData() {
       : kit;
     data.currency = existing?.currency || { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 };
   }
+  reconcilePreparedSpells(data, existing || data);
   return data;
 }
 
@@ -5446,10 +5554,153 @@ function renderConditionPicker(character) {
   </details>`;
 }
 
+function spellManagerPool(character, className) {
+  const entry = classEntry(character, className) || { level: 1 };
+  const policy = spellPreparationPolicy(character.edition, className, classSubclassName(character, className));
+  if (policy === "spellbook") return classSpellRecords(character, className, true);
+  const lists = spellListsFor(character.edition, className, classSubclassName(character, className)) || {};
+  const allowed = maxSpellLevel(className, entry.level, character.edition, classSubclassName(character, className));
+  return Object.entries(lists)
+    .filter(([level]) => Number(level) > 0 && Number(level) <= allowed)
+    .flatMap(([level, names]) => names.map(name => ({ name, level: Number(level), className })))
+    .filter((spell, index, rows) => rows.findIndex(item => item.name === spell.name) === index);
+}
+
+function activePreparedNames(character, className) {
+  const policy = spellPreparationPolicy(character.edition, className, classSubclassName(character, className));
+  if (policy === "spellbook") return preparedNamesForClass(character, className);
+  return new Set(classSpellRecords(character, className, true).map(spell => spell.name));
+}
+
+function openSpellManager(characterId, className) {
+  const character = characters.find(item => item.id === characterId);
+  if (!character || !canControlCharacter(character)) return;
+  const entry = classEntry(character, className);
+  if (!entry) return;
+  const policy = spellPreparationPolicy(character.edition, className, classSubclassName(character, className));
+  if (policy === "level") { toast(spellPreparationRuleText(character, className)); return; }
+  const names = activePreparedNames(character, className);
+  spellManagerState = {
+    characterId,
+    className,
+    policy,
+    original: new Set(names),
+    draft: new Set(names)
+  };
+  activeSheetSection = "spells";
+  renderSheet();
+}
+
+function closeSpellManager() {
+  spellManagerState = null;
+  renderSheet();
+}
+
+function saveSpellManager() {
+  if (!spellManagerState) return;
+  const character = characters.find(item => item.id === spellManagerState.characterId);
+  const entry = character && classEntry(character, spellManagerState.className);
+  if (!character || !entry || !canControlCharacter(character)) return;
+  const pool = spellManagerPool(character, entry.name);
+  const available = new Map(pool.map(spell => [spell.name, spell]));
+  const limit = preparedSpellLimitFor(entry.name, entry.level, character.edition, classSubclassName(character, entry.name), withClassContext(character, entry.name, entry.level));
+  const required = Math.min(limit, pool.length);
+  const selected = [...spellManagerState.draft].filter(name => available.has(name));
+  if (selected.length !== required) {
+    toast(`Prepare exactly ${required} ${entry.name} spell${required === 1 ? "" : "s"}`);
+    return;
+  }
+  if (spellManagerState.policy === "long-rest-one") {
+    const removed = [...spellManagerState.original].filter(name => !spellManagerState.draft.has(name));
+    const added = selected.filter(name => !spellManagerState.original.has(name));
+    const openSlots = Math.max(0, required - spellManagerState.original.size);
+    if (removed.length > 1 || added.length > openSlots + 1) {
+      toast(`${entry.name} can replace only one prepared spell after a Long Rest`);
+      return;
+    }
+  }
+  if (spellManagerState.policy === "spellbook") {
+    const otherClasses = (character.preparedSpells || []).filter(prepared => preparedEntryClass(prepared, character) !== entry.name);
+    character.preparedSpells = [...otherClasses, ...selected.map(name => ({ name, className: entry.name }))];
+    character.preparedSpellClasses = [...new Set([...(character.preparedSpellClasses || []), entry.name])];
+  } else {
+    const preserved = characterSpellRecords(character).filter(spell => spell.className !== entry.name || Number(spell.level || 0) === 0);
+    character.spells = [...preserved, ...selected.map(name => available.get(name))];
+  }
+  character.updatedAt = Date.now();
+  spellManagerState = null;
+  persistCharacters();
+  renderSheet();
+  renderCampaigns();
+  toast(`${entry.name} prepared spells updated`);
+}
+
+function renderSpellManagerPanel(character) {
+  if (!spellManagerState || spellManagerState.characterId !== character.id) return "";
+  const entry = classEntry(character, spellManagerState.className);
+  if (!entry) return "";
+  const pool = spellManagerPool(character, entry.name);
+  const limit = preparedSpellLimitFor(entry.name, entry.level, character.edition, classSubclassName(character, entry.name), withClassContext(character, entry.name, entry.level));
+  const selectedCount = spellManagerState.draft.size;
+  const groups = new Map();
+  pool.forEach(spell => {
+    if (!groups.has(spell.level)) groups.set(spell.level, []);
+    groups.get(spell.level).push(spell);
+  });
+  return `<section class="spell-manager-panel">
+    <div class="spell-manager-head">
+      <div><span class="eyebrow">MANAGE SPELLS</span><h3>${escapeHtml(entry.name)} prepared spells</h3><p>${escapeHtml(spellPreparationRuleText(character, entry.name))}</p></div>
+      <strong class="spell-manager-count ${selectedCount === limit ? "complete" : ""}">${selectedCount}/${limit}</strong>
+    </div>
+    <div class="spell-manager-levels">${[...groups.entries()].sort((a, b) => a[0] - b[0]).map(([level, spells]) => `<div class="spell-manager-level">
+      <h4>Level ${level}</h4>
+      <div>${spells.sort((a, b) => a.name.localeCompare(b.name)).map(spell => {
+        const checked = spellManagerState.draft.has(spell.name);
+        const capped = !checked && selectedCount >= limit;
+        return `<label class="spell-manager-option ${checked ? "selected" : ""} ${capped ? "locked" : ""}"><input type="checkbox" data-manage-spell="${escapeHtml(spell.name)}" ${checked ? "checked" : ""} ${capped ? "disabled" : ""}><span><strong>${escapeHtml(spell.name)}</strong><small>${checked ? "Prepared" : spellManagerState.policy === "spellbook" ? "In spellbook" : "Available"}</small></span></label>`;
+      }).join("")}</div>
+    </div>`).join("")}</div>
+    <div class="spell-manager-actions"><button type="button" class="button ghost" data-spell-manager-cancel>Cancel</button><button type="button" class="button primary" data-spell-manager-save>Save prepared spells</button></div>
+  </section>`;
+}
+
+function renderSpellPreparationControls(character, spellcastingClasses, canControl) {
+  return `<div class="spell-preparation-grid">${spellcastingClasses.map(entry => {
+    const policy = spellPreparationPolicy(character.edition, entry.name, classSubclassName(character, entry.name));
+    const limit = preparedSpellLimitFor(entry.name, entry.level, character.edition, classSubclassName(character, entry.name), withClassContext(character, entry.name, entry.level));
+    const prepared = activePreparedNames(character, entry.name).size;
+    const bookCount = policy === "spellbook" ? classSpellRecords(character, entry.name, true).length : 0;
+    const noun = policy === "level" && character.edition === "2014" ? "known" : "prepared";
+    return `<article class="spell-preparation-card"><div><small>${escapeHtml(entry.name)} SPELLS</small><strong>${prepared}/${limit} ${noun}</strong>${bookCount ? `<span>${bookCount} in spellbook</span>` : ""}<p>${escapeHtml(spellPreparationRuleText(character, entry.name))}</p></div>${canControl && policy !== "level" ? `<button type="button" class="button small ghost" data-manage-spells="${escapeHtml(entry.name)}" data-character="${character.id}">Manage spells</button>` : `<span class="spell-change-lock">${policy === "level" ? `Change at ${escapeHtml(entry.name)} level-up` : "View only"}</span>`}</article>`;
+  }).join("")}</div>`;
+}
+
+function spellsReadyToCast(character, allSpells) {
+  const wizardPrepared = new Map(classBreakdown(character)
+    .filter(entry => spellPreparationPolicy(character.edition, entry.name, classSubclassName(character, entry.name)) === "spellbook")
+    .map(entry => [entry.name, preparedNamesForClass(character, entry.name)]));
+  return allSpells.filter(spell => {
+    if (spell.level === "Custom" || Number(spell.level || 0) === 0) return true;
+    const className = spell.className || primaryClassName(character);
+    return !wizardPrepared.has(className) || wizardPrepared.get(className).has(spell.name);
+  });
+}
+
+function renderWizardSpellbooks(character) {
+  const entries = classBreakdown(character).filter(entry => entry.name === "Wizard");
+  return entries.map(entry => {
+    const book = classSpellRecords(character, entry.name, true);
+    const prepared = preparedNamesForClass(character, entry.name);
+    if (!book.length) return "";
+    return `<details class="wizard-spellbook"><summary><strong>Wizard Spellbook</strong><span>${book.length} spells · ${prepared.size} prepared</span></summary><div>${book.slice().sort((a, b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).map(spell => `<span class="${prepared.has(spell.name) ? "prepared" : ""}"><small>Level ${spell.level}</small>${escapeHtml(spell.name)}<b>${prepared.has(spell.name) ? "Prepared" : "In book"}</b></span>`).join("")}</div></details>`;
+  }).join("");
+}
+
 function renderSheet() {
   const c = characters.find(x => x.id === activeCharacterId) || characters[0];
   if (!c) { $("#sheet-empty").classList.remove("hidden"); $("#character-sheet").classList.add("hidden"); return; }
   activeCharacterId = c.id;
+  if (spellManagerState && spellManagerState.characterId !== c.id) spellManagerState = null;
   const d = derived(c);
   const canControl = canControlCharacter(c);
   const classEntries = classBreakdown(c);
@@ -5477,8 +5728,9 @@ function renderSheet() {
     })
     .filter(Boolean);
   const feats = [...(c.feats || []), ...String(c.customFeats || "").split(",").map(x => x.trim()).filter(Boolean)];
-  const customSpells = String(c.customSpells || "").split(",").map(x => x.trim()).filter(Boolean).map(name => ({ name, level: "Custom" }));
-  const spells = [...(c.spells || []).map(spell => typeof spell === "string" ? { name: spell, level: 0 } : spell), ...customSpells];
+  const customSpells = String(c.customSpells || "").split(",").map(x => x.trim()).filter(Boolean).map(name => ({ name, level: "Custom", className: primaryClassName(c) }));
+  const allSpells = [...characterSpellRecords(c), ...customSpells];
+  const castableSpells = spellsReadyToCast(c, allSpells);
   const speciesTraits = speciesTraitCards(c);
   const characterChoices = [];
   const addChoice = (name, source, description = "") => {
@@ -5621,8 +5873,11 @@ function renderSheet() {
         const ability = spellcastingAbility(context);
         const attack = d.prof + modifier(c[ability]);
         return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${8 + attack} · ${signed(attack)} attack</span>`;
-      }).join("")}<span><strong>Selected:</strong> ${spells.length}</span></div>
-      ${renderSpellBook(spells, c)}
+      }).join("")}<span><strong>Ready to cast:</strong> ${castableSpells.length}</span></div>
+      ${renderSpellPreparationControls(c, spellcastingClasses, canControl)}
+      ${renderSpellManagerPanel(c)}
+      ${renderSpellBook(castableSpells, c)}
+      ${renderWizardSpellbooks(c)}
     </section>` : ""}
   </div>`;
 }
@@ -5831,28 +6086,30 @@ function levelSpellChoices(character, targetLevel) {
   const lists = spellListsFor(character.edition, character.className, subclassName(character));
   if (!lists) return "";
   const newMax = maxSpellLevel(character.className, targetLevel, character.edition, subclassName(character));
-  const thirdCasterTotals = {
-    "Eldritch Knight": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
-    "Arcane Trickster": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
-    "Order of the Profane Soul": [0,0,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,11]
-  };
-  const progression = SPELL_PROGRESSION[character.edition]?.[character.className]
-    || (thirdCasterTotals[subclassName(character)] ? { mode: "known", totals: thirdCasterTotals[subclassName(character)] } : null);
+  const progression = character.edition === "2014" && character.className === "Artificer"
+    ? null
+    : spellProgressionFor(character.edition, character.className, subclassName(character));
+  const policy = spellPreparationPolicy(character.edition, character.className, subclassName(character));
   let count = 0;
-  if (progression?.perLevel) count = progression.perLevel;
+  if (progression?.perLevel) count = character.className === "Wizard" && targetLevel === 1 ? 6 : progression.perLevel;
   if (progression?.totals) {
     const before = progression.totals[Number(character.level) - 1] || 0;
     const after = progression.totals[targetLevel - 1] || before;
     count = Math.max(0, after - before);
   }
-  if (!count) return "";
-  const existing = new Set((character.spells || []).map(spell => typeof spell === "string" ? spell : spell.name));
+  if (!progression && policy !== "level") {
+    const before = preparedSpellLimitFor(character.className, Number(character.level), character.edition, subclassName(character), character);
+    const after = preparedSpellLimitFor(character.className, targetLevel, character.edition, subclassName(character), { ...character, level: targetLevel });
+    count = Math.max(0, after - before);
+  }
+  const existingRecords = classSpellRecords(character, character.className, true);
+  const existing = new Set(existingRecords.map(spell => spell.name));
   const available = Object.entries(lists)
     .filter(([level]) => Number(level) > 0 && Number(level) <= newMax)
     .flatMap(([level, spells]) => spells.map(name => ({ name, level: Number(level) })))
     .filter(spell => !existing.has(spell.name));
-  const modeLabel = progression.mode === "spellbook" ? "spellbook" : progression.mode === "known" ? "spells known" : "prepared spells";
-  return `<section class="advancement-section">
+  const modeLabel = progression?.mode === "spellbook" ? "spellbook" : policy === "level" && character.edition === "2014" ? "spells known" : "prepared spells";
+  const addSection = count ? `<section class="advancement-section">
     <h3>Add ${count} spell${count > 1 ? "s" : ""}</h3>
     <p>Your ${modeLabel} increases at this level. Choose exactly ${count}; eligible spell levels are 1–${newMax}.</p>
     <div class="progression-choice" data-min-choices="${count}" data-choice-name="levelSpells">
@@ -5861,7 +6118,16 @@ function levelSpellChoices(character, targetLevel) {
         return spellDescription(name, character.edition, EXPANDED_SPELL_SOURCES[character.edition]?.[name] || "");
       })}
     </div>
-  </section>`;
+  </section>` : "";
+  const replacementSection = policy === "level" && existingRecords.length && available.length ? `<section class="advancement-section">
+    <h3>Optional spell replacement</h3>
+    <p>${character.edition === "2024" ? "Replace one prepared spell" : "Replace one known spell"} as part of gaining this ${character.className} level.</p>
+    <div class="progression-choice spell-replacement-row">
+      <label>Replace<select name="replaceSpellOld"><option value="">Keep current spells</option>${existingRecords.slice().sort((a, b) => a.name.localeCompare(b.name)).map(spell => `<option value="${escapeHtml(spell.name)}">${escapeHtml(spell.name)}</option>`).join("")}</select></label>
+      <label>With<select name="replaceSpellNew"><option value="">Choose a replacement</option>${available.slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name)).map(spell => `<option value="${escapeHtml(spell.name)}">${escapeHtml(spell.name)} · level ${spell.level}</option>`).join("")}</select></label>
+    </div>
+  </section>` : "";
+  return `${addSection}${replacementSection}`;
 }
 
 function levelCantripChoices(character, targetLevel) {
@@ -5970,7 +6236,7 @@ function closeLevelUp() {
 }
 
 function progressionSnapshot(character) {
-  const keys = ["level", "classes", "className", "hpOverride", "subclass", "customSubclass", "subclassChoices", "feats", "spells", "fightingStyle", "fightingStyles", "pactBoon", "metamagic", "invocations", "skillProficiencies", "backgroundSkills", "expertise", "weaponMastery", "divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "resourceUsage", "baseAbilities", "originBonuses", "originFeat", "featAbilityChoices", "featBonuses", "speciesVariant", "backgroundAbilityMode", "backgroundPrimary", "backgroundSecondary", "originFeatChoice", ...ABILITIES];
+  const keys = ["level", "classes", "className", "hpOverride", "subclass", "customSubclass", "subclassChoices", "feats", "spells", "preparedSpells", "preparedSpellClasses", "fightingStyle", "fightingStyles", "pactBoon", "metamagic", "invocations", "skillProficiencies", "backgroundSkills", "expertise", "weaponMastery", "divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "resourceUsage", "baseAbilities", "originBonuses", "originFeat", "featAbilityChoices", "featBonuses", "speciesVariant", "backgroundAbilityMode", "backgroundPrimary", "backgroundSecondary", "originFeatChoice", ...ABILITIES];
   return Object.fromEntries(keys.map(name => [name, structuredClone(character[name])]));
 }
 
@@ -6022,6 +6288,7 @@ function delevelCharacter(id) {
         if (last?.level > updated.level) history.pop();
       }
       updated.progressionHistory = history;
+      reconcilePreparedSpells(updated, updated);
       updated.updatedAt = Date.now();
       characters[characters.findIndex(item => item.id === id)] = updated;
       persistCharacters();
@@ -6123,6 +6390,7 @@ function autoLevelCharacter(id, targetClass = "") {
     updated.spells = [...(updated.spells || []), ...spellAdditions];
     choices.spells = spellAdditions.map(spell => spell.name);
   }
+  reconcilePreparedSpells(updated, character);
   const gained = levelFeatures(character, targetLevel, levelClass).map(feature => `${feature.source}: ${feature.name}`);
   updated.progressionHistory = [...(updated.progressionHistory || []), {
     level: targetLevel,
@@ -6266,6 +6534,22 @@ function completeLevelUp(event) {
   }
   const addedCantrips = formValues.getAll("levelCantrips");
   const arcanum = formValues.get("mysticArcanum");
+  const replaceSpellOld = formValues.get("replaceSpellOld");
+  const replaceSpellNew = formValues.get("replaceSpellNew");
+  if (Boolean(replaceSpellOld) !== Boolean(replaceSpellNew)) {
+    toast("Choose both the spell to replace and its replacement");
+    return;
+  }
+  if (replaceSpellOld && replaceSpellNew) {
+    const spellContext = withClassContext(updated, levelClass, targetClassLevel);
+    const lists = spellListsFor(updated.edition, levelClass, subclassName(spellContext)) || {};
+    const replacementLevel = Number(Object.entries(lists).find(([, names]) => names.includes(replaceSpellNew))?.[0] || 0);
+    updated.spells = characterSpellRecords(updated).filter(spell => !(spell.className === levelClass && spell.name === replaceSpellOld));
+    if (!updated.spells.some(spell => spell.className === levelClass && spell.name === replaceSpellNew)) {
+      updated.spells.push({ name: replaceSpellNew, className: levelClass, level: replacementLevel });
+    }
+    choices.spellReplacement = `${replaceSpellOld} -> ${replaceSpellNew}`;
+  }
   const addedSpells = [...addedCantrips, ...formValues.getAll("levelSpells"), ...(arcanum ? [arcanum] : [])];
   if (addedSpells.length) {
     const spellContext = withClassContext(updated, levelClass, targetClassLevel);
@@ -6280,6 +6564,7 @@ function completeLevelUp(event) {
     choices.spells = addedSpells;
     if (arcanum) choices.mysticArcanum = arcanum;
   }
+  reconcilePreparedSpells(updated, character);
   const gained = levelFeatures(character, targetLevel, levelClass).map(feature => `${feature.source}: ${feature.name}`);
   updated.progressionHistory = [...(updated.progressionHistory || []), {
     level: targetLevel,
@@ -6603,6 +6888,21 @@ function initEvents() {
     const sheetJump = event.target.closest("[data-sheet-section-jump]");
     if (sheetJump) {
       activeSheetSection = sheetJump.dataset.sheetSectionJump;
+      renderSheet();
+      return;
+    }
+    const manageSpells = event.target.closest("[data-manage-spells]");
+    if (manageSpells) {
+      openSpellManager(manageSpells.dataset.character, manageSpells.dataset.manageSpells);
+      return;
+    }
+    if (event.target.closest("[data-spell-manager-cancel]")) { closeSpellManager(); return; }
+    if (event.target.closest("[data-spell-manager-save]")) { saveSpellManager(); return; }
+    const managedSpell = event.target.closest("[data-manage-spell]");
+    if (managedSpell && spellManagerState) {
+      const name = managedSpell.dataset.manageSpell;
+      if (managedSpell.checked) spellManagerState.draft.add(name);
+      else spellManagerState.draft.delete(name);
       renderSheet();
       return;
     }
