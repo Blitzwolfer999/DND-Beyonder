@@ -2414,18 +2414,18 @@ function quickOrigin(className, species, background) {
   };
 }
 
-function quickSkillChoices(className, background) {
+function quickSkillChoices(className, background, level = 1) {
   const profile = QUICK_BUILD_PROFILES[className];
   const backgroundSkills = [...new Set(BACKGROUND_SKILLS[background] || profile.skills.slice(-2))].slice(0, 2);
   while (backgroundSkills.length < 2) {
     const fallback = Object.keys(SKILLS).find(skill => !backgroundSkills.includes(skill));
     backgroundSkills.push(fallback);
   }
-  const rule = classSkillRuleAtLevel(className, 1, edition);
+  const rule = classSkillRuleAtLevel(className, level, edition);
   const preferred = profile.skills.filter(skill => rule.options.includes(skill) && !backgroundSkills.includes(skill));
   const remaining = rule.options.filter(skill => !backgroundSkills.includes(skill) && !preferred.includes(skill));
   const skillProficiencies = [...preferred, ...remaining].slice(0, rule.count);
-  const expertiseCount = expertiseCountAtLevel(className, 1, edition);
+  const expertiseCount = expertiseCountAtLevel(className, level, edition);
   return {
     backgroundSkills,
     skillProficiencies,
@@ -2591,20 +2591,37 @@ function prebuildSubclassChoices(subclass, level) {
 }
 
 function prebuildClassChoices(className, level, profile) {
+  const masteryCount = weaponMasteryCount(className, level, edition);
+  const weaponMastery = [...(profile.masteries || []), ...weaponMasteryOptions(className)]
+    .filter((name, index, names) => names.indexOf(name) === index)
+    .slice(0, masteryCount);
+  const invocationCount = Object.entries(LEVEL_CHOICE_RULES[edition]?.Warlock?.invocations || {})
+    .reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0);
+  const invocationPreferences = [
+    "Agonizing Blast", "Eldritch Mind", "Repelling Blast",
+    ...(edition === "2024" ? ["Pact of the Tome"] : []),
+    "Fiendish Vigor", "Devil's Sight", "Armor of Shadows", "Eldritch Sight", "Eldritch Spear", "Lifedrinker"
+  ];
+  const invocations = [...invocationPreferences, ...(PROGRESSION_OPTIONS.invocations[edition] || [])]
+    .filter((name, index, names) => names.indexOf(name) === index)
+    .slice(0, invocationCount);
+  const metamagicCount = Object.entries(LEVEL_CHOICE_RULES[edition]?.Sorcerer?.metamagic || {})
+    .reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0);
+  const metamagicPreferences = ["Careful Spell", "Quickened Spell", "Twinned Spell", "Subtle Spell", "Empowered Spell", "Heightened Spell"];
+  const metamagic = [...metamagicPreferences, ...(PROGRESSION_OPTIONS.metamagic[edition] || [])]
+    .filter((name, index, names) => names.indexOf(name) === index)
+    .slice(0, metamagicCount);
   return {
-    weaponMastery: (profile.masteries || []).slice(0, weaponMasteryCount(className, level, edition)),
+    weaponMastery,
     fightingStyle: ["Fighter", "Paladin", "Ranger"].includes(className) && level >= (className === "Fighter" ? 1 : 2) ? profile.fightingStyle || "Defense" : "",
     fightingStyles: [],
+    pactBoon: className === "Warlock" && edition === "2014" && level >= 3 ? "Pact of the Tome" : "",
     divineOrder: edition === "2024" && className === "Cleric" ? "Protector" : "",
     primalOrder: edition === "2024" && className === "Druid" ? "Magician" : "",
     blessedStrikes: edition === "2024" && className === "Cleric" && level >= 7 ? "Divine Strike" : "",
     elementalFury: edition === "2024" && className === "Druid" && level >= 7 ? "Potent Spellcasting" : "",
-    invocations: className === "Warlock"
-      ? ["Agonizing Blast", "Eldritch Mind", "Repelling Blast", "Pact of the Tome", "Fiendish Vigor"].slice(0, Object.entries(LEVEL_CHOICE_RULES[edition]?.Warlock?.invocations || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0))
-      : [],
-    metamagic: className === "Sorcerer"
-      ? ["Careful Spell", "Quickened Spell", "Twinned Spell", "Subtle Spell", "Empowered Spell"].slice(0, Object.entries(LEVEL_CHOICE_RULES[edition]?.Sorcerer?.metamagic || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0))
-      : []
+    invocations: className === "Warlock" ? invocations : [],
+    metamagic: className === "Sorcerer" ? metamagic : []
   };
 }
 
@@ -2718,7 +2735,7 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
   for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
     (lists[spellLevel] || []).forEach(name => leveledPool.push({ name, level: spellLevel }));
   }
-  if (className === "Wizard") leveledPool.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+  leveledPool.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
   addFromPool(leveledPool, Math.max(0, spellTarget - existingLeveled));
   if (className === "Warlock") {
     const arcanumLevel = ({ 11: 6, 13: 7, 15: 8, 17: 9 })[classLevelValue];
@@ -2727,6 +2744,33 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
     }
   }
   return additions;
+}
+
+function balancedLeveledSpellChoices(lists, allowed, limit, preferredNames = []) {
+  const byLevel = new Map();
+  for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
+    const spells = (lists[spellLevel] || []).map(name => ({ name, level: spellLevel }));
+    if (spells.length) byLevel.set(spellLevel, spells);
+  }
+  const levels = [...byLevel.keys()].sort((a, b) => b - a);
+  const selected = [];
+  const add = spell => {
+    if (!spell || selected.length >= limit || selected.some(item => item.name === spell.name)) return false;
+    selected.push(spell);
+    return true;
+  };
+  levels.forEach(level => add(byLevel.get(level)[0]));
+  preferredNames.forEach(name => add(levels.flatMap(level => byLevel.get(level)).find(spell => spell.name === name)));
+  while (selected.length < limit) {
+    let added = false;
+    for (const level of levels) {
+      const next = byLevel.get(level).find(spell => !selected.some(item => item.name === spell.name));
+      if (add(next)) added = true;
+      if (selected.length >= limit) break;
+    }
+    if (!added) break;
+  }
+  return selected;
 }
 
 function prebuildSpellChoices(className, level, subclass, characterData) {
@@ -2742,7 +2786,9 @@ function prebuildSpellChoices(className, level, subclass, characterData) {
   };
   const cantrips = lists[0] || [];
   const preferredCantrips = (profile.spells || []).filter(name => cantrips.includes(name));
-  [...preferredCantrips, ...cantrips].slice(0, Math.max(0, cantripLimit)).forEach(name => addUnique(name, 0));
+  [...new Set([...preferredCantrips, ...cantrips])]
+    .slice(0, Math.max(0, cantripLimit))
+    .forEach(name => addUnique(name, 0));
   if (className === "Wizard") {
     const addWizardSpells = (classLevel, amount) => {
       const maximum = maxSpellLevel(className, classLevel, edition, subclass);
@@ -2762,16 +2808,16 @@ function prebuildSpellChoices(className, level, subclass, characterData) {
     for (let classLevel = 2; classLevel <= level; classLevel += 1) addWizardSpells(classLevel, 2);
     return chosen;
   }
-  const leveledPool = [];
-  for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
-    (lists[spellLevel] || []).forEach(name => leveledPool.push({ name, level: spellLevel }));
+  balancedLeveledSpellChoices(lists, allowed, Math.max(0, spellLimit), profile.spells || [])
+    .forEach(spell => addUnique(spell.name, spell.level));
+  if (className === "Warlock") {
+    [[11, 6], [13, 7], [15, 8], [17, 9]].forEach(([unlock, spellLevel]) => {
+      if (level < unlock) return;
+      const pool = lists[spellLevel] || [];
+      const preferred = (profile.spells || []).find(name => pool.includes(name));
+      addUnique(preferred || pool[0], spellLevel);
+    });
   }
-  const preferred = (profile.spells || [])
-    .map(name => leveledPool.find(spell => spell.name === name))
-    .filter(Boolean);
-  [...preferred, ...leveledPool].forEach(spell => {
-    if (chosen.filter(item => item.level > 0).length < Math.max(0, spellLimit)) addUnique(spell.name, spell.level);
-  });
   return chosen;
 }
 
@@ -2826,7 +2872,7 @@ function buildPrebuiltCharacter(preview = false) {
     ability,
     Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0) + Number(asiBonuses[ability] || 0)
   ]));
-  const skills = quickSkillChoices(className, background);
+  const skills = quickSkillChoices(className, background, level);
   const feats = origin.originFeat ? [origin.originFeat] : [];
   const classChoices = prebuildClassChoices(className, level, profile);
   const subclassChoices = prebuildSubclassChoices(subclass, level);
@@ -2870,10 +2916,11 @@ function buildPrebuiltCharacter(preview = false) {
     primalOrder: classChoices.primalOrder,
     blessedStrikes: classChoices.blessedStrikes,
     elementalFury: classChoices.elementalFury,
+    pactBoon: classChoices.pactBoon,
     invocations: classChoices.invocations,
     metamagic: classChoices.metamagic,
     subclassChoices,
-    spells: prebuildSpellChoices(className, level, subclass, spellSeed),
+    spells: prebuildSpellChoices(className, level, subclass, spellSeed).map(spell => ({ ...spell, className })),
     customSpells: "",
     customFeats: "",
     inventory: quickInventory(className),
@@ -2887,6 +2934,7 @@ function buildPrebuiltCharacter(preview = false) {
     progressionHistory: prebuildProgressionHistory(className, subclass, level),
     prebuilt: true,
     quickBuilt: true,
+    quickBuildVersion: 4,
     updatedAt: Date.now()
   };
   reconcilePreparedSpells(character);
@@ -2949,35 +2997,44 @@ function renderPrebuildSummary() {
     </div>
     <div class="quick-summary-section"><strong>Ability scores</strong><p>${ABILITIES.map(ability => `${ability} ${character[ability]}`).join(" &middot; ")}</p></div>
     <div class="quick-summary-section"><strong>Core proficiencies</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
+    ${character.expertise?.length ? `<div class="quick-summary-section"><strong>Expertise</strong><p>${escapeHtml(character.expertise.join(", "))}</p></div>` : ""}
     ${character.weaponMastery?.length ? `<div class="quick-summary-section"><strong>Weapon masteries</strong><p>${escapeHtml(character.weaponMastery.join(", "))}</p></div>` : ""}
     ${character.fightingStyle ? `<div class="quick-summary-section"><strong>Fighting style</strong><p>${escapeHtml(character.fightingStyle)}</p></div>` : ""}
+    ${character.pactBoon ? `<div class="quick-summary-section"><strong>Pact boon</strong><p>${escapeHtml(character.pactBoon)}</p></div>` : ""}
+    ${character.invocations?.length ? `<div class="quick-summary-section"><strong>Eldritch invocations</strong><p>${escapeHtml(character.invocations.join(", "))}</p></div>` : ""}
+    ${character.metamagic?.length ? `<div class="quick-summary-section"><strong>Metamagic</strong><p>${escapeHtml(character.metamagic.join(", "))}</p></div>` : ""}
     ${spellNames.length ? `<div class="quick-summary-section"><strong>Spells selected</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p><small>${escapeHtml(spellCoverage)}</small></div>` : ""}
     <div class="quick-summary-section"><strong>Features ready</strong><p>${featureCount} class/subclass feature${featureCount === 1 ? "" : "s"} will appear on the sheet for level ${character.level}.</p></div>
     <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 7).map(item => `${item.quantity > 1 ? `${item.quantity}x ` : ""}${item.name}`).join(", ")}</p></div>
     <p class="quick-summary-note">Generated choices are solid defaults. You can edit spells, ASIs, items, and level-up details after creation.</p>`;
 }
 
-function buildQuickCharacter(preview = false) {
-  const { profile, species, background, level } = quickSelections();
-  const baseAbilities = quickAbilityScores(quickClass);
-  const origin = quickOrigin(quickClass, species, background);
-  const asiPlan = autoAsiPlan(quickClass, level, baseAbilities, origin.originBonuses);
+function buildQuickCharacter(preview = false, overrides = null) {
+  const buildClassName = overrides?.className || quickClass;
+  const profile = QUICK_BUILD_PROFILES[buildClassName] || QUICK_BUILD_PROFILES.Fighter;
+  const selections = overrides || quickSelections();
+  const species = selections.species || "Human";
+  const background = selections.background || profile.backgrounds[edition] || "Soldier";
+  const level = Math.max(1, Math.min(20, Number(selections.level || 1)));
+  const baseAbilities = quickAbilityScores(buildClassName);
+  const origin = quickOrigin(buildClassName, species, background);
+  const asiPlan = autoAsiPlan(buildClassName, level, baseAbilities, origin.originBonuses);
   const asiBonuses = asiPlan.bonuses;
-  const skills = quickSkillChoices(quickClass, background);
-  const subclass = defaultSubclassFor(quickClass, level);
+  const skills = quickSkillChoices(buildClassName, background, level);
+  const subclass = defaultSubclassFor(buildClassName, level);
   const subclassChoices = prebuildSubclassChoices(subclass, level);
   const finalAbilities = Object.fromEntries(ABILITIES.map(ability => [
     ability,
     Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0) + Number(asiBonuses[ability] || 0)
   ]));
-  const classChoices = prebuildClassChoices(quickClass, level, profile);
-  const spellSeed = { className: quickClass, level, edition, subclass, ...finalAbilities };
-  const spells = prebuildSpellChoices(quickClass, level, subclass, spellSeed);
+  const classChoices = prebuildClassChoices(buildClassName, level, profile);
+  const spellSeed = { className: buildClassName, level, edition, subclass, ...finalAbilities };
+  const spells = prebuildSpellChoices(buildClassName, level, subclass, spellSeed);
   const feats = origin.originFeat ? [origin.originFeat] : [];
   const character = {
     id: preview ? "quick-preview" : crypto.randomUUID(),
-    name: $("#quick-name")?.value.trim() || generateQuickName(false),
-    player: $("#quick-player")?.value.trim() || "",
+    name: overrides?.name || $("#quick-name")?.value.trim() || generateQuickName(false),
+    player: overrides?.player || $("#quick-player")?.value.trim() || "",
     pronouns: "",
     level,
     edition,
@@ -2985,10 +3042,10 @@ function buildQuickCharacter(preview = false) {
     background,
     alignment: "Unaligned",
     campaign: "",
-    className: quickClass,
+    className: buildClassName,
     subclass,
     customSubclass: "",
-    classes: [{ name: quickClass, level, subclass, customSubclass: "", subclassChoices }],
+    classes: [{ name: buildClassName, level, subclass, customSubclass: "", subclassChoices }],
     ...finalAbilities,
     baseAbilities,
     originBonuses: origin.originBonuses,
@@ -3013,13 +3070,14 @@ function buildQuickCharacter(preview = false) {
     primalOrder: classChoices.primalOrder,
     blessedStrikes: classChoices.blessedStrikes,
     elementalFury: classChoices.elementalFury,
+    pactBoon: classChoices.pactBoon,
     invocations: classChoices.invocations,
     metamagic: classChoices.metamagic,
     subclassChoices,
-    spells,
+    spells: spells.map(spell => ({ ...spell, className: buildClassName })),
     customSpells: "",
     customFeats: "",
-    inventory: quickInventory(quickClass),
+    inventory: quickInventory(buildClassName),
     currency: { cp: 0, sp: 0, ep: 0, gp: 10 + Math.max(0, level - 1) * 5, pp: 0 },
     portrait: "",
     backstory: `${profile.tagline} This quick-build character was generated at level ${level} with smart defaults and can be fully customized from the character sheet.`,
@@ -3027,8 +3085,9 @@ function buildQuickCharacter(preview = false) {
     hpOverride: "",
     resourceUsage: {},
     conditions: [],
-    progressionHistory: prebuildProgressionHistory(quickClass, subclass, level),
+    progressionHistory: prebuildProgressionHistory(buildClassName, subclass, level),
     quickBuilt: true,
+    quickBuildVersion: 4,
     updatedAt: Date.now()
   };
   reconcilePreparedSpells(character);
@@ -3087,8 +3146,12 @@ function renderQuickSummary() {
     </div>
     <div class="quick-summary-section"><strong>Automatic ability scores</strong><p>${ABILITIES.map(ability => `${ability} ${character[ability]}`).join(" · ")}</p></div>
     <div class="quick-summary-section"><strong>Trained skills</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
+    ${character.expertise?.length ? `<div class="quick-summary-section"><strong>Expertise</strong><p>${escapeHtml(character.expertise.join(", "))}</p></div>` : ""}
     ${character.weaponMastery?.length ? `<div class="quick-summary-section"><strong>Weapon masteries</strong><p>${escapeHtml(character.weaponMastery.join(", "))}</p></div>` : ""}
     ${character.fightingStyle ? `<div class="quick-summary-section"><strong>Fighting style</strong><p>${escapeHtml(character.fightingStyle)}</p></div>` : ""}
+    ${character.pactBoon ? `<div class="quick-summary-section"><strong>Pact boon</strong><p>${escapeHtml(character.pactBoon)}</p></div>` : ""}
+    ${character.invocations?.length ? `<div class="quick-summary-section"><strong>Eldritch invocations</strong><p>${escapeHtml(character.invocations.join(", "))}</p></div>` : ""}
+    ${character.metamagic?.length ? `<div class="quick-summary-section"><strong>Metamagic</strong><p>${escapeHtml(character.metamagic.join(", "))}</p></div>` : ""}
     ${spellNames.length ? `<div class="quick-summary-section"><strong>Selected spells</strong><p>${escapeHtml(spellNames.slice(0, 18).join(", "))}${spellNames.length > 18 ? `, and ${spellNames.length - 18} more` : ""}</p><small>${escapeHtml(spellCoverage)}</small></div>` : ""}
     <div class="quick-summary-section"><strong>Features ready</strong><p>${featureCount} class/subclass feature${featureCount === 1 ? "" : "s"} will appear on the sheet for level ${character.level}.</p></div>
     <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 6).map(item => `${item.quantity > 1 ? `${item.quantity}× ` : ""}${item.name}`).join(", ")}</p></div>
@@ -3176,6 +3239,53 @@ function surpriseQuickBuild() {
   setQuickStep(3);
 }
 
+function generatedCharacterIssue(character) {
+  const level = Number(character.level || 0);
+  const className = primaryClassName(character);
+  if (level < 1 || level > 20) return "The generated level is outside the 1-20 range.";
+  if (ABILITIES.some(ability => !Number.isFinite(Number(character[ability])))) return "One or more generated ability scores are invalid.";
+  const stats = derived(character);
+  if (!Number.isFinite(stats.hp) || stats.hp < 1 || !Number.isFinite(stats.ac)) return "Generated combat statistics are invalid.";
+  if (!(character.inventory || []).length) return "The generated character has no starting equipment.";
+  const subclassOptions = subclassEntries(className, character.edition);
+  if (subclassOptions.length && level >= subclassLevel(className, character.edition) && !classSubclassName(character, className)) {
+    return `The generated ${className} is missing a subclass.`;
+  }
+  const expectedExpertise = expertiseCountAtLevel(className, level, character.edition);
+  if ((character.expertise || []).length < expectedExpertise) return `The generated ${className} is missing expertise choices.`;
+  const expectedMasteries = weaponMasteryCount(className, level, character.edition);
+  if ((character.weaponMastery || []).length < expectedMasteries) return `The generated ${className} is missing weapon mastery choices.`;
+  const expectedInvocations = className === "Warlock"
+    ? Object.entries(LEVEL_CHOICE_RULES[character.edition]?.Warlock?.invocations || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0)
+    : 0;
+  if ((character.invocations || []).length < expectedInvocations) return "The generated Warlock is missing invocation choices.";
+  const expectedMetamagic = className === "Sorcerer"
+    ? Object.entries(LEVEL_CHOICE_RULES[character.edition]?.Sorcerer?.metamagic || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0)
+    : 0;
+  if ((character.metamagic || []).length < expectedMetamagic) return "The generated Sorcerer is missing metamagic choices.";
+  const subclass = classSubclassName(character, className);
+  const lists = spellListsFor(character.edition, className, subclass);
+  if (!lists) return "";
+  const records = classSpellRecords(character, className);
+  const expectedCantrips = Math.min(cantripLimitFor(className, level, character.edition, subclass), (lists[0] || []).length);
+  if (records.filter(spell => Number(spell.level || 0) === 0).length < expectedCantrips) return `The generated ${className} is missing cantrips.`;
+  const allowed = maxSpellLevel(className, level, character.edition, subclass);
+  const expectedLeveled = spellLimitFor(className, level, character.edition, subclass, withClassContext(character, className, level));
+  const regularSpells = records.filter(spell => Number(spell.level || 0) > 0 && (className !== "Warlock" || Number(spell.level) <= 5));
+  if (regularSpells.length < expectedLeveled) return `The generated ${className} is missing leveled spells.`;
+  const expectedLevels = Array.from({ length: Math.max(0, allowed) }, (_, index) => index + 1).filter(spellLevel => (lists[spellLevel] || []).length);
+  if (expectedLeveled >= expectedLevels.length && expectedLevels.some(spellLevel => !regularSpells.some(spell => Number(spell.level) === spellLevel))) {
+    return `The generated ${className} does not cover every unlocked spell level.`;
+  }
+  if (className === "Warlock") {
+    const missingArcanum = [[11, 6], [13, 7], [15, 8], [17, 9]].some(([unlock, spellLevel]) =>
+      level >= unlock && !records.some(spell => Number(spell.level) === spellLevel)
+    );
+    if (missingArcanum) return "The generated Warlock is missing a Mystic Arcanum spell.";
+  }
+  return "";
+}
+
 function createQuickCharacter() {
   const character = buildQuickCharacter();
   if (!character.name.trim()) {
@@ -3183,6 +3293,8 @@ function createQuickCharacter() {
     toast("Give your hero a name");
     return;
   }
+  const issue = generatedCharacterIssue(character);
+  if (issue) { toast(issue); return; }
   clearCharacterDeletion(character.id);
   characters.unshift(character);
   activeCharacterId = character.id;
@@ -3200,6 +3312,8 @@ function createPrebuiltCharacter() {
     toast("Give your prebuilt hero a name");
     return;
   }
+  const issue = generatedCharacterIssue(character);
+  if (issue) { toast(issue); return; }
   clearCharacterDeletion(character.id);
   characters.unshift(character);
   activeCharacterId = character.id;
