@@ -679,6 +679,9 @@ textarea { resize: vertical; }
 .spell-preparation-card strong { color: var(--ink); font-size: 14px; }
 .spell-preparation-card span { color: var(--gold-dark); font-size: 11px; font-weight: 800; }
 .spell-preparation-card p { margin-top: 4px; font-size: 11px; }
+.spell-repair-callout { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -6px 0 18px; padding: 13px 14px; border: 1px solid #d5aa63; border-radius: 12px; background: #fff4d9; }
+.spell-repair-callout strong { color: var(--ink); }
+.spell-repair-callout p { margin: 3px 0 0; font-size: 12px; }
 .spell-change-lock { flex: 0 0 115px; padding: 6px 8px; border-radius: 8px; background: #f1e7d5; text-align: center; line-height: 1.25; }
 .spell-manager-panel { margin: 14px 0 20px; padding: 16px; border: 1px solid #c7ae84; border-radius: 15px; background: linear-gradient(180deg, #fffaf0, #f7efe1); box-shadow: 0 8px 24px rgba(57, 39, 20, .08); }
 .spell-manager-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
@@ -1058,7 +1061,7 @@ textarea { resize: vertical; }
   .option-list, .feature-grid, .sheet-spells, .resource-grid { grid-template-columns: 1fr; }
   .sheet-spell-card { grid-template-columns: 1fr; }
   .spell-fact-grid { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
-  .spell-preparation-card, .spell-manager-head { align-items: stretch; flex-direction: column; }
+  .spell-preparation-card, .spell-manager-head, .spell-repair-callout { align-items: stretch; flex-direction: column; }
   .spell-preparation-card .button, .spell-change-lock { width: 100%; flex-basis: auto; }
   .spell-manager-level > div, .wizard-spellbook > div, .spell-replacement-row { grid-template-columns: 1fr; }
   .spell-manager-actions { display: grid; grid-template-columns: 1fr; }
@@ -2332,6 +2335,7 @@ html[data-theme="dark"] .spellbook-level-head h3 { color: var(--ink); }
 html[data-theme="dark"] .spellbook-level-head span { color: #f3d48f; }
 html[data-theme="dark"] .spell-preparation-card,
 html[data-theme="dark"] .spell-manager-panel,
+html[data-theme="dark"] .spell-repair-callout,
 html[data-theme="dark"] .wizard-spellbook { color: var(--ink); background: #111720; border-color: #394454; }
 html[data-theme="dark"] .spell-preparation-card strong,
 html[data-theme="dark"] .spell-manager-head h3,

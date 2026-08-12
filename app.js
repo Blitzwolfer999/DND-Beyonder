@@ -236,6 +236,7 @@ const RECOVERY_SNAPSHOT_KEY = "arcanaForge.recoverySnapshots.v1";
 const MAX_RECOVERY_SNAPSHOTS = 5;
 const BACKUP_META_KEY = "arcanaForge.cloudBackupMeta.v1";
 const THEME_KEY = "dndb.theme";
+const QUICK_BUILD_VERSION = 5;
 const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
 const BUILDER_STEP_COUNT = 7;
 
@@ -436,7 +437,7 @@ function mergeUserVaultCharacters(lists, userId) {
   lists.flat().forEach(character => {
     if (!character?.id || isDemoCharacter(character)) return;
     const ownerId = character.cloudOwnerId || character.owner_user_id || userId || "";
-    const normalized = { ...character, cloudOwnerId: ownerId };
+    const normalized = normalizeCharacterData({ ...character, cloudOwnerId: ownerId });
     const key = characterVaultKey(normalized, userId);
     const existing = merged.get(key);
     if (!existing || characterTimestamp(normalized) >= characterTimestamp(existing)) merged.set(key, normalized);
@@ -1382,14 +1383,14 @@ async function loadCloudCharacters() {
       }
       return;
     }
-    const remote = {
+    const remote = normalizeCharacterData({
       ...row.data,
       id: row.id,
       cloudOwnerId: row.user_id,
       _campaignShared: !isOwn,
       _campaignRole: role || "",
       _campaignIds: campaignCharacters.filter(link => link.owner_user_id === row.user_id && link.character_id === row.id).map(link => link.campaign_id)
-    };
+    });
     const local = merged.get(rowKey);
     if (isOwn && deletionTimestamp(remote.id) >= remoteTimestamp) return;
     if (!local || remoteTimestamp >= characterTimestamp(local)) merged.set(rowKey, remote);
@@ -2773,12 +2774,12 @@ function balancedLeveledSpellChoices(lists, allowed, limit, preferredNames = [])
   return selected;
 }
 
-function prebuildSpellChoices(className, level, subclass, characterData) {
-  const lists = spellListsFor(edition, className, subclass) || {};
+function prebuildSpellChoices(className, level, subclass, characterData, rulesEdition = edition) {
+  const lists = spellListsFor(rulesEdition, className, subclass) || {};
   const profile = QUICK_BUILD_PROFILES[className] || {};
-  const allowed = maxSpellLevel(className, level, edition, subclass);
-  const cantripLimit = cantripLimitFor(className, level, edition, subclass);
-  const spellLimit = spellLimitFor(className, level, edition, subclass, characterData);
+  const allowed = maxSpellLevel(className, level, rulesEdition, subclass);
+  const cantripLimit = cantripLimitFor(className, level, rulesEdition, subclass);
+  const spellLimit = spellLimitFor(className, level, rulesEdition, subclass, characterData);
   const chosen = [];
   const addUnique = (name, spellLevel) => {
     if (!name || chosen.some(spell => spell.name === name)) return;
@@ -2791,7 +2792,7 @@ function prebuildSpellChoices(className, level, subclass, characterData) {
     .forEach(name => addUnique(name, 0));
   if (className === "Wizard") {
     const addWizardSpells = (classLevel, amount) => {
-      const maximum = maxSpellLevel(className, classLevel, edition, subclass);
+      const maximum = maxSpellLevel(className, classLevel, rulesEdition, subclass);
       const pool = Object.entries(lists)
         .filter(([spellLevel]) => Number(spellLevel) > 0 && Number(spellLevel) <= maximum)
         .flatMap(([spellLevel, names]) => names.map(name => ({ name, level: Number(spellLevel) })))
@@ -2934,7 +2935,7 @@ function buildPrebuiltCharacter(preview = false) {
     progressionHistory: prebuildProgressionHistory(className, subclass, level),
     prebuilt: true,
     quickBuilt: true,
-    quickBuildVersion: 4,
+    quickBuildVersion: QUICK_BUILD_VERSION,
     updatedAt: Date.now()
   };
   reconcilePreparedSpells(character);
@@ -3087,7 +3088,7 @@ function buildQuickCharacter(preview = false, overrides = null) {
     conditions: [],
     progressionHistory: prebuildProgressionHistory(buildClassName, subclass, level),
     quickBuilt: true,
-    quickBuildVersion: 4,
+    quickBuildVersion: QUICK_BUILD_VERSION,
     updatedAt: Date.now()
   };
   reconcilePreparedSpells(character);
@@ -3239,6 +3240,32 @@ function surpriseQuickBuild() {
   setQuickStep(3);
 }
 
+function generatedSpellIssue(character) {
+  const className = primaryClassName(character);
+  const level = classLevel(character, className) || Number(character.level || 0);
+  const subclass = classSubclassName(character, className);
+  const lists = spellListsFor(character.edition, className, subclass);
+  if (!lists) return "";
+  const records = classSpellRecords(character, className);
+  const expectedCantrips = Math.min(cantripLimitFor(className, level, character.edition, subclass), (lists[0] || []).length);
+  if (records.filter(spell => Number(spell.level || 0) === 0).length < expectedCantrips) return `The generated ${className} is missing cantrips.`;
+  const allowed = maxSpellLevel(className, level, character.edition, subclass);
+  const expectedLeveled = spellLimitFor(className, level, character.edition, subclass, withClassContext(character, className, level));
+  const regularSpells = records.filter(spell => Number(spell.level || 0) > 0 && (className !== "Warlock" || Number(spell.level) <= 5));
+  if (regularSpells.length < expectedLeveled) return `The generated ${className} is missing leveled spells.`;
+  const expectedLevels = Array.from({ length: Math.max(0, allowed) }, (_, index) => index + 1).filter(spellLevel => (lists[spellLevel] || []).length);
+  if (expectedLeveled >= expectedLevels.length && expectedLevels.some(spellLevel => !regularSpells.some(spell => Number(spell.level) === spellLevel))) {
+    return `The generated ${className} does not cover every unlocked spell level.`;
+  }
+  if (className === "Warlock") {
+    const missingArcanum = [[11, 6], [13, 7], [15, 8], [17, 9]].some(([unlock, spellLevel]) =>
+      level >= unlock && !records.some(spell => Number(spell.level) === spellLevel)
+    );
+    if (missingArcanum) return "The generated Warlock is missing a Mystic Arcanum spell.";
+  }
+  return "";
+}
+
 function generatedCharacterIssue(character) {
   const level = Number(character.level || 0);
   const className = primaryClassName(character);
@@ -3263,27 +3290,7 @@ function generatedCharacterIssue(character) {
     ? Object.entries(LEVEL_CHOICE_RULES[character.edition]?.Sorcerer?.metamagic || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0)
     : 0;
   if ((character.metamagic || []).length < expectedMetamagic) return "The generated Sorcerer is missing metamagic choices.";
-  const subclass = classSubclassName(character, className);
-  const lists = spellListsFor(character.edition, className, subclass);
-  if (!lists) return "";
-  const records = classSpellRecords(character, className);
-  const expectedCantrips = Math.min(cantripLimitFor(className, level, character.edition, subclass), (lists[0] || []).length);
-  if (records.filter(spell => Number(spell.level || 0) === 0).length < expectedCantrips) return `The generated ${className} is missing cantrips.`;
-  const allowed = maxSpellLevel(className, level, character.edition, subclass);
-  const expectedLeveled = spellLimitFor(className, level, character.edition, subclass, withClassContext(character, className, level));
-  const regularSpells = records.filter(spell => Number(spell.level || 0) > 0 && (className !== "Warlock" || Number(spell.level) <= 5));
-  if (regularSpells.length < expectedLeveled) return `The generated ${className} is missing leveled spells.`;
-  const expectedLevels = Array.from({ length: Math.max(0, allowed) }, (_, index) => index + 1).filter(spellLevel => (lists[spellLevel] || []).length);
-  if (expectedLeveled >= expectedLevels.length && expectedLevels.some(spellLevel => !regularSpells.some(spell => Number(spell.level) === spellLevel))) {
-    return `The generated ${className} does not cover every unlocked spell level.`;
-  }
-  if (className === "Warlock") {
-    const missingArcanum = [[11, 6], [13, 7], [15, 8], [17, 9]].some(([unlock, spellLevel]) =>
-      level >= unlock && !records.some(spell => Number(spell.level) === spellLevel)
-    );
-    if (missingArcanum) return "The generated Warlock is missing a Mystic Arcanum spell.";
-  }
-  return "";
+  return generatedSpellIssue(character);
 }
 
 function createQuickCharacter() {
@@ -3863,6 +3870,46 @@ function spellListsFor(rulesEdition, className, subclass = "") {
   return SPELL_LISTS[rulesEdition]?.[spellListClass(className, subclass)];
 }
 
+function normalizeCharacterData(character, options = {}) {
+  if (!character || typeof character !== "object") return character;
+  const normalized = { ...character };
+  let changed = false;
+  if (Array.isArray(character.classes) && character.classes.length) {
+    normalized.classes = character.classes.map(entry => ({ ...entry }));
+    const totalLevel = Math.max(1, Math.min(20, Number(character.level || 1)));
+    if (normalized.classes.length === 1 && Number(normalized.classes[0].level || 0) !== totalLevel) {
+      normalized.classes[0].level = totalLevel;
+      changed = true;
+    } else if (normalized.classes.length > 1) {
+      const classTotal = normalized.classes.reduce((total, entry) => total + Math.max(0, Number(entry.level || 0)), 0);
+      if (classTotal && Number(normalized.level || 0) !== classTotal) {
+        normalized.level = Math.min(20, classTotal);
+        changed = true;
+      }
+    }
+  }
+  const seen = new Set();
+  normalized.spells = (character.spells || []).map(spell => {
+    const original = typeof spell === "string" ? { name: spell } : spell || {};
+    const className = original.className || primaryClassName(normalized);
+    const subclass = classSubclassName(normalized, className);
+    const lists = spellListsFor(normalized.edition || "2014", className, subclass) || {};
+    const listedLevel = Object.entries(lists).find(([, names]) => names.includes(original.name))?.[0];
+    const level = listedLevel === undefined ? Number(original.level || 0) : Number(listedLevel);
+    const record = { ...original, name: original.name || "Unnamed Spell", level, className };
+    if (typeof spell === "string" || spell?.className !== className || Number(spell?.level || 0) !== level) changed = true;
+    return record;
+  }).filter(spell => {
+    const key = `${spell.className}:${spell.name}`;
+    if (seen.has(key)) { changed = true; return false; }
+    seen.add(key);
+    return true;
+  });
+  if (changed && options.touch !== false) normalized.updatedAt = Date.now();
+  if (options.report && changed) options.report.changed = true;
+  return normalized;
+}
+
 function maxSpellLevel(className, level, rulesEdition, subclass = "") {
   if (!spellListsFor(rulesEdition, className, subclass)) return -1;
   if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) {
@@ -4172,7 +4219,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   $("#spell-guidance").textContent = `${selectedClass} spell list - ${cantripText} - ${spellLimitText} - spell levels through ${allowed} are available at character level ${level}.`;
   const editingCharacter = characters.find(character => character.id === activeCharacterId && !isDemoCharacter(character));
   if (editingCharacter && spellPreparationPolicy(edition, selectedClass, selectedSubclass) === "level") {
-    $("#spell-guidance").textContent += ` Leveled spells are locked here; replace one when you gain a ${selectedClass} level.`;
+    $("#spell-guidance").textContent += ` These spells normally change on a ${selectedClass} level-up; Direct Edit can correct the saved sheet.`;
   }
   $("#spell-level-tabs").innerHTML = Object.keys(lists).filter(key => lists[key].length).map(key =>
     `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? "Cantrip" : key}</button>`
@@ -4190,8 +4237,6 @@ function renderSpellList() {
   const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
   const { cantripLimit, spellLimit } = spellLimitContext();
   const counts = selectedSpellCounts();
-  const editingCharacter = characters.find(character => character.id === activeCharacterId && !isDemoCharacter(character));
-  const levelChangeOnly = Boolean(editingCharacter && spellPreparationPolicy(edition, selectedClass, selectedSubclass) === "level");
   const rows = [];
   Object.entries(lists).forEach(([spellLevel, spells]) => {
     if (!query && Number(spellLevel) !== selectedSpellLevel) return;
@@ -4201,11 +4246,10 @@ function renderSpellList() {
     const locked = spell.level > allowed;
     const checked = selectedSpellNames.has(spell.name);
     const capped = !checked && !locked && (spell.level === 0 ? counts.cantrips >= cantripLimit : counts.spells >= spellLimit);
-    const levelLocked = levelChangeOnly && spell.level > 0;
     const source = EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || "";
     const description = spellDescription(spell.name, edition, source);
-    return `<article class="choice-option ${locked || capped || levelLocked ? "locked" : ""}"><label>
-      <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${checked ? "checked" : ""} ${locked || capped || levelLocked ? "disabled" : ""}>
+    return `<article class="choice-option ${locked || capped ? "locked" : ""}"><label>
+      <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${checked ? "checked" : ""} ${locked || capped ? "disabled" : ""}>
       <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${locked ? ` · available when this spell level is reached` : ""}</small></span>
     </label>${ruleDetails(description)}</article>`;
   };
@@ -5737,7 +5781,6 @@ function openSpellManager(characterId, className) {
   const entry = classEntry(character, className);
   if (!entry) return;
   const policy = spellPreparationPolicy(character.edition, className, classSubclassName(character, className));
-  if (policy === "level") { toast(spellPreparationRuleText(character, className)); return; }
   const names = activePreparedNames(character, className);
   spellManagerState = {
     characterId,
@@ -5817,7 +5860,7 @@ function renderSpellManagerPanel(character) {
   });
   return `<section class="spell-manager-panel">
     <div class="spell-manager-head">
-      <div><span class="eyebrow">MANAGE SPELLS</span><h3>${escapeHtml(entry.name)} prepared spells</h3><p>${escapeHtml(spellPreparationRuleText(character, entry.name))}${managesSpellbook ? " Add any eligible spell below to your spellbook before preparing it." : ""}</p></div>
+      <div><span class="eyebrow">MANAGE SPELLS</span><h3>${escapeHtml(entry.name)} ${spellManagerState.policy === "level" && character.edition === "2014" ? "known" : "prepared"} spells</h3><p>${escapeHtml(spellPreparationRuleText(character, entry.name))}${managesSpellbook ? " Add any eligible spell below to your spellbook before preparing it." : spellManagerState.policy === "level" ? " Use this manager when you need to correct the saved sheet directly." : ""}</p></div>
       <strong class="spell-manager-count ${selectedCount === limit ? "complete" : ""}">${selectedCount}/${limit}</strong>
     </div>
     <div class="spell-manager-levels">${[...groups.entries()].sort((a, b) => a[0] - b[0]).map(([level, spells]) => `<div class="spell-manager-level">
@@ -5834,15 +5877,61 @@ function renderSpellManagerPanel(character) {
   </section>`;
 }
 
+function rebuildGeneratedSpells(characterId) {
+  const character = characters.find(item => item.id === characterId);
+  if (!character || !canControlCharacter(character)) return;
+  confirmAction({
+    title: "Rebuild generated spells?",
+    message: `Rebuild ${character.name}'s generated cantrips, spellbook, and prepared spell choices for the recorded class levels? Custom spell entries are preserved.`,
+    confirmLabel: "Rebuild spells",
+    onConfirm: () => {
+      const updated = normalizeCharacterData(structuredClone(character), { touch: false });
+      const entries = classBreakdown(updated);
+      const generatedClasses = new Set(entries.map(entry => entry.name));
+      const preserved = characterSpellRecords(updated).filter(spell => {
+        if (!generatedClasses.has(spell.className)) return true;
+        const lists = spellListsFor(updated.edition, spell.className, classSubclassName(updated, spell.className)) || {};
+        return !Object.values(lists).some(names => names.includes(spell.name));
+      });
+      const rebuilt = entries.flatMap(entry => {
+        const subclass = classSubclassName(updated, entry.name);
+        const context = withClassContext(updated, entry.name, entry.level);
+        return prebuildSpellChoices(entry.name, entry.level, subclass, context, updated.edition)
+          .map(spell => ({ ...spell, className: entry.name }));
+      });
+      const seen = new Set();
+      updated.spells = [...preserved, ...rebuilt].filter(spell => {
+        const key = `${spell.className}:${spell.name}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      updated.preparedSpells = (updated.preparedSpells || []).filter(entry => !generatedClasses.has(preparedEntryClass(entry, updated)));
+      updated.preparedSpellClasses = (updated.preparedSpellClasses || []).filter(name => !generatedClasses.has(name));
+      updated.quickBuildVersion = QUICK_BUILD_VERSION;
+      reconcilePreparedSpells(updated);
+      updated.updatedAt = Date.now();
+      characters[characters.findIndex(item => item.id === characterId)] = updated;
+      activeCharacterId = characterId;
+      spellManagerState = null;
+      persistCharacters();
+      renderCards();
+      renderSheet();
+      toast(`${updated.name}'s generated spells were rebuilt`);
+    }
+  });
+}
+
 function renderSpellPreparationControls(character, spellcastingClasses, canControl) {
+  const repairIssue = (character.quickBuilt || character.prebuilt || character.premade) ? generatedSpellIssue(character) : "";
   return `<div class="spell-preparation-grid">${spellcastingClasses.map(entry => {
     const policy = spellPreparationPolicy(character.edition, entry.name, classSubclassName(character, entry.name));
     const limit = preparedSpellLimitFor(entry.name, entry.level, character.edition, classSubclassName(character, entry.name), withClassContext(character, entry.name, entry.level));
     const prepared = activePreparedNames(character, entry.name).size;
     const bookCount = policy === "spellbook" ? classSpellRecords(character, entry.name, true).length : 0;
     const noun = policy === "level" && character.edition === "2014" ? "known" : "prepared";
-    return `<article class="spell-preparation-card"><div><small>${escapeHtml(entry.name)} SPELLS</small><strong>${prepared}/${limit} ${noun}</strong>${bookCount ? `<span>${bookCount} in spellbook</span>` : ""}<p>${escapeHtml(spellPreparationRuleText(character, entry.name))}</p></div>${canControl && policy !== "level" ? `<button type="button" class="button small ghost" data-manage-spells="${escapeHtml(entry.name)}" data-character="${character.id}">Manage spells</button>` : `<span class="spell-change-lock">${policy === "level" ? `Change at ${escapeHtml(entry.name)} level-up` : "View only"}</span>`}</article>`;
-  }).join("")}</div>`;
+    return `<article class="spell-preparation-card"><div><small>${escapeHtml(entry.name)} SPELLS</small><strong>${prepared}/${limit} ${noun}</strong>${bookCount ? `<span>${bookCount} in spellbook</span>` : ""}<p>${escapeHtml(spellPreparationRuleText(character, entry.name))}</p></div>${canControl ? `<button type="button" class="button small ghost" data-manage-spells="${escapeHtml(entry.name)}" data-character="${character.id}">Manage spells</button>` : `<span class="spell-change-lock">View only</span>`}</article>`;
+  }).join("")}</div>${canControl && repairIssue ? `<div class="spell-repair-callout"><div><strong>Generated spell setup needs repair</strong><p>${escapeHtml(repairIssue)} Rebuild it using the character's current class levels.</p></div><button type="button" class="button primary small" data-repair-generated-spells="${character.id}">Repair generated spells</button></div>` : ""}`;
 }
 
 function spellsReadyToCast(character, allSpells) {
@@ -7066,6 +7155,11 @@ function initEvents() {
       openSpellManager(manageSpells.dataset.character, manageSpells.dataset.manageSpells);
       return;
     }
+    const repairGeneratedSpells = event.target.closest("[data-repair-generated-spells]");
+    if (repairGeneratedSpells) {
+      rebuildGeneratedSpells(repairGeneratedSpells.dataset.repairGeneratedSpells);
+      return;
+    }
     if (event.target.closest("[data-spell-manager-cancel]")) { closeSpellManager(); return; }
     if (event.target.closest("[data-spell-manager-save]")) { saveSpellManager(); return; }
     const spellbookSpell = event.target.closest("[data-spellbook-spell]");
@@ -7823,7 +7917,7 @@ function initEvents() {
         writeRecoverySnapshot("before vault import");
         const importedIds = new Set(data.characters.map(character => character.id));
         characters.filter(character => !importedIds.has(character.id)).forEach(character => rememberCharacterDeletion(character.id));
-        characters = data.characters.map(character => ({ ...character, updatedAt: Number(character.updatedAt || Date.now()) }));
+        characters = data.characters.map(character => normalizeCharacterData({ ...character, updatedAt: Number(character.updatedAt || Date.now()) }));
         characters.forEach(character => clearCharacterDeletion(character.id));
         persistCharacters();
         writeRecoverySnapshot("vault imported");
@@ -8110,6 +8204,9 @@ function seedDemo() {
 }
 
 function init() {
+  const migration = { changed: false };
+  characters = characters.map(character => normalizeCharacterData(character, { report: migration }));
+  if (migration.changed) persistCharacters();
   seedDemo(); buildAbilities(); populateRules(); resetPortrait(); initDice(); initTheme(); initEvents(); updatePreview(); updateAccount(); renderCards(); setStep(1); navigate(routeViewFromHash(), { replace: true });
   initCloud();
 }
