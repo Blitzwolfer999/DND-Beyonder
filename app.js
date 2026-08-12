@@ -266,6 +266,9 @@ let quickStep = 1;
 let quickClass = "Fighter";
 let prebuildClass = "Fighter";
 let prebuildSubclass = "";
+let selectedThemeId = "psychic";
+let selectedThemeBranch = 0;
+let selectedThemeSubclass = "";
 let lastGeneratedName = "";
 const recentGeneratedNames = new Map();
 let drawing = false;
@@ -2370,15 +2373,16 @@ function populateRules(savedCharacter = null) {
   renderStartingEquipmentChoices();
 }
 
-function quickAbilityScores(className) {
-  const order = QUICK_BUILD_PROFILES[className]?.abilities || ABILITIES;
+function quickAbilityScores(className, abilityOrder = null) {
+  const order = abilityOrder?.length ? abilityOrder : QUICK_BUILD_PROFILES[className]?.abilities || ABILITIES;
   const scores = {};
   [15, 14, 13, 12, 10, 8].forEach((score, index) => { scores[order[index]] = score; });
   return Object.fromEntries(ABILITIES.map(ability => [ability, scores[ability] || 10]));
 }
 
-function quickOrigin(className, species, background) {
+function quickOrigin(className, species, background, abilityOrder = null) {
   const profile = QUICK_BUILD_PROFILES[className];
+  const priorities = abilityOrder?.length ? abilityOrder : profile.abilities;
   const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
   if (edition === "2014") {
     const rule = SPECIES_RULES_2014[species] || { variants: [flexibleSpeciesVariant()] };
@@ -2387,7 +2391,7 @@ function quickOrigin(className, species, background) {
     const chosen = [];
     (variant.choices || []).forEach(choice => {
       for (let index = 0; index < choice.count; index += 1) {
-        const ability = profile.abilities.find(candidate =>
+        const ability = priorities.find(candidate =>
           !choice.exclude?.includes(candidate) && (!choice.distinct || !chosen.includes(candidate))
         );
         if (ability) {
@@ -2404,11 +2408,11 @@ function quickOrigin(className, species, background) {
     };
   }
   const rule = BACKGROUND_RULES_2024[background] || {
-    abilities: profile.abilities.slice(0, 3),
+    abilities: priorities.slice(0, 3),
     feat: "Skilled"
   };
-  const primary = profile.abilities.find(ability => rule.abilities.includes(ability)) || rule.abilities[0];
-  const secondary = profile.abilities.find(ability => rule.abilities.includes(ability) && ability !== primary)
+  const primary = priorities.find(ability => rule.abilities.includes(ability)) || rule.abilities[0];
+  const secondary = priorities.find(ability => rule.abilities.includes(ability) && ability !== primary)
     || rule.abilities.find(ability => ability !== primary);
   bonuses[primary] += 2;
   if (secondary) bonuses[secondary] += 1;
@@ -2422,7 +2426,7 @@ function quickOrigin(className, species, background) {
   };
 }
 
-function quickSkillChoices(className, background, level = 1) {
+function quickSkillChoices(className, background, level = 1, themeSkills = []) {
   const profile = QUICK_BUILD_PROFILES[className];
   const backgroundSkills = [...new Set(BACKGROUND_SKILLS[background] || profile.skills.slice(-2))].slice(0, 2);
   while (backgroundSkills.length < 2) {
@@ -2430,7 +2434,9 @@ function quickSkillChoices(className, background, level = 1) {
     backgroundSkills.push(fallback);
   }
   const rule = classSkillRuleAtLevel(className, level, edition);
-  const preferred = profile.skills.filter(skill => rule.options.includes(skill) && !backgroundSkills.includes(skill));
+  const preferred = [...themeSkills, ...profile.skills]
+    .filter((skill, index, list) => list.indexOf(skill) === index)
+    .filter(skill => rule.options.includes(skill) && !backgroundSkills.includes(skill));
   const remaining = rule.options.filter(skill => !backgroundSkills.includes(skill) && !preferred.includes(skill));
   const skillProficiencies = [...preferred, ...remaining].slice(0, rule.count);
   const expertiseCount = expertiseCountAtLevel(className, level, edition);
@@ -2457,8 +2463,8 @@ function quickSpellChoices(className) {
   return chosen;
 }
 
-function quickInventory(className) {
-  const names = [...(QUICK_BUILD_PROFILES[className]?.equipment || []), "Bedroll", "Rations, 1 day"];
+function quickInventory(className, themeEquipment = null) {
+  const names = [...(themeEquipment?.length ? themeEquipment : QUICK_BUILD_PROFILES[className]?.equipment || []), "Bedroll", "Rations, 1 day"];
   const entries = new Map();
   names.forEach(name => {
     const catalog = EQUIPMENT_CATALOG.find(item => item.name === name)
@@ -2856,9 +2862,11 @@ function wizardSpellChoices(lists, level, rulesEdition, profileSpells = []) {
   return selected;
 }
 
-function prebuildSpellChoices(className, level, subclass, characterData, rulesEdition = edition) {
+function prebuildSpellChoices(className, level, subclass, characterData, rulesEdition = edition, themeSpells = []) {
   const lists = spellListsFor(rulesEdition, className, subclass) || {};
   const profile = QUICK_BUILD_PROFILES[className] || {};
+  const preferences = [...themeSpells, ...(profile.spells || [])]
+    .filter((name, index, names) => names.indexOf(name) === index);
   const allowed = maxSpellLevel(className, level, rulesEdition, subclass);
   const cantripLimit = cantripLimitFor(className, level, rulesEdition, subclass);
   const spellLimit = spellLimitFor(className, level, rulesEdition, subclass, characterData);
@@ -2868,22 +2876,22 @@ function prebuildSpellChoices(className, level, subclass, characterData, rulesEd
     chosen.push({ name, level: Number(spellLevel) });
   };
   const cantrips = lists[0] || [];
-  const preferredCantrips = (profile.spells || []).filter(name => cantrips.includes(name));
+  const preferredCantrips = preferences.filter(name => cantrips.includes(name));
   [...new Set([...preferredCantrips, ...cantrips])]
     .slice(0, Math.max(0, cantripLimit))
     .forEach(name => addUnique(name, 0));
   if (className === "Wizard") {
-    wizardSpellChoices(lists, level, rulesEdition, profile.spells || []).forEach(spell => addUnique(spell.name, spell.level));
+    wizardSpellChoices(lists, level, rulesEdition, preferences).forEach(spell => addUnique(spell.name, spell.level));
     return chosen;
   }
   const slots = className === "Warlock" ? [] : prebuildSpellSlotCounts(className, level, rulesEdition, subclass);
-  balancedLeveledSpellChoices(lists, allowed, Math.max(0, spellLimit), profile.spells || [], slots)
+  balancedLeveledSpellChoices(lists, allowed, Math.max(0, spellLimit), preferences, slots)
     .forEach(spell => addUnique(spell.name, spell.level));
   if (className === "Warlock") {
     [[11, 6], [13, 7], [15, 8], [17, 9]].forEach(([unlock, spellLevel]) => {
       if (level < unlock) return;
       const pool = lists[spellLevel] || [];
-      const preferred = (profile.spells || []).find(name => pool.includes(name));
+      const preferred = preferences.find(name => pool.includes(name));
       addUnique(preferred || pool[0], spellLevel);
     });
   }
@@ -3076,6 +3084,353 @@ function renderPrebuildSummary() {
     <div class="quick-summary-section"><strong>Features ready</strong><p>${featureCount} class/subclass feature${featureCount === 1 ? "" : "s"} will appear on the sheet for level ${character.level}.</p></div>
     <div class="quick-summary-section"><strong>Starting equipment</strong><p>${character.inventory.slice(0, 7).map(item => `${item.quantity > 1 ? `${item.quantity}x ` : ""}${item.name}`).join(", ")}</p></div>
     <p class="quick-summary-note">Generated choices are solid defaults. You can edit spells, ASIs, items, and level-up details after creation.</p>`;
+}
+
+function themeCatalog() {
+  return typeof CHARACTER_THEMES !== "undefined" ? CHARACTER_THEMES : [];
+}
+
+function currentTheme() {
+  return themeCatalog().find(theme => theme.id === selectedThemeId) || themeCatalog()[0] || null;
+}
+
+function currentThemeBranch() {
+  const theme = currentTheme();
+  if (!theme?.branches?.length) return null;
+  selectedThemeBranch = Math.max(0, Math.min(theme.branches.length - 1, Number(selectedThemeBranch || 0)));
+  return theme.branches[selectedThemeBranch];
+}
+
+function recommendedThemeSubclass(branch, rulesEdition = edition) {
+  if (!branch) return "";
+  const options = subclassEntries(branch.className, rulesEdition);
+  const requested = branch.subclasses?.[rulesEdition] || branch.subclasses?.[2014] || "";
+  return options.find(item => item.name === requested)?.name
+    || options.find(item => item.name.toLowerCase() === requested.toLowerCase())?.name
+    || defaultSubclassFor(branch.className, Number($("#theme-level")?.value || 3), rulesEdition);
+}
+
+function themeBackgroundRecommendation(themeId, className, rulesEdition = edition, abilityOrder = []) {
+  const recommendations = {
+    psychic: { 2014: "Sage", 2024: "Sage" },
+    ninja: { 2014: "Criminal", 2024: "Criminal" },
+    necromancer: { 2014: "Haunted One", 2024: "Acolyte" },
+    elementalist: { 2014: "Sage", 2024: "Sage" },
+    "holy-champion": { 2014: "Acolyte", 2024: "Acolyte" },
+    "nature-guardian": { 2014: "Outlander", 2024: "Guide" },
+    "monster-hunter": { 2014: "Haunted One", 2024: "Guide" },
+    "arcane-marksman": { 2014: "Soldier", 2024: "Soldier" },
+    "shadow-mage": { 2014: "Criminal", 2024: "Criminal" },
+    "battle-medic": { 2014: "Acolyte", 2024: "Acolyte" },
+    inventor: { 2014: "Guild Artisan", 2024: "Artisan" },
+    "dragon-rider": { 2014: "Outlander", 2024: "Guide" },
+    swashbuckler: { 2014: "Sailor", 2024: "Sailor" }
+  };
+  const thematic = recommendations[themeId]?.[rulesEdition];
+  const classDefault = QUICK_BUILD_PROFILES[className]?.backgrounds?.[rulesEdition];
+  if (rulesEdition !== "2024") return thematic || classDefault || "Soldier";
+  const primary = abilityOrder[0] || QUICK_BUILD_PROFILES[className]?.abilities?.[0];
+  const secondary = abilityOrder[1] || QUICK_BUILD_PROFILES[className]?.abilities?.[1];
+  const supports = name => BACKGROUND_RULES_2024[name]?.abilities?.includes(primary);
+  if (supports(thematic)) return thematic;
+  if (supports(classDefault)) return classDefault;
+  return Object.entries(BACKGROUND_RULES_2024)
+    .sort((a, b) => Number(b[1].abilities.includes(secondary)) - Number(a[1].abilities.includes(secondary)))
+    .find(([, rule]) => rule.abilities.includes(primary))?.[0] || thematic || classDefault || "Soldier";
+}
+
+function themeSearchScore(theme, query) {
+  const terms = String(query || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return 1;
+  const branchText = (theme.branches || []).map(branch => [
+    branch.title,
+    branch.className,
+    branch.playstyle,
+    ...Object.values(branch.subclasses || {})
+  ].join(" ")).join(" ");
+  const primary = `${theme.name} ${(theme.aliases || []).join(" ")}`.toLowerCase();
+  const searchable = `${primary} ${theme.description} ${branchText}`.toLowerCase();
+  if (!terms.every(term => searchable.includes(term))) return 0;
+  return terms.reduce((score, term) => score + (primary.includes(term) ? 5 : 1), 1);
+}
+
+function renderThemeResults(query = "") {
+  const target = $("#theme-result-list");
+  if (!target) return;
+  const matches = themeCatalog()
+    .map(theme => ({ theme, score: themeSearchScore(theme, query) }))
+    .filter(result => result.score > 0)
+    .sort((a, b) => b.score - a.score || a.theme.name.localeCompare(b.theme.name));
+  target.innerHTML = matches.length ? matches.map(({ theme }) => `
+    <button type="button" class="theme-result ${theme.id === selectedThemeId ? "selected" : ""}" data-theme-id="${escapeHtml(theme.id)}" role="option" aria-selected="${theme.id === selectedThemeId}">
+      <span class="theme-result-icon">${escapeHtml(theme.icon)}</span>
+      <span><strong>${escapeHtml(theme.name)}</strong><small>${escapeHtml(theme.description)}</small></span>
+    </button>`).join("") : `<p class="theme-empty">No exact theme matched that search. Try a broader idea such as shadow, ranged, healer, beast, magic, or warrior.</p>`;
+}
+
+function renderThemeBranches() {
+  const theme = currentTheme();
+  const heading = $("#theme-selected-heading");
+  const tree = $("#theme-tree");
+  if (!theme || !heading || !tree) return;
+  heading.innerHTML = `<span>${escapeHtml(theme.icon)}</span><div><h3>${escapeHtml(theme.name)}</h3><p>${escapeHtml(theme.description)}</p></div>`;
+  tree.innerHTML = theme.branches.map((branch, index) => {
+    const subclass = recommendedThemeSubclass(branch);
+    return `<button type="button" class="theme-branch ${index === selectedThemeBranch ? "selected" : ""}" data-theme-branch="${index}">
+      <span class="theme-branch-icon">${RULES.classes[branch.className]?.icon || branch.className.slice(0, 2)}</span>
+      <span><strong>${escapeHtml(branch.title)}</strong><small>${escapeHtml(branch.className)} / ${escapeHtml(subclass || "No subclass")}</small><em>${escapeHtml(branch.playstyle)}</em></span>
+    </button>`;
+  }).join("");
+}
+
+function renderThemeOptions(resetOrigin = false) {
+  const theme = currentTheme();
+  const branch = currentThemeBranch();
+  const subclassSelect = $("#theme-subclass");
+  const speciesSelect = $("#theme-species");
+  const backgroundSelect = $("#theme-background");
+  if (!theme || !branch || !subclassSelect || !speciesSelect || !backgroundSelect) return;
+  const level = Math.max(1, Math.min(20, Number($("#theme-level")?.value || 3)));
+  $("#theme-level").value = level;
+  const subclasses = subclassEntries(branch.className, edition);
+  const recommendedSubclass = recommendedThemeSubclass(branch);
+  if (resetOrigin || !subclasses.some(item => item.name === selectedThemeSubclass)) selectedThemeSubclass = recommendedSubclass;
+  subclassSelect.innerHTML = subclasses.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.name === recommendedSubclass ? " - theme pick" : ""}</option>`).join("") || `<option value="">No subclass</option>`;
+  subclassSelect.value = subclasses.some(item => item.name === selectedThemeSubclass) ? selectedThemeSubclass : recommendedSubclass;
+  selectedThemeSubclass = subclassSelect.value;
+  const unlock = subclassLevel(branch.className, edition);
+  $("#theme-subclass-note").textContent = level >= unlock
+    ? `${selectedThemeSubclass || "Subclass"} features are active at this level.`
+    : `This path is planned now and activates its subclass features at level ${unlock}.`;
+
+  const speciesValue = speciesSelect.value || "Human";
+  const species = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]);
+  speciesSelect.innerHTML = species.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
+  speciesSelect.value = species.some(item => item.name === speciesValue) ? speciesValue : "Human";
+
+  const backgrounds = customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]);
+  const recommendedBackground = themeBackgroundRecommendation(theme.id, branch.className, edition, branch.abilities || []);
+  const backgroundValue = resetOrigin ? recommendedBackground : backgroundSelect.value || recommendedBackground;
+  backgroundSelect.innerHTML = backgrounds.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.name === recommendedBackground ? " - theme pick" : ""}</option>`).join("");
+  backgroundSelect.value = backgrounds.some(item => item.name === backgroundValue) ? backgroundValue : backgrounds[0]?.name || "";
+}
+
+function themeAdvancementPlan(className, level, baseAbilities, originBonuses, branch, startingFeats = []) {
+  const abilityOrder = [...(branch.abilities || []), ...preferredAbilityOrder(className)]
+    .filter((ability, index, list) => list.indexOf(ability) === index);
+  const current = Object.fromEntries(ABILITIES.map(ability => [
+    ability,
+    Number(baseAbilities[ability] || 10) + Number(originBonuses[ability] || 0)
+  ]));
+  const asiBonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
+  const featBonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
+  const featAbilityChoices = {};
+  const asi = {};
+  const feats = [...new Set(startingFeats.filter(Boolean))];
+  const summary = [];
+  const unlocks = advancementLevelsFor(className).filter(unlock => unlock <= Number(level || 1));
+  unlocks.forEach((unlock, index) => {
+    const allFeats = FEATS[edition] || [];
+    const epic = edition === "2024" && unlock >= 19
+      ? allFeats.find(feat => feat.category === "Epic Boon" && !feats.includes(feat.name))
+      : null;
+    const themedFeat = index % 2 === 0
+      ? (branch.feats || []).map(name => allFeats.find(feat => feat.name === name)).find(feat => feat && featEligible(feat, unlock, className, edition) && !feats.includes(feat.name))
+      : null;
+    const feat = epic || themedFeat;
+    if (feat) {
+      feats.push(feat.name);
+      const options = featAbilityOptions(feat, edition);
+      const ability = abilityOrder.find(candidate => options.includes(candidate) && current[candidate] < (feat.category === "Epic Boon" ? 30 : 20)) || options[0] || "";
+      if (ability) {
+        featAbilityChoices[feat.name] = ability;
+        featBonuses[ability] += 1;
+        current[ability] += 1;
+      }
+      asi[index] = { mode: "feat", one: "", two: "", feat: feat.name };
+      summary.push(`Level ${unlock}: ${feat.name}${ability ? ` (${ability} +1)` : ""}`);
+      return;
+    }
+    const increases = [];
+    for (let point = 0; point < 2; point += 1) {
+      const ability = abilityOrder.find(candidate => current[candidate] < 20);
+      if (!ability) break;
+      current[ability] += 1;
+      asiBonuses[ability] += 1;
+      increases.push(ability);
+    }
+    asi[index] = { mode: "asi", one: increases[0] || "", two: increases[1] || "" };
+    summary.push(`Level ${unlock}: ${increases.join(" +1, ")} +1`);
+  });
+  return { asi, asiBonuses, featBonuses, featAbilityChoices, feats, summary };
+}
+
+function themeSelections() {
+  const theme = currentTheme();
+  const branch = currentThemeBranch();
+  const className = branch?.className || "Fighter";
+  const profile = { ...(QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter), ...branch };
+  const level = Math.max(1, Math.min(20, Number($("#theme-level")?.value || 3)));
+  const subclass = $("#theme-subclass")?.value || selectedThemeSubclass || recommendedThemeSubclass(branch);
+  const species = $("#theme-species")?.value || "Human";
+  const background = $("#theme-background")?.value || themeBackgroundRecommendation(theme?.id, className, edition, branch?.abilities || []);
+  return { theme, branch, className, profile, level, subclass, species, background };
+}
+
+function buildThemedCharacter(preview = false) {
+  const { theme, branch, className, profile, level, subclass, species, background } = themeSelections();
+  if (!theme || !branch) return null;
+  const abilityOrder = branch.abilities || profile.abilities;
+  const baseAbilities = quickAbilityScores(className, abilityOrder);
+  const origin = quickOrigin(className, species, background, abilityOrder);
+  const advancement = themeAdvancementPlan(className, level, baseAbilities, origin.originBonuses, branch, [origin.originFeat]);
+  const finalAbilities = Object.fromEntries(ABILITIES.map(ability => [
+    ability,
+    Number(baseAbilities[ability]) + Number(origin.originBonuses[ability] || 0)
+      + Number(advancement.asiBonuses[ability] || 0) + Number(advancement.featBonuses[ability] || 0)
+  ]));
+  const skills = quickSkillChoices(className, background, level, branch.skills || []);
+  const classChoices = prebuildClassChoices(className, level, profile);
+  const subclassChoices = prebuildSubclassChoices(subclass, level);
+  const spellSeed = { className, level, edition, subclass, ...finalAbilities };
+  const spells = prebuildSpellChoices(className, level, subclass, spellSeed, edition, branch.spells || []);
+  const character = {
+    id: preview ? "theme-preview" : crypto.randomUUID(),
+    name: $("#theme-name")?.value.trim() || (preview ? "Preview Hero" : generateQuickName(false, species)),
+    player: $("#theme-player")?.value.trim() || "",
+    pronouns: "",
+    level,
+    edition,
+    species,
+    background,
+    alignment: "Unaligned",
+    campaign: "",
+    className,
+    subclass,
+    customSubclass: "",
+    classes: [{ name: className, level, subclass, customSubclass: "", subclassChoices }],
+    ...finalAbilities,
+    baseAbilities,
+    originBonuses: origin.originBonuses,
+    originFeat: origin.originFeat,
+    originFeatChoice: origin.originFeatChoice,
+    speciesVariant: origin.speciesVariant || "",
+    backgroundAbilityMode: origin.backgroundAbilityMode || "",
+    backgroundPrimary: origin.backgroundPrimary || "",
+    backgroundSecondary: origin.backgroundSecondary || "",
+    feats: advancement.feats,
+    featAbilityChoices: advancement.featAbilityChoices,
+    featBonuses: advancement.featBonuses,
+    asi: advancement.asi,
+    asiBonuses: advancement.asiBonuses,
+    skillProficiencies: skills.skillProficiencies,
+    backgroundSkills: skills.backgroundSkills,
+    expertise: skills.expertise,
+    weaponMastery: classChoices.weaponMastery,
+    fightingStyle: classChoices.fightingStyle,
+    fightingStyles: classChoices.fightingStyles,
+    divineOrder: classChoices.divineOrder,
+    primalOrder: classChoices.primalOrder,
+    blessedStrikes: classChoices.blessedStrikes,
+    elementalFury: classChoices.elementalFury,
+    pactBoon: branch.pactBoon || classChoices.pactBoon,
+    invocations: classChoices.invocations,
+    metamagic: classChoices.metamagic,
+    subclassChoices,
+    spells: spells.map(spell => ({ ...spell, className })),
+    customSpells: "",
+    customFeats: "",
+    inventory: quickInventory(className, branch.equipment),
+    currency: { cp: 0, sp: 0, ep: 0, gp: 10 + Math.max(0, level - 1) * 5, pp: 0 },
+    portrait: "",
+    backstory: `${branch.playstyle} This ${theme.name.toLowerCase()} theme build follows the ${branch.title} path and remains fully editable.`,
+    acOverride: "",
+    hpOverride: "",
+    resourceUsage: {},
+    conditions: [],
+    progressionHistory: prebuildProgressionHistory(className, subclass, level),
+    primaryAbility: abilityOrder[0] || RULES.classes[className]?.primary || "STR",
+    themeBuild: { id: theme.id, name: theme.name, path: branch.title, advancement: advancement.summary },
+    prebuilt: true,
+    quickBuilt: true,
+    quickBuildVersion: QUICK_BUILD_VERSION,
+    updatedAt: Date.now()
+  };
+  reconcilePreparedSpells(character);
+  character.currentHp = derived(character).hp;
+  return character;
+}
+
+function renderThemeSummary() {
+  const summary = $("#theme-summary");
+  if (!summary) return;
+  const character = buildThemedCharacter(true);
+  if (!character) { summary.innerHTML = ""; return; }
+  const stats = derived(character);
+  const branch = currentThemeBranch();
+  const abilityOrder = branch.abilities || preferredAbilityOrder(character.className);
+  const spellNames = character.spells.map(spell => spell.name);
+  const advancements = character.themeBuild?.advancement || [];
+  summary.innerHTML = `
+    <div class="quick-summary-title"><span>${RULES.classes[character.className]?.icon || "T"}</span><div><small>LEVEL ${character.level} ${edition === "2024" ? "5.5e" : "5e"} THEME BUILD</small><h3>${escapeHtml(character.themeBuild.path)}</h3><p>${escapeHtml(character.species)} ${escapeHtml(character.className)} / ${escapeHtml(character.subclass)}</p></div></div>
+    <div class="quick-summary-stats"><span><small>AC</small><strong>${stats.ac}</strong></span><span><small>HP</small><strong>${stats.hp}</strong></span><span><small>Primary</small><strong>${abilityOrder[0]} ${character[abilityOrder[0]]}</strong></span></div>
+    <div class="quick-summary-section"><strong>Ability plan</strong><div class="theme-plan-grid">
+      <span><small>Primary</small><strong>${abilityOrder[0]} ${character[abilityOrder[0]]}</strong></span>
+      <span><small>Secondary</small><strong>${abilityOrder[1]} ${character[abilityOrder[1]]}</strong></span>
+      <span><small>Support</small><strong>${abilityOrder[2]} ${character[abilityOrder[2]]}</strong></span>
+      <span><small>Dump stat</small><strong>${abilityOrder[5]} ${character[abilityOrder[5]]}</strong></span>
+    </div></div>
+    <div class="quick-summary-section"><strong>Theme skills</strong><p>${escapeHtml([...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", "))}</p></div>
+    ${character.fightingStyle ? `<div class="quick-summary-section"><strong>Combat style</strong><p>${escapeHtml(character.fightingStyle)}${character.weaponMastery?.length ? `; masteries: ${escapeHtml(character.weaponMastery.join(", "))}` : ""}</p></div>` : character.weaponMastery?.length ? `<div class="quick-summary-section"><strong>Weapon masteries</strong><p>${escapeHtml(character.weaponMastery.join(", "))}</p></div>` : ""}
+    ${advancements.length ? `<div class="quick-summary-section"><strong>ASI and feat path</strong><p>${escapeHtml(advancements.join("; "))}</p></div>` : `<div class="quick-summary-section"><strong>ASI and feat path</strong><p>Your first themed advancement appears at level 4.</p></div>`}
+    ${spellNames.length ? `<div class="quick-summary-section"><strong>Theme-aware spells</strong><p>${escapeHtml(spellNames.slice(0, 20).join(", "))}${spellNames.length > 20 ? `, and ${spellNames.length - 20} more` : ""}</p><small>${escapeHtml(spellLevelCoverage(character.spells))}</small></div>` : ""}
+    <div class="quick-summary-section"><strong>Starting equipment</strong><p>${escapeHtml(character.inventory.slice(0, 7).map(equipmentDisplayName).join(", "))}</p></div>
+    <p class="quick-summary-note">This path is optimized around the theme, not a single mandatory play style. You keep full editing control.</p>`;
+}
+
+function renderThemeBuilder(resetOrigin = false) {
+  renderThemeResults($("#theme-search")?.value || "");
+  renderThemeBranches();
+  renderThemeOptions(resetOrigin);
+  renderThemeSummary();
+}
+
+function initializeThemeBuilder() {
+  if (!currentTheme()) selectedThemeId = themeCatalog()[0]?.id || "";
+  selectedThemeBranch = Math.max(0, Number(selectedThemeBranch || 0));
+  selectedThemeSubclass = recommendedThemeSubclass(currentThemeBranch());
+  renderThemeBuilder(true);
+  if (!$("#theme-name")?.value) $("#theme-name").value = generateQuickName(false, $("#theme-species")?.value || "Human");
+  renderThemeSummary();
+}
+
+function createThemedCharacter() {
+  const character = buildThemedCharacter();
+  if (!character?.name.trim()) { $("#theme-name")?.focus(); toast("Give your themed hero a name"); return; }
+  const issue = generatedCharacterIssue(character);
+  if (issue) { toast(issue); return; }
+  clearCharacterDeletion(character.id);
+  characters.unshift(character);
+  activeCharacterId = character.id;
+  persistCharacters();
+  renderCards();
+  renderSheet();
+  navigate("sheet");
+  toast(`${character.name} is ready on the ${character.themeBuild.path} path`);
+}
+
+function surpriseThemeBuild() {
+  const themes = themeCatalog();
+  const theme = themes[Math.floor(Math.random() * themes.length)];
+  if (!theme) return;
+  selectedThemeId = theme.id;
+  selectedThemeBranch = Math.floor(Math.random() * theme.branches.length);
+  selectedThemeSubclass = recommendedThemeSubclass(currentThemeBranch());
+  if ($("#theme-search")) $("#theme-search").value = "";
+  if ($("#theme-level")) $("#theme-level").value = 1 + Math.floor(Math.random() * 20);
+  renderThemeBuilder(true);
+  if ($("#theme-name")) $("#theme-name").value = generateQuickName(false, $("#theme-species")?.value || "Human");
+  renderThemeSummary();
 }
 
 function buildQuickCharacter(preview = false, overrides = null) {
@@ -3272,17 +3627,20 @@ function showCreationMethod(method) {
   const standard = method === "standard";
   const premade = method === "premade";
   const prebuild = method === "prebuild";
+  const theme = method === "theme";
   $("#creation-methods").classList.toggle("hidden", !choosing);
   $("#quick-builder").classList.toggle("hidden", !quick);
   $("#prebuild-builder")?.classList.toggle("hidden", !prebuild);
   $("#premade-builder")?.classList.toggle("hidden", !premade);
+  $("#theme-builder")?.classList.toggle("hidden", !theme);
   $("#standard-builder").classList.toggle("hidden", !standard);
-  $("#builder-eyebrow").textContent = choosing ? "CHARACTER CREATOR" : quick ? "BEGINNER QUICK BUILD" : prebuild ? "CUSTOM PREBUILD" : premade ? "PREMADE HEROES" : "FULL CHARACTER CREATOR";
-  $("#builder-title").textContent = choosing ? "Build your adventurer" : quick ? "Create a hero in minutes" : prebuild ? "Generate a leveled hero" : premade ? "Claim a ready character" : "Build every detail";
+  $("#builder-eyebrow").textContent = choosing ? "CHARACTER CREATOR" : quick ? "BEGINNER QUICK BUILD" : theme ? "GUIDED THEME BUILD" : prebuild ? "CUSTOM PREBUILD" : premade ? "PREMADE HEROES" : "FULL CHARACTER CREATOR";
+  $("#builder-title").textContent = choosing ? "Build your adventurer" : quick ? "Create a hero in minutes" : theme ? "Turn an idea into a hero" : prebuild ? "Generate a leveled hero" : premade ? "Claim a ready character" : "Build every detail";
   $("#builder-description").textContent = choosing
     ? "Choose a fast guided build or take full control."
-    : quick ? "Pick a starting level, smart defaults, and no rules expertise required." : prebuild ? "Pick the core concept and let DND Beyonder create a solid playable sheet." : premade ? "Pick a playable hero, then edit anything from the sheet." : "Every choice updates your sheet as you go.";
+    : quick ? "Pick a starting level, smart defaults, and no rules expertise required." : theme ? "Search a fantasy, choose a class and subclass branch, then review every themed choice." : prebuild ? "Pick the core concept and let DND Beyonder create a solid playable sheet." : premade ? "Pick a playable hero, then edit anything from the sheet." : "Every choice updates your sheet as you go.";
   if (quick) initializeQuickBuilder();
+  if (theme) initializeThemeBuilder();
   if (prebuild) initializePrebuildBuilder();
   if (premade) renderPremadeHeroes();
   if (standard) setStep(currentStep);
@@ -6190,7 +6548,7 @@ function renderSheet() {
       <h2>Combat & senses</h2>
       <p><strong>Proficiency bonus:</strong> ${signed(d.prof)}</p><p><strong>Passive Perception:</strong> ${d.passive}</p>
       <p><strong>Armor Class source:</strong> ${escapeHtml(d.acSource)}</p><p><strong>Initiative:</strong> ${escapeHtml(d.initiativeSource)}${d.initiativeAdvantage ? " · advantage" : ""}</p>
-      <p><strong>Saving throw proficiencies:</strong> ${[...savingThrowProficiencies(c)].join(", ")}</p><p><strong>Primary ability:</strong> ${cls.primary}</p>
+      <p><strong>Saving throw proficiencies:</strong> ${[...savingThrowProficiencies(c)].join(", ")}</p><p><strong>Primary ability:</strong> ${escapeHtml(c.primaryAbility || cls.primary)}</p>
       <p><strong>Class levels:</strong> ${escapeHtml(classSummary(c))}</p>
       <p><strong>Skill proficiencies:</strong> ${[...proficientSkills(c)].sort().join(", ") || "None selected"}</p>
       <p><strong>Active conditions:</strong> ${activeConditions.length ? escapeHtml(activeConditions.join(", ")) : "None"}</p>
@@ -7238,6 +7596,28 @@ function initEvents() {
       renderPrebuildSummary();
       return;
     }
+    const themeResult = event.target.closest("[data-theme-id]");
+    if (themeResult) {
+      selectedThemeId = themeResult.dataset.themeId;
+      selectedThemeBranch = 0;
+      selectedThemeSubclass = recommendedThemeSubclass(currentThemeBranch());
+      renderThemeBuilder(true);
+      return;
+    }
+    const themeBranch = event.target.closest("[data-theme-branch]");
+    if (themeBranch) {
+      selectedThemeBranch = Number(themeBranch.dataset.themeBranch || 0);
+      selectedThemeSubclass = recommendedThemeSubclass(currentThemeBranch());
+      renderThemeBuilder(true);
+      return;
+    }
+    if (event.target.closest("#theme-create")) { createThemedCharacter(); return; }
+    if (event.target.closest("#theme-surprise")) { surpriseThemeBuild(); return; }
+    if (event.target.closest("#theme-name-generator")) {
+      if ($("#theme-name")) $("#theme-name").value = generateQuickName(false, $("#theme-species")?.value || "Human");
+      renderThemeSummary();
+      return;
+    }
     const helpChipEl = event.target.closest(".help-chip");
     if (helpChipEl) { event.preventDefault(); showHelpPopover(helpChipEl); return; }
     if (!event.target.closest(".help-popover")) hideHelpPopover();
@@ -7644,9 +8024,22 @@ function initEvents() {
     if (target.id === "prebuild-level") renderPrebuildOptions(false);
     else renderPrebuildSummary();
   });
+  document.addEventListener("change", event => {
+    const target = event.target.closest("#theme-subclass, #theme-species, #theme-background, #theme-level");
+    if (!target) return;
+    if (target.id === "theme-subclass") selectedThemeSubclass = target.value;
+    renderThemeOptions(false);
+    renderThemeSummary();
+  });
   document.addEventListener("input", event => {
     if (event.target.closest("#prebuild-name, #prebuild-player")) renderPrebuildSummary();
     if (event.target.closest("#prebuild-level")) renderPrebuildOptions(false);
+    if (event.target.closest("#theme-search")) renderThemeResults(event.target.value);
+    if (event.target.closest("#theme-name, #theme-player")) renderThemeSummary();
+    if (event.target.closest("#theme-level")) {
+      renderThemeOptions(false);
+      renderThemeSummary();
+    }
   });
   form.addEventListener("input", event => {
     if (ABILITIES.includes(event.target.name)) {
@@ -7903,6 +8296,7 @@ function initEvents() {
     edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
     if (!$("#quick-builder").classList.contains("hidden")) initializeQuickBuilder();
     if (!$("#prebuild-builder")?.classList.contains("hidden")) initializePrebuildBuilder();
+    if (!$("#theme-builder")?.classList.contains("hidden")) initializeThemeBuilder();
     if (!$("#premade-builder")?.classList.contains("hidden")) renderPremadeHeroes();
   }));
   $("#quick-next").addEventListener("click", () => setQuickStep(quickStep + 1));

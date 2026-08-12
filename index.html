@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=pregen-variety-1">
+  <link rel="stylesheet" href="styles.css?v=theme-builder-2">
 </head>
 <body>
   <div class="app-shell">
@@ -126,6 +126,13 @@
             </button>
           </div>
           <div class="creation-method-grid extra-methods">
+            <button type="button" class="creation-method theme-method" data-creation-method="theme">
+              <span class="method-badge">Build from an idea</span>
+              <span class="method-icon">TREE</span>
+              <strong>Theme Builder</strong>
+              <small>Search for a concept like psychic, ninja, healer, or dragon rider, then choose a class and subclass path.</small>
+              <em>Explore character themes</em>
+            </button>
             <button type="button" class="creation-method" data-creation-method="prebuild">
               <span class="method-badge">Choose the basics</span>
               <span class="method-icon">PB</span>
@@ -147,6 +154,37 @@
               <small>Instantly generate a playable level-1 character using smart defaults.</small>
               <em>Roll a hero</em>
             </button>
+          </div>
+        </section>
+
+        <section class="theme-builder hidden" id="theme-builder">
+          <div class="quick-builder-head">
+            <button type="button" class="text-button" data-creation-method="choose">Back to methods</button>
+            <div><span class="eyebrow">THEME BUILDER</span><h2>Start with the hero in your head</h2><p>Describe the fantasy, choose a branch, and get a complete level-aware character. No rules knowledge required.</p></div>
+            <button type="button" class="button ghost small" id="theme-surprise">Surprise me</button>
+          </div>
+          <div class="theme-builder-layout">
+            <aside class="theme-discovery">
+              <label class="theme-search-label" for="theme-search">Search a character idea</label>
+              <div class="theme-search-box"><span aria-hidden="true">?</span><input id="theme-search" type="search" placeholder="Try psychic, ninja, healer..." autocomplete="off"></div>
+              <p class="theme-search-help">Search by fantasy, role, power, class, or play style.</p>
+              <div class="theme-result-list" id="theme-result-list" role="listbox" aria-label="Character themes"></div>
+            </aside>
+            <div class="theme-workbench">
+              <div class="theme-selected-heading" id="theme-selected-heading"></div>
+              <div class="theme-tree" id="theme-tree" aria-label="Class and subclass paths"></div>
+              <div class="theme-controls">
+                <label>Subclass<select id="theme-subclass"></select><small id="theme-subclass-note"></small></label>
+                <label>Species<select id="theme-species"></select></label>
+                <label>Background<select id="theme-background"></select><small>Recommended for this path; you can choose another.</small></label>
+                <label>Starting level<input id="theme-level" type="number" min="1" max="20" value="3"><small>Spells, feats, ASIs, and features scale to this level.</small></label>
+                <label>Character name<input id="theme-name" maxlength="40" placeholder="Enter a name or generate one"></label>
+                <button type="button" class="button ghost small" id="theme-name-generator">Generate a species name</button>
+                <label>Player name <small>optional</small><input id="theme-player" maxlength="40" placeholder="Your name"></label>
+              </div>
+              <article class="quick-summary theme-summary" id="theme-summary" aria-live="polite"></article>
+              <div class="theme-create-bar"><p>Every generated choice can be changed later from the sheet or full editor.</p><button type="button" class="button primary" id="theme-create">Create themed character</button></div>
+            </div>
           </div>
         </section>
 
@@ -620,6 +658,7 @@
   <script src="content-summaries.js?v=obojima-2"></script>
   <script src="subclass-features.js?v=obojima-2"></script>
   <script src="name-data.js?v=names-1"></script>
+  <script src="theme-data.js?v=themes-2"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js?v=supabase-ifvyg-3"></script>
   <script>
@@ -628,6 +667,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=pregen-variety-3"></script>
+  <script src="app.js?v=theme-builder-2"></script>
 </body>
 </html>
