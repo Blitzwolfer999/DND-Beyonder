@@ -297,6 +297,8 @@ let selectedMapTileCategory = "All";
 let mapTileSearch = "";
 let selectedMapTokenCategory = "All";
 let mapTokenSearch = "";
+let mapTokenResultLimit = 60;
+let mapTokenSearchTimer = null;
 let selectedMapRulerStart = null;
 let mapSpacePan = false;
 let mapPointerState = null;
@@ -305,6 +307,7 @@ const mapViewportStates = new Map();
 const mapEditHistory = new Map();
 let campaignMapImageDraft = "";
 let campaignTileImageDraft = "";
+let campaignCreatureImageDraft = "";
 let campaignLiveTimer = null;
 let dungeonWorkshopPreview = null;
 let dungeonWorkshopCr = 5;
@@ -705,7 +708,13 @@ function mapTokenPortrait(token, character = null) {
   if (character?.portrait) return character.portrait;
   if (token?.portrait) return token.portrait;
   const preset = mapTokenPreset(token?.presetId);
-  return preset && typeof window.tokenPresetPortrait === "function" ? window.tokenPresetPortrait(preset) : "";
+  if (typeof window.tokenPresetPortrait !== "function") return "";
+  return window.tokenPresetPortrait(preset || {
+    id: token?.id,
+    name: character?.name || token?.name || "Creature",
+    category: character ? "Humanoid" : token?.creatureType || (token?.kind === "npc" ? "NPC" : "Monstrosity"),
+    color: token?.color || tokenColor(character?.name || token?.name || "Creature")
+  });
 }
 function firstOpenMapPosition(data, size = 1) {
   const occupied = new Set();
@@ -734,6 +743,7 @@ async function addCampaignPresetToken(mapId, presetId) {
   const token = {
     id: `library-${preset.id}-${crypto.randomUUID()}`,
     presetId: preset.id,
+    creatureType: preset.category,
     kind: preset.category === "NPC" ? "npc" : "monster",
     side: preset.side === "ally" ? "ally" : "enemy",
     role: preset.role,
@@ -752,9 +762,19 @@ async function addCampaignPresetToken(mapId, presetId) {
       saveDc: preset.saveDc,
       damage: preset.damage
     },
-    sourceNote: "DND Beyonder quick-run profile; use your chosen rules source for a complete stat block."
+    sourceNote: preset.profileKind === "editable"
+      ? "Generated map token with an editable quick profile. Use the SRD or a rules source you own for the complete stat block."
+      : "DND Beyonder quick-run profile; use your chosen rules source for a complete stat block."
   };
   data.tokens.push(token);
+  if (data.encounter.status === "active" || data.encounter.status === "paused") {
+    const activeId = data.encounter.combatants[data.encounter.turnIndex]?.id;
+    const combatant = mapCombatantFromToken(token);
+    combatant.initiative = Math.floor(Math.random() * 20) + 1 + combatant.initiativeBonus;
+    data.encounter.combatants.push(combatant);
+    data.encounter.combatants.sort((a, b) => Number(b.initiative || 0) - Number(a.initiative || 0));
+    data.encounter.turnIndex = Math.max(0, data.encounter.combatants.findIndex(item => item.id === activeId));
+  }
   map.data = data;
   selectedMapToken = token.id;
   selectedMapTool = "token";
@@ -1450,19 +1470,23 @@ async function addCampaignCreatureToken(mapId, values) {
   if (latest?.data) map.data = normalizeMapData(latest.data);
   const data = normalizeMapData(map.data);
   const name = String(values.name || "").trim() || "Unknown Creature";
+  const creatureType = String(values.creatureType || (values.side === "ally" ? "NPC" : "Monstrosity")).trim() || "Monstrosity";
   const size = Math.min(4, Math.max(1, Number(values.size || 1)));
   const maximumHp = Math.max(1, Number(values.hp || 10));
+  const position = firstOpenMapPosition(data, size);
+  const portrait = campaignCreatureImageDraft || String(values.portraitUrl || "").trim();
   const token = {
     id: `monster-${crypto.randomUUID()}`,
     kind: values.side === "ally" ? "npc" : "monster",
     side: values.side === "ally" ? "ally" : "enemy",
+    creatureType,
     role: String(values.role || "creature").trim() || "creature",
     name,
-    portrait: "",
+    portrait,
     size,
-    color: String(values.color || "").trim() || tokenColor(name),
-    x: Math.min(data.columns - size, Math.max(0, Number(values.x || 1))),
-    y: Math.min(data.rows - size, Math.max(0, Number(values.y || 1))),
+    color: String(values.color || "").trim() || (typeof window.creatureTokenColor === "function" ? window.creatureTokenColor(name, creatureType) : tokenColor(name)),
+    x: position.x,
+    y: position.y,
     hidden: values.hidden === "on",
     quickStats: {
       ac: Math.max(0, Number(values.ac || 10)),
@@ -1474,6 +1498,7 @@ async function addCampaignCreatureToken(mapId, values) {
     },
     sourceNote: "DM-created quick-run profile."
   };
+  campaignCreatureImageDraft = "";
   data.tokens.push(token);
   if (data.encounter.status === "active" || data.encounter.status === "paused") {
     const activeId = data.encounter.combatants[data.encounter.turnIndex]?.id;
@@ -1502,14 +1527,94 @@ async function updateCampaignMapToken(mapId, tokenId, updates = {}, message = "T
   const index = data.tokens.findIndex(token => token.id === tokenId);
   if (index < 0) { toast("Token not found"); return; }
   data.tokens[index] = { ...data.tokens[index], ...updates };
+  const combatant = data.encounter.combatants.find(item => item.tokenId === tokenId);
+  if (combatant) {
+    combatant.name = data.tokens[index].name || combatant.name;
+    combatant.side = data.tokens[index].side || combatant.side;
+    combatant.role = data.tokens[index].role || combatant.role;
+  }
   map.data = data;
   await saveCampaignMap(map, message);
+}
+async function duplicateCampaignMapToken(mapId, tokenId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can duplicate tokens"); return; }
+  const data = normalizeMapData(map.data);
+  const source = data.tokens.find(token => token.id === tokenId);
+  if (!source) { toast("Token not found"); return; }
+  const copyNumber = data.tokens.filter(token => String(token.name || "").startsWith(source.name || "Token")).length + 1;
+  const copy = {
+    ...source,
+    id: `copy-${crypto.randomUUID()}`,
+    name: `${source.name || "Token"} ${copyNumber}`,
+    quickStats: { ...(source.quickStats || {}) },
+    conditions: []
+  };
+  const position = firstOpenMapPosition(data, mapTokenSize(copy));
+  copy.x = position.x;
+  copy.y = position.y;
+  data.tokens.push(copy);
+  if (data.encounter.status === "active" || data.encounter.status === "paused") {
+    const activeId = data.encounter.combatants[data.encounter.turnIndex]?.id;
+    const combatant = mapCombatantFromToken(copy);
+    combatant.initiative = Math.floor(Math.random() * 20) + 1 + combatant.initiativeBonus;
+    data.encounter.combatants.push(combatant);
+    data.encounter.combatants.sort((a, b) => Number(b.initiative || 0) - Number(a.initiative || 0));
+    data.encounter.turnIndex = Math.max(0, data.encounter.combatants.findIndex(item => item.id === activeId));
+  }
+  map.data = data;
+  selectedMapToken = copy.id;
+  await saveCampaignMap(map, `${source.name || "Token"} duplicated`);
+}
+async function editCampaignMapTokenProfile(mapId, tokenId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit token profiles"); return; }
+  const data = normalizeMapData(map.data);
+  const token = data.tokens.find(item => item.id === tokenId);
+  if (!token) return;
+  const stats = { ac: 10, maxHp: 1, initiativeBonus: 0, attackBonus: 0, saveDc: 10, damage: "1d6", ...(token.quickStats || {}) };
+  const ac = prompt("Armor Class", String(stats.ac));
+  if (ac === null) return;
+  const hp = prompt("Maximum Hit Points", String(stats.maxHp));
+  if (hp === null) return;
+  const initiative = prompt("Initiative bonus", String(stats.initiativeBonus));
+  if (initiative === null) return;
+  const attack = prompt("Attack bonus", String(stats.attackBonus));
+  if (attack === null) return;
+  const saveDc = prompt("Save DC", String(stats.saveDc));
+  if (saveDc === null) return;
+  const damage = prompt("Quick damage formula", String(stats.damage));
+  if (damage === null) return;
+  const finiteNumber = (value, fallback, minimum = -Infinity) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(minimum, parsed) : fallback;
+  };
+  token.quickStats = {
+    ac: finiteNumber(ac, stats.ac, 0),
+    maxHp: finiteNumber(hp, stats.maxHp, 1),
+    initiativeBonus: finiteNumber(initiative, stats.initiativeBonus),
+    attackBonus: finiteNumber(attack, stats.attackBonus),
+    saveDc: finiteNumber(saveDc, stats.saveDc, 0),
+    damage: String(damage || stats.damage).trim() || stats.damage
+  };
+  const combatant = data.encounter.combatants.find(item => item.tokenId === token.id);
+  if (combatant) {
+    combatant.ac = token.quickStats.ac;
+    combatant.maxHp = token.quickStats.maxHp;
+    const currentHp = Number(combatant.hp);
+    combatant.hp = Math.min(Number.isFinite(currentHp) ? currentHp : combatant.maxHp, combatant.maxHp);
+    combatant.initiativeBonus = token.quickStats.initiativeBonus;
+  }
+  map.data = data;
+  await saveCampaignMap(map, `${token.name || "Token"} profile updated`);
 }
 async function deleteCampaignMapToken(mapId, tokenId) {
   const map = campaignMapById(mapId);
   if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can delete tokens"); return; }
   const data = normalizeMapData(map.data);
   data.tokens = data.tokens.filter(token => token.id !== tokenId);
+  data.encounter.combatants = data.encounter.combatants.filter(combatant => combatant.tokenId !== tokenId);
+  data.encounter.turnIndex = Math.min(Math.max(0, data.encounter.turnIndex), Math.max(0, data.encounter.combatants.length - 1));
   if (selectedMapToken === tokenId) selectedMapToken = null;
   map.data = data;
   await saveCampaignMap(map, "Token removed");
@@ -6230,6 +6335,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const sceneTemplates = Array.isArray(window.MAP_SCENE_TEMPLATES) ? window.MAP_SCENE_TEMPLATES : [];
   const assetPacks = Array.isArray(window.MAP_ASSET_LIBRARY) ? window.MAP_ASSET_LIBRARY : [];
   const tokenPresets = mapTokenLibrary();
+  const creatureTypes = Array.isArray(window.MAP_TOKEN_TYPES) ? window.MAP_TOKEN_TYPES : [];
+  const tokenLibraryNotice = window.MAP_TOKEN_LIBRARY_NOTICE || null;
   const mapTabs = maps.map(map => `<button type="button" class="${map.id === activeMap?.id ? "active" : ""}" data-campaign-map-select="${escapeHtml(map.id)}">${escapeHtml(map.name)}</button>`).join("");
   const createForm = isDm ? `<details class="map-create">
     <summary>Create or upload a map</summary>
@@ -6257,7 +6364,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     return `<section class="campaign-panel campaign-map-panel campaign-map-room">
       <div class="campaign-map-hero">
         <div>
-          <span class="eyebrow">MAP STUDIO 2.0</span>
+          <span class="eyebrow">MAP STUDIO 2.1</span>
           <h3>Encounter maps</h3>
           <p>${isDm ? "Create a grid map, upload art, and place party tokens." : "The DM has not shared a battle map yet."}</p>
         </div>
@@ -6356,6 +6463,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       ${isDm ? `<div class="map-token-toolbar">
         <button type="button" data-map-token-toggle-hidden="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">${token.hidden ? "Reveal" : "Hide"}</button>
         <button type="button" data-map-token-toggle-side="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">${token.side === "ally" ? "Make enemy" : "Make ally"}</button>
+        <button type="button" data-map-token-profile="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Edit profile</button>
+        <button type="button" data-map-token-duplicate="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Duplicate</button>
         <button type="button" data-map-token-rename="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Rename</button>
         <button type="button" data-map-token-color="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Color</button>
         <button type="button" data-map-token-delete="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Delete</button>
@@ -6390,23 +6499,35 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     `<div class="map-ping" style="--x:${Number(ping.x)};--y:${Number(ping.y)};"><span></span><small>${escapeHtml(ping.by || "Ping")}</small></div>`
   ).join("");
   if (!isDm) selectedMapSidebar = "tokens";
-  const tokenCategories = ["All", ...new Set(tokenPresets.map(preset => preset.category))];
+  const tokenCategories = ["All", ...new Set(["NPC", ...creatureTypes, ...tokenPresets.map(preset => preset.category)])].filter(category => category === "All" || tokenPresets.some(preset => preset.category === category));
   if (!tokenCategories.includes(selectedMapTokenCategory)) selectedMapTokenCategory = "All";
-  const visibleTokenPresets = tokenPresets.filter(preset => selectedMapTokenCategory === "All" || preset.category === selectedMapTokenCategory);
+  const normalizedTokenSearch = mapTokenSearch.trim().toLowerCase();
+  const filteredTokenPresets = tokenPresets.filter(preset => {
+    if (selectedMapTokenCategory !== "All" && preset.category !== selectedMapTokenCategory) return false;
+    const searchable = `${preset.name} ${preset.category} ${preset.role} ${preset.sizeLabel || ""} ${preset.source || ""}`.toLowerCase();
+    return !normalizedTokenSearch || searchable.includes(normalizedTokenSearch);
+  });
+  const visibleTokenPresets = filteredTokenPresets.slice(0, mapTokenResultLimit);
   const tokenPresetCards = visibleTokenPresets.map(preset => {
     const portrait = typeof window.tokenPresetPortrait === "function" ? window.tokenPresetPortrait(preset) : "";
-    const searchable = `${preset.name} ${preset.category} ${preset.role}`.toLowerCase();
-    return `<article class="map-token-preset-card" data-library-search="${escapeHtml(searchable)}" ${mapTokenSearch && !searchable.includes(mapTokenSearch.toLowerCase()) ? "hidden" : ""}>
+    const profileLabel = preset.profileKind === "editable"
+      ? `${preset.sizeLabel || "Medium"} &middot; editable quick profile`
+      : `AC ${preset.ac} &middot; HP ${preset.hp} &middot; ${escapeHtml(preset.damage)}`;
+    return `<article class="map-token-preset-card">
       <span class="map-token-preset-portrait" style="--token:${escapeHtml(preset.color)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(preset.name.charAt(0))}</span>
-      <div><small>${escapeHtml(preset.category)} &middot; ${escapeHtml(preset.role)}</small><strong>${escapeHtml(preset.name)}</strong><span>AC ${preset.ac} &middot; HP ${preset.hp} &middot; ${escapeHtml(preset.damage)}</span></div>
+      <div><small>${escapeHtml(preset.category)} &middot; ${escapeHtml(preset.role)}</small><strong>${escapeHtml(preset.name)}</strong><span>${profileLabel}</span>${preset.source === "SRD 5.2.1" ? `<em>SRD 5.2.1</em>` : ""}</div>
       <button type="button" data-map-token-preset-add="${escapeHtml(preset.id)}" data-map-id="${escapeHtml(activeMap.id)}">Add</button>
     </article>`;
   }).join("");
+  const tokenMore = filteredTokenPresets.length > visibleTokenPresets.length ? `<button type="button" class="map-library-more" data-map-token-show-more>Show ${Math.min(60, filteredTokenPresets.length - visibleTokenPresets.length)} more</button>` : "";
+  const tokenNotice = tokenLibraryNotice ? `<details class="map-token-library-notice"><summary>Creature coverage and rules source</summary><p>${escapeHtml(tokenLibraryNotice.attribution)}</p><p>Portraits and quick profiles are original DND Beyonder play aids. Quick numbers are editable and are not replacements for complete stat blocks.</p><span><a href="${escapeHtml(tokenLibraryNotice.sourceUrl)}" target="_blank" rel="noreferrer">Open SRD 5.2.1</a><a href="${escapeHtml(tokenLibraryNotice.licenseUrl)}" target="_blank" rel="noreferrer">CC BY 4.0</a></span></details>` : "";
   const tokenBrowser = isDm ? `<section class="map-token-browser">
-    <div class="map-dock-heading"><div><small>Quick tokens</small><strong>Monsters and NPCs</strong></div><span class="map-library-count">${tokenPresets.length}</span></div>
-    <div class="map-library-filter"><label><span>Find a token</span><input type="search" value="${escapeHtml(mapTokenSearch)}" placeholder="Goblin, undead, guard..." data-map-token-search></label></div>
+    <div class="map-dock-heading"><div><small>Creature vault</small><strong>Monsters, NPCs, and allies</strong></div><span class="map-library-count">${filteredTokenPresets.length}/${tokenPresets.length}</span></div>
+    <div class="map-library-filter"><label><span>Find any creature</span><input type="search" value="${escapeHtml(mapTokenSearch)}" placeholder="Dragon, undead, guard, huge..." data-map-token-search></label></div>
     <div class="map-library-categories" aria-label="Token categories">${tokenCategories.map(category => `<button type="button" class="${selectedMapTokenCategory === category ? "active" : ""}" data-map-token-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div>
-    <div class="map-token-preset-list">${tokenPresetCards || `<p class="map-dock-note">No presets match this filter.</p>`}</div>
+    <div class="map-token-preset-list">${tokenPresetCards || `<p class="map-dock-note">No presets match this filter. Use the custom creature form below for anything from another book or your own setting.</p>`}</div>
+    ${tokenMore}
+    ${tokenNotice}
   </section>` : `<div class="map-player-tool-summary"><strong>Player map tools</strong><p>Move your own character token, pan and zoom the map, measure distance, and ping locations for the party. Monster and NPC controls remain with the DM.</p></div>`;
   const sceneGallery = sceneTemplates.map(scene => `<article class="map-scene-card">
     <div class="map-scene-preview" style="${mapTileStyle(activeMap, scene.previewTile)}"></div>
@@ -6449,11 +6570,12 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </form>
   </details>` : "";
   const creatureForm = isDm ? `<details class="map-creature-create">
-    <summary>Add creature or NPC token</summary>
+    <summary>Create a custom or book creature token</summary>
     <form data-campaign-creature-create="${escapeHtml(activeMap.id)}">
       <div class="map-creature-form-grid">
         <label>Token name<input name="name" required maxlength="60" placeholder="Vampire Spawn"></label>
         <label>Role<input name="role" maxlength="30" placeholder="Skirmisher"></label>
+        <label>Creature type<select name="creatureType"><option value="NPC">NPC</option>${creatureTypes.map(type => `<option value="${escapeHtml(type)}" ${type === "Monstrosity" ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}</select></label>
         <label>Side<select name="side"><option value="enemy">Enemy</option><option value="ally">Ally / NPC</option></select></label>
         <label>Size<select name="size"><option value="1">1x1 Medium</option><option value="2">2x2 Large</option><option value="3">3x3 Huge</option><option value="4">4x4 Gargantuan</option></select></label>
         <label>AC<input name="ac" type="number" min="0" max="40" value="14"></label>
@@ -6463,8 +6585,11 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label>Save DC<input name="saveDc" type="number" min="0" max="40" value="13"></label>
         <label>Damage<input name="damage" maxlength="24" value="2d6 + 3"></label>
         <label>Token color<input name="color" type="color" value="#8f2f2f"></label>
+        <label>Portrait URL<input name="portraitUrl" placeholder="Optional image URL"></label>
+        <label>Upload portrait<input type="file" accept="image/*" data-campaign-creature-upload><small class="field-hint" data-creature-upload-status>Generated art will be used</small></label>
         <label class="map-grid-toggle"><input name="hidden" type="checkbox" checked><span><strong>Start hidden</strong><small>Players will not see the token until you reveal it.</small></span></label>
       </div>
+      <p class="field-hint">Use this for creatures from books you own or homebrew. Without an image, DND Beyonder generates a type-based token automatically.</p>
       <button class="button primary small" type="submit">Place creature</button>
     </form>
   </details>` : "";
@@ -6472,7 +6597,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   return `<section class="campaign-panel campaign-map-panel campaign-map-room">
     <div class="campaign-map-hero">
       <div>
-        <span class="eyebrow">MAP STUDIO 2.0</span>
+        <span class="eyebrow">MAP STUDIO 2.1</span>
         <h3>${escapeHtml(activeMap.name)}</h3>
         <p>${isDm ? "Run the table from a dark tactical workspace: start the session, control fog, place tokens, ping, measure, and track play." : "The live table appears here when the DM starts the session. You can move tokens connected to your own character."}</p>
       </div>
@@ -8784,6 +8909,13 @@ function initEvents() {
     const tokenCategory = event.target.closest("[data-map-token-category]");
     if (tokenCategory) {
       selectedMapTokenCategory = tokenCategory.dataset.mapTokenCategory || "All";
+      mapTokenResultLimit = 60;
+      renderCampaigns();
+      return;
+    }
+    const tokenShowMore = event.target.closest("[data-map-token-show-more]");
+    if (tokenShowMore) {
+      mapTokenResultLimit += 60;
       renderCampaigns();
       return;
     }
@@ -8911,6 +9043,16 @@ function initEvents() {
         const side = token.side === "ally" ? "enemy" : "ally";
         updateCampaignMapToken(map.id, token.id, { side, kind: side === "ally" ? "npc" : "monster", hidden: side === "enemy" ? token.hidden : false }, side === "ally" ? "Token marked as an ally" : "Token marked as an enemy");
       }
+      return;
+    }
+    const mapTokenProfile = event.target.closest("[data-map-token-profile]");
+    if (mapTokenProfile) {
+      editCampaignMapTokenProfile(mapTokenProfile.dataset.mapId, mapTokenProfile.dataset.mapTokenProfile);
+      return;
+    }
+    const mapTokenDuplicate = event.target.closest("[data-map-token-duplicate]");
+    if (mapTokenDuplicate) {
+      duplicateCampaignMapToken(mapTokenDuplicate.dataset.mapId, mapTokenDuplicate.dataset.mapTokenDuplicate);
       return;
     }
     const mapTokenRename = event.target.closest("[data-map-token-rename]");
@@ -9243,9 +9385,23 @@ function initEvents() {
     if (!tileSearch && !tokenSearch) return;
     const search = String(event.target.value || "").trim().toLowerCase();
     if (tileSearch) mapTileSearch = search;
-    if (tokenSearch) mapTokenSearch = search;
-    const selector = tileSearch ? ".map-tile-swatch[data-library-search]" : ".map-token-preset-card[data-library-search]";
-    event.target.closest(".map-dock-body")?.querySelectorAll(selector).forEach(card => {
+    if (tokenSearch) {
+      mapTokenSearch = search;
+      clearTimeout(mapTokenSearchTimer);
+      mapTokenSearchTimer = setTimeout(() => {
+        mapTokenResultLimit = 60;
+        renderCampaigns();
+        requestAnimationFrame(() => {
+          const nextSearch = document.querySelector("[data-map-token-search]");
+          if (nextSearch) {
+            nextSearch.focus();
+            nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+          }
+        });
+      }, 180);
+      return;
+    }
+    event.target.closest(".map-dock-body")?.querySelectorAll(".map-tile-swatch[data-library-search]").forEach(card => {
       card.hidden = Boolean(search && !String(card.dataset.librarySearch || "").includes(search));
     });
   });
@@ -9256,27 +9412,33 @@ function initEvents() {
       return;
     }
     const tileUpload = event.target.closest("[data-campaign-tile-upload]");
-    const upload = event.target.closest("[data-campaign-map-upload]") || tileUpload;
+    const creatureUpload = event.target.closest("[data-campaign-creature-upload]");
+    const upload = event.target.closest("[data-campaign-map-upload]") || tileUpload || creatureUpload;
     if (!upload) return;
     const file = upload.files?.[0];
-    const status = upload.closest("label")?.querySelector(tileUpload ? "[data-tile-upload-status]" : "[data-map-upload-status]");
+    const statusSelector = tileUpload ? "[data-tile-upload-status]" : creatureUpload ? "[data-creature-upload-status]" : "[data-map-upload-status]";
+    const status = upload.closest("label")?.querySelector(statusSelector);
     if (!file) {
       if (tileUpload) campaignTileImageDraft = "";
+      else if (creatureUpload) campaignCreatureImageDraft = "";
       else campaignMapImageDraft = "";
       if (status) status.textContent = "No image selected";
       return;
     }
-    if (file.size > 2_500_000) {
+    const maximumSize = creatureUpload ? 900_000 : 2_500_000;
+    if (file.size > maximumSize) {
       upload.value = "";
       if (tileUpload) campaignTileImageDraft = "";
+      else if (creatureUpload) campaignCreatureImageDraft = "";
       else campaignMapImageDraft = "";
       if (status) status.textContent = "Image is too large for cloud sync";
-      toast("Use an image under 2.5 MB, or paste an image URL");
+      toast(`Use an image under ${creatureUpload ? "900 KB" : "2.5 MB"}, or paste an image URL`);
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       if (tileUpload) campaignTileImageDraft = String(reader.result || "");
+      else if (creatureUpload) campaignCreatureImageDraft = String(reader.result || "");
       else campaignMapImageDraft = String(reader.result || "");
       if (status) status.textContent = `${file.name} ready`;
     };

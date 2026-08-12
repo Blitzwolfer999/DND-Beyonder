@@ -2605,8 +2605,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-token-preset-card small { color: #d7ad67; font-size: 7px; font-weight: 900; text-transform: uppercase; }
 .map-token-preset-card strong { overflow: hidden; color: #f4efe7; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .map-token-preset-card div > span { color: #9eabba; font-size: 8px; }
+.map-token-preset-card div > em { display: inline-block; margin-top: 3px; padding: 2px 5px; border: 1px solid #526172; border-radius: 999px; color: #c3cfdd; background: #171e27; font-size: 7px; font-style: normal; font-weight: 800; }
 .map-token-preset-card > button { min-height: 28px; padding: 4px 7px; border: 1px solid #566477; border-radius: 7px; color: #fff1da; background: #303a48; cursor: pointer; font-size: 8px; font-weight: 900; }
 .map-token-preset-card > button:hover { border-color: #d3a85c; background: #8f2f2f; }
+.map-library-more { width: 100%; min-height: 31px; margin-top: 7px; border: 1px solid #536175; border-radius: 8px; color: #f5dfb9; background: #27313e; cursor: pointer; font-size: 9px; font-weight: 900; }
+.map-library-more:hover { border-color: #d3a85c; background: #66312d; }
+.map-token-library-notice { margin-top: 8px; padding: 7px 8px; border: 1px solid #3d4959; border-radius: 8px; color: #aeb9c7; background: #151b24; font-size: 8px; line-height: 1.45; }
+.map-token-library-notice summary { color: #d8b36f; cursor: pointer; font-weight: 900; }
+.map-token-library-notice p { margin: 6px 0; }
+.map-token-library-notice span { display: flex; flex-wrap: wrap; gap: 6px; }
+.map-token-library-notice a { padding: 3px 6px; border: 1px solid #536175; border-radius: 6px; color: #dce8f5; text-decoration: none; }
+.map-token-library-notice a:hover { color: #fff; border-color: #d3a85c; }
 .map-token-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 3px 0 8px; }
 .map-token-list-heading strong { color: #f3eee6; font-size: 10px; }
 .map-player-tool-summary { margin-bottom: 11px; padding: 10px; border: 1px solid #38536d; border-radius: 10px; background: linear-gradient(145deg,rgba(49,91,120,.22),rgba(32,39,51,.8)); }

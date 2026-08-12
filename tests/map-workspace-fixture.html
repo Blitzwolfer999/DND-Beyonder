@@ -28,19 +28,18 @@
       <div class="map-dock-tabs"><button class="active">Tokens</button><button>Tiles</button><button>Scenes</button></div>
       <div class="map-dock-body">
         <section class="map-token-browser">
-          <div class="map-dock-heading"><div><small>Quick tokens</small><strong>Monsters and NPCs</strong></div><span class="map-library-count">32</span></div>
-          <div class="map-library-filter"><label><span>Find a token</span><input type="search" placeholder="Goblin, undead, guard..."></label></div>
-          <div class="map-library-categories"><button class="active">All</button><button>NPC</button><button>Humanoid</button><button>Beast</button><button>Undead</button></div>
-          <div class="map-token-preset-list">
-            <article class="map-token-preset-card"><span class="map-token-preset-portrait" style="--token:#4e7135">GR</span><div><small>Humanoid - Skirmisher</small><strong>Goblin Raider</strong><span>AC 15 - HP 10 - 1d6 + 2</span></div><button>Add</button></article>
-            <article class="map-token-preset-card"><span class="map-token-preset-portrait" style="--token:#315b78">TG</span><div><small>NPC - Defender</small><strong>Town Guard</strong><span>AC 16 - HP 18 - 1d8 + 2</span></div><button>Add</button></article>
-          </div>
+          <div class="map-dock-heading"><div><small>Creature vault</small><strong>Monsters, NPCs, and allies</strong></div><span class="map-library-count" id="fixture-token-count">343/343</span></div>
+          <div class="map-library-filter"><label><span>Find any creature</span><input id="fixture-token-search" type="search" placeholder="Dragon, undead, guard, huge..."></label></div>
+          <div class="map-library-categories" id="fixture-token-categories"></div>
+          <div class="map-token-preset-list" id="fixture-token-list"></div>
+          <button type="button" class="map-library-more">Show 60 more</button>
+          <details class="map-token-library-notice"><summary>Creature coverage and rules source</summary><p>SRD 5.2.1 creature names with original generated portraits and editable quick profiles.</p></details>
         </section>
         <div class="map-token-list-heading"><strong>Tokens on this map</strong><span>3</span></div>
         <div class="map-token-list">
           <article class="map-token-card active"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#8f2f2f">A</span><strong>Astrid Vale</strong><small>Visible to players</small></button><div class="map-token-size-row"><small>Token size: 1x1</small><span><button>-</button><button>+</button></span></div></article>
           <article class="map-token-card"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#315f89">M</span><strong>Mira Ember</strong><small>Visible to players</small></button><div class="map-token-size-row"><small>Token size: 1x1</small><span><button>-</button><button>+</button></span></div></article>
-          <article class="map-token-card"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#8f2f2f">V</span><strong>Vampire Spawn</strong><small>Skirmisher - hidden</small></button><div class="map-token-toolbar"><button>Reveal</button><button>Rename</button><button>Color</button><button>Delete</button></div></article>
+          <article class="map-token-card"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#8f2f2f">V</span><strong>Vampire Spawn</strong><small>Skirmisher - hidden</small></button><div class="map-token-toolbar"><button>Reveal</button><button>Make ally</button><button>Edit profile</button><button>Duplicate</button><button>Rename</button><button>Color</button><button>Delete</button></div></article>
         </div>
       </div>
     </aside>
@@ -61,5 +60,28 @@
     </div>
   </div>
 </main>
+<script src="../map-token-library.js"></script>
+<script>
+  const tokenList = document.querySelector("#fixture-token-list");
+  const tokenCount = document.querySelector("#fixture-token-count");
+  const tokenSearch = document.querySelector("#fixture-token-search");
+  const categories = document.querySelector("#fixture-token-categories");
+  let category = "All";
+  function renderFixtureTokens() {
+    const search = tokenSearch.value.trim().toLowerCase();
+    const matches = MAP_TOKEN_LIBRARY.filter(token => (category === "All" || token.category === category) && (!search || `${token.name} ${token.category} ${token.role} ${token.sizeLabel}`.toLowerCase().includes(search)));
+    tokenCount.textContent = `${matches.length}/${MAP_TOKEN_LIBRARY.length}`;
+    tokenList.innerHTML = matches.slice(0, 8).map(token => `<article class="map-token-preset-card"><span class="map-token-preset-portrait" style="--token:${token.color}"><img src="${tokenPresetPortrait(token)}" alt=""></span><div><small>${token.category} &middot; ${token.role}</small><strong>${token.name}</strong><span>${token.sizeLabel} &middot; ${token.profileKind === "editable" ? "editable quick profile" : `AC ${token.ac} &middot; HP ${token.hp}`}</span>${token.source === "SRD 5.2.1" ? "<em>SRD 5.2.1</em>" : ""}</div><button>Add</button></article>`).join("");
+  }
+  ["All", "NPC", ...MAP_TOKEN_TYPES].forEach(type => {
+    const button = document.createElement("button");
+    button.textContent = type;
+    button.className = type === "All" ? "active" : "";
+    button.addEventListener("click", () => { category = type; categories.querySelectorAll("button").forEach(item => item.classList.toggle("active", item === button)); renderFixtureTokens(); });
+    categories.append(button);
+  });
+  tokenSearch.addEventListener("input", renderFixtureTokens);
+  renderFixtureTokens();
+</script>
 </body>
 </html>
