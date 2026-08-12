@@ -291,7 +291,14 @@ let activeMapId = "";
 let selectedMapToken = null;
 let selectedMapTool = "token";
 let selectedMapTile = "stone-floor";
+let selectedMapSidebar = "tokens";
+let selectedMapBrushSize = 1;
 let selectedMapRulerStart = null;
+let mapSpacePan = false;
+let mapPointerState = null;
+let suppressMapClickUntil = 0;
+const mapViewportStates = new Map();
+const mapEditHistory = new Map();
 let campaignMapImageDraft = "";
 let campaignTileImageDraft = "";
 let campaignLiveTimer = null;
@@ -312,16 +319,30 @@ const PORTRAIT_EXPORT_SIZE = 256;
 const PORTRAIT_EXPORT_QUALITY = 0.74;
 const BUILT_IN_MAP_TILES = [
   { id: "stone-floor", name: "Stone Floor", category: "Dungeon", style: "background:#787064;background-image:linear-gradient(90deg,rgba(0,0,0,.18) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.18) 1px,transparent 1px);background-size:50% 50%;" },
+  { id: "flagstone", name: "Flagstone", category: "Dungeon", style: "background:#77736b;background-image:linear-gradient(90deg,rgba(35,31,27,.34) 2px,transparent 2px),linear-gradient(rgba(35,31,27,.34) 2px,transparent 2px),radial-gradient(circle at 72% 28%,rgba(255,255,255,.13),transparent 45%);background-size:50% 100%,100% 50%,100% 100%;" },
   { id: "cracked-stone", name: "Cracked Stone", category: "Dungeon", style: "background:#6c665e;background-image:linear-gradient(135deg,transparent 45%,rgba(24,20,18,.36) 46%,transparent 50%),linear-gradient(35deg,transparent 58%,rgba(255,255,255,.12) 59%,transparent 62%);" },
+  { id: "mossy-stone", name: "Mossy Stone", category: "Dungeon", style: "background:#61675a;background-image:radial-gradient(circle at 18% 78%,rgba(74,111,55,.65) 0 14%,transparent 15%),radial-gradient(circle at 82% 20%,rgba(58,94,43,.45) 0 11%,transparent 12%),linear-gradient(90deg,rgba(0,0,0,.2) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.2) 1px,transparent 1px);background-size:34px 34px,42px 42px,50% 50%,50% 50%;" },
+  { id: "crypt-floor", name: "Crypt Floor", category: "Dungeon", style: "background:#565058;background-image:repeating-linear-gradient(90deg,transparent 0 28%,rgba(15,12,18,.34) 29% 32%,transparent 33% 65%,rgba(15,12,18,.34) 66% 69%),linear-gradient(rgba(255,255,255,.08),rgba(0,0,0,.2));" },
   { id: "dungeon-wall", name: "Dungeon Wall", category: "Dungeon", style: "background:#3e3935;background-image:linear-gradient(90deg,rgba(255,255,255,.09) 2px,transparent 2px),linear-gradient(rgba(0,0,0,.3) 50%,transparent 50%);background-size:22px 100%,100% 50%;" },
+  { id: "brick-wall", name: "Brick Wall", category: "Dungeon", style: "background:#684c42;background-image:linear-gradient(rgba(20,14,12,.42) 2px,transparent 2px),linear-gradient(90deg,rgba(20,14,12,.35) 2px,transparent 2px);background-size:100% 50%,50% 50%;" },
+  { id: "cave-floor", name: "Cave Floor", category: "Dungeon", style: "background:#625a4f;background-image:radial-gradient(ellipse at 26% 34%,rgba(255,255,255,.1) 0 22%,transparent 23%),radial-gradient(ellipse at 76% 70%,rgba(22,18,15,.22) 0 27%,transparent 28%);background-size:38px 33px;" },
+  { id: "chasm", name: "Chasm", category: "Dungeon", style: "background:#15171b;background-image:radial-gradient(ellipse at center,#333640 0 8%,#17191e 52%,#08090c 100%);" },
   { id: "wood-planks", name: "Wood Planks", category: "Town", style: "background:#8b5f37;background-image:linear-gradient(90deg,rgba(50,25,9,.35) 2px,transparent 2px),linear-gradient(rgba(255,230,170,.12),rgba(30,12,5,.18));background-size:16px 100%,100% 100%;" },
+  { id: "dark-wood", name: "Dark Wood", category: "Town", style: "background:#53351f;background-image:repeating-linear-gradient(90deg,rgba(16,8,3,.38) 0 2px,transparent 2px 17px),linear-gradient(rgba(236,183,112,.1),rgba(0,0,0,.24));" },
   { id: "cobblestone", name: "Cobblestone", category: "Town", style: "background:#8c877b;background-image:radial-gradient(ellipse at 35% 35%,rgba(255,255,255,.18) 0 18%,transparent 19%),radial-gradient(ellipse at 75% 65%,rgba(0,0,0,.18) 0 22%,transparent 23%);background-size:26px 22px;" },
+  { id: "marble", name: "Marble", category: "Town", style: "background:#d5d0c4;background-image:linear-gradient(112deg,transparent 44%,rgba(83,91,101,.24) 45%,transparent 48%),linear-gradient(28deg,transparent 63%,rgba(172,148,135,.28) 64%,transparent 67%);" },
+  { id: "roof-tile", name: "Roof Tile", category: "Town", style: "background:#84483c;background-image:radial-gradient(ellipse at 50% 0,transparent 0 48%,rgba(43,20,17,.4) 49% 53%,transparent 54%);background-size:22px 18px;" },
+  { id: "rug", name: "Woven Rug", category: "Town", style: "background:#7d292e;background-image:repeating-linear-gradient(45deg,rgba(234,186,93,.35) 0 3px,transparent 3px 11px),repeating-linear-gradient(-45deg,rgba(35,16,19,.28) 0 2px,transparent 2px 13px);" },
   { id: "grass", name: "Grass", category: "Wilderness", style: "background:#4f7a3c;background-image:linear-gradient(115deg,rgba(255,255,255,.08) 12%,transparent 12%),linear-gradient(25deg,rgba(0,0,0,.12) 18%,transparent 18%);background-size:14px 14px;" },
   { id: "forest", name: "Forest", category: "Wilderness", style: "background:#315b35;background-image:radial-gradient(circle at 35% 35%,#4f8a45 0 18%,transparent 19%),radial-gradient(circle at 72% 68%,#24452b 0 22%,transparent 23%);background-size:30px 30px;" },
   { id: "dirt", name: "Dirt Path", category: "Wilderness", style: "background:#8a633f;background-image:radial-gradient(circle,rgba(50,25,10,.22) 0 12%,transparent 13%);background-size:18px 18px;" },
   { id: "sand", name: "Sand", category: "Wilderness", style: "background:#c7ad6b;background-image:radial-gradient(circle,rgba(255,255,255,.18) 0 8%,transparent 9%),radial-gradient(circle,rgba(90,60,20,.18) 0 7%,transparent 8%);background-size:18px 18px,25px 25px;" },
+  { id: "snow", name: "Snow", category: "Wilderness", style: "background:#dce5e7;background-image:radial-gradient(circle at 20% 25%,rgba(255,255,255,.72) 0 9%,transparent 10%),linear-gradient(145deg,rgba(102,132,148,.14),transparent 46%);background-size:26px 26px,100% 100%;" },
+  { id: "ice", name: "Ice", category: "Wilderness", style: "background:#8fc3d2;background-image:linear-gradient(135deg,transparent 34%,rgba(255,255,255,.45) 35%,transparent 37%),linear-gradient(25deg,transparent 62%,rgba(35,91,119,.28) 63%,transparent 66%);" },
   { id: "water", name: "Water", category: "Hazard", style: "background:#2f6f94;background-image:linear-gradient(135deg,rgba(255,255,255,.24) 12%,transparent 13%,transparent 50%,rgba(255,255,255,.16) 51%,transparent 52%);background-size:24px 24px;" },
+  { id: "deep-water", name: "Deep Water", category: "Hazard", style: "background:#153f62;background-image:radial-gradient(ellipse at 28% 42%,rgba(85,164,195,.35),transparent 45%),linear-gradient(145deg,rgba(255,255,255,.12) 12%,transparent 13%);background-size:42px 34px,23px 23px;" },
   { id: "lava", name: "Lava", category: "Hazard", style: "background:#9b2f1e;background-image:radial-gradient(circle at 30% 35%,#ffb13a 0 12%,transparent 13%),linear-gradient(45deg,rgba(0,0,0,.28),transparent);" },
+  { id: "acid", name: "Acid", category: "Hazard", style: "background:#6c8e28;background-image:radial-gradient(circle at 30% 32%,rgba(213,245,90,.62) 0 8%,transparent 9%),radial-gradient(circle at 78% 69%,rgba(25,45,12,.38) 0 12%,transparent 13%);background-size:28px 28px;" },
   { id: "shadow", name: "Shadow", category: "Overlay", style: "background:rgba(18,14,22,.7);background-image:radial-gradient(circle,rgba(255,255,255,.06),transparent 55%);" }
 ];
 
@@ -553,6 +574,13 @@ function normalizeMapData(data = {}) {
     rows: Math.min(80, Math.max(4, Number(data.rows || 16))),
     gridSize: Math.min(72, Math.max(28, Number(data.gridSize || 44))),
     gridEnabled: data.gridEnabled !== false,
+    display: {
+      gridColor: /^#[0-9a-f]{6}$/i.test(String(data.display?.gridColor || "")) ? String(data.display.gridColor) : "#ffffff",
+      gridOpacity: Math.min(.8, Math.max(.08, Number(data.display?.gridOpacity ?? .32))),
+      gridThickness: Math.min(3, Math.max(1, Number(data.display?.gridThickness || 1))),
+      tokenNames: data.display?.tokenNames !== false,
+      tokenHealth: data.display?.tokenHealth !== false
+    },
     background: String(data.background || ""),
     backgroundFit: data.backgroundFit || "cover",
     scale: data.scale && typeof data.scale === "object" ? {
@@ -575,6 +603,7 @@ function normalizeMapData(data = {}) {
     tokens: Array.isArray(data.tokens) ? data.tokens : [],
     tiles: Array.isArray(data.tiles) ? data.tiles : [],
     customTiles: Array.isArray(data.customTiles) ? data.customTiles : [],
+    scene: data.scene && typeof data.scene === "object" ? data.scene : null,
     dungeon: data.dungeon && typeof data.dungeon === "object" ? data.dungeon : null,
     encounter: {
       status: encounterStatus,
@@ -662,6 +691,159 @@ function clampMapTokenPosition(data, token, x, y) {
     y: Math.min(Math.max(0, data.rows - size), Math.max(0, Number(y)))
   };
 }
+function mapViewportState(mapId) {
+  if (!mapViewportStates.has(mapId)) mapViewportStates.set(mapId, { zoom: 1, scrollLeft: 0, scrollTop: 0, initialized: false });
+  return mapViewportStates.get(mapId);
+}
+function mapBoardCellFromPointer(board, event, data) {
+  const rect = board.getBoundingClientRect();
+  const cellWidth = rect.width / Math.max(1, data.columns);
+  const cellHeight = rect.height / Math.max(1, data.rows);
+  const rawX = (event.clientX - rect.left) / cellWidth;
+  const rawY = (event.clientY - rect.top) / cellHeight;
+  return {
+    rawX: Math.min(data.columns - .001, Math.max(0, rawX)),
+    rawY: Math.min(data.rows - .001, Math.max(0, rawY)),
+    x: Math.min(data.columns - 1, Math.max(0, Math.floor(rawX))),
+    y: Math.min(data.rows - 1, Math.max(0, Math.floor(rawY)))
+  };
+}
+function setCampaignMapZoom(mapId, zoom, options = {}) {
+  const map = campaignMapById(mapId);
+  const shell = document.querySelector(`[data-map-shell="${mapId}"]`);
+  const board = document.querySelector(`[data-campaign-map-board="${mapId}"]`);
+  if (!map || !shell || !board) return;
+  const data = normalizeMapData(map.data);
+  const state = mapViewportState(mapId);
+  const priorZoom = state.zoom || 1;
+  const anchorX = options.anchorX ?? shell.clientWidth / 2;
+  const anchorY = options.anchorY ?? shell.clientHeight / 2;
+  const boardX = (shell.scrollLeft + anchorX) / priorZoom;
+  const boardY = (shell.scrollTop + anchorY) / priorZoom;
+  state.zoom = Math.min(2.5, Math.max(.3, Number(zoom) || 1));
+  board.style.setProperty("--cell", `${data.gridSize * state.zoom}px`);
+  const label = document.querySelector(`[data-map-zoom-label="${mapId}"]`);
+  if (label) label.textContent = `${Math.round(state.zoom * 100)}%`;
+  requestAnimationFrame(() => {
+    shell.scrollLeft = boardX * state.zoom - anchorX;
+    shell.scrollTop = boardY * state.zoom - anchorY;
+    state.scrollLeft = shell.scrollLeft;
+    state.scrollTop = shell.scrollTop;
+  });
+}
+function fitCampaignMap(mapId) {
+  const map = campaignMapById(mapId);
+  const shell = document.querySelector(`[data-map-shell="${mapId}"]`);
+  if (!map || !shell) return;
+  const data = normalizeMapData(map.data);
+  const availableWidth = Math.max(240, shell.clientWidth - 32);
+  const availableHeight = Math.max(240, shell.clientHeight - 32);
+  const zoom = Math.min(1.4, availableWidth / (data.columns * data.gridSize), availableHeight / (data.rows * data.gridSize));
+  setCampaignMapZoom(mapId, zoom, { anchorX: 0, anchorY: 0 });
+  requestAnimationFrame(() => {
+    shell.scrollLeft = 0;
+    shell.scrollTop = 0;
+  });
+}
+function pushMapEditHistory(mapId, data) {
+  const history = mapEditHistory.get(mapId) || [];
+  history.push({
+    columns: data.columns,
+    rows: data.rows,
+    tiles: JSON.parse(JSON.stringify(data.tiles)),
+    fog: JSON.parse(JSON.stringify(data.fog)),
+    scene: data.scene ? JSON.parse(JSON.stringify(data.scene)) : null
+  });
+  mapEditHistory.set(mapId, history.slice(-20));
+}
+async function undoCampaignMapEdit(mapId) {
+  const map = campaignMapById(mapId);
+  const history = mapEditHistory.get(mapId) || [];
+  if (!map || !canEditCampaign(map.campaign_id) || !history.length) return;
+  const prior = history.pop();
+  mapEditHistory.set(mapId, history);
+  const data = normalizeMapData(map.data);
+  data.columns = prior.columns;
+  data.rows = prior.rows;
+  data.tiles = prior.tiles;
+  data.fog = prior.fog;
+  data.scene = prior.scene;
+  data.tokens = data.tokens.map(token => ({ ...token, ...clampMapTokenPosition(data, token, token.x, token.y) }));
+  map.data = data;
+  await saveCampaignMap(map, "Map edit undone", { preserveTokens: true });
+}
+function applyMapBrushToData(data, tool, tileId, originX, originY, brushSize = 1) {
+  if (typeof window.paintMapDataCells === "function") return window.paintMapDataCells(data, tool, tileId, originX, originY, brushSize);
+  const size = Math.min(4, Math.max(1, Number(brushSize || 1)));
+  const changed = [];
+  const tileMap = new Map(data.tiles.map(tile => [mapCellKey(tile.x, tile.y), tile]));
+  const fogCells = new Set(data.fog.cells);
+  for (let offsetY = 0; offsetY < size; offsetY += 1) {
+    for (let offsetX = 0; offsetX < size; offsetX += 1) {
+      const x = originX + offsetX;
+      const y = originY + offsetY;
+      if (x < 0 || y < 0 || x >= data.columns || y >= data.rows) continue;
+      const key = mapCellKey(x, y);
+      if (tool === "paint") tileMap.set(key, { x, y, tileId });
+      if (tool === "erase") tileMap.delete(key);
+      if (tool === "fog-paint") {
+        data.fog.enabled = true;
+        fogCells.add(key);
+      }
+      if (tool === "fog-erase") fogCells.delete(key);
+      changed.push({ x, y });
+    }
+  }
+  data.tiles = [...tileMap.values()];
+  data.fog.cells = [...fogCells];
+  if (!data.fog.cells.length) data.fog.enabled = false;
+  return changed;
+}
+function syncMapBrushVisual(board, map, data, cells) {
+  const tileLayer = board.querySelector(".battle-map-tiles");
+  const fogLayer = board.querySelector(".battle-map-fog");
+  cells.forEach(({ x, y }) => {
+    tileLayer?.querySelectorAll(`[data-cell-x="${x}"][data-cell-y="${y}"]`).forEach(node => node.remove());
+    const tile = data.tiles.find(item => Number(item.x) === x && Number(item.y) === y);
+    if (tile && tileLayer) {
+      const element = document.createElement("div");
+      element.className = "map-cell-tile";
+      element.dataset.cellX = String(x);
+      element.dataset.cellY = String(y);
+      element.style.cssText = `--x:${x};--y:${y};${mapTileStyle(map, tile.tileId)}`;
+      tileLayer.appendChild(element);
+    }
+    fogLayer?.querySelectorAll(`[data-cell-x="${x}"][data-cell-y="${y}"]`).forEach(node => node.remove());
+    if (data.fog.enabled && data.fog.cells.includes(mapCellKey(x, y)) && fogLayer) {
+      const element = document.createElement("div");
+      element.className = "map-fog-cell";
+      element.dataset.cellX = String(x);
+      element.dataset.cellY = String(y);
+      element.style.cssText = `--x:${x};--y:${y};`;
+      fogLayer.appendChild(element);
+    }
+  });
+}
+async function applyCampaignMapScene(mapId, sceneId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id) || typeof window.buildMapScene !== "function") return;
+  const scene = window.buildMapScene(sceneId, `${map.name}-${Date.now()}`);
+  if (!scene) return;
+  const data = normalizeMapData(map.data);
+  pushMapEditHistory(mapId, data);
+  data.columns = scene.columns;
+  data.rows = scene.rows;
+  data.tiles = scene.tiles;
+  data.scene = { id: scene.id, name: scene.name, description: scene.description };
+  data.fog.cells = data.fog.cells.filter(cell => {
+    const [x, y] = String(cell).split(",").map(Number);
+    return x >= 0 && y >= 0 && x < data.columns && y < data.rows;
+  });
+  data.tokens = data.tokens.map(token => ({ ...token, ...clampMapTokenPosition(data, token, token.x, token.y) }));
+  map.data = data;
+  await saveCampaignMap(map, `${scene.name} applied`, { preserveTokens: true });
+  setTimeout(() => fitCampaignMap(mapId), 50);
+}
 function tokensForCampaignMap(map, links) {
   const data = normalizeMapData(map?.data);
   const existing = new Map(data.tokens.map(token => [token.id || mapTokenId(token.ownerUserId, token.characterId), token]));
@@ -723,12 +905,17 @@ async function createCampaignMap(campaignId, values) {
   if (!cloudUser || !cloudClient) { toast("Sign in to create a map"); return; }
   if (!canEditCampaign(campaignId)) { toast("Only the DM can create maps"); return; }
   const name = String(values.name || "").trim() || "New Encounter Map";
+  const scene = typeof window.buildMapScene === "function" && values.sceneTemplate && values.sceneTemplate !== "blank"
+    ? window.buildMapScene(values.sceneTemplate, `${name}-${Date.now()}`)
+    : null;
   const data = normalizeMapData({
-    columns: values.columns,
-    rows: values.rows,
+    columns: scene?.columns || values.columns,
+    rows: scene?.rows || values.rows,
     gridSize: values.gridSize,
     gridEnabled: values.gridEnabled === "on",
     background: campaignMapImageDraft || String(values.background || "").trim(),
+    tiles: scene?.tiles || [],
+    scene: scene ? { id: scene.id, name: scene.name, description: scene.description } : null,
     session: { state: "draft", updatedAt: new Date().toISOString() }
   });
   const { data: inserted, error } = await cloudClient.from("campaign_maps").insert({
@@ -1002,6 +1189,13 @@ async function updateCampaignMapSettings(mapId, values) {
     rows: values.rows,
     gridSize: values.gridSize,
     gridEnabled: values.gridEnabled === "on",
+    display: {
+      ...map.data?.display,
+      gridColor: values.gridColor || map.data?.display?.gridColor,
+      gridOpacity: values.gridOpacity ?? map.data?.display?.gridOpacity,
+      tokenNames: values.tokenNames === "on",
+      tokenHealth: values.tokenHealth === "on"
+    },
     background: campaignMapImageDraft || String(values.background || "").trim() || map.data?.background || ""
   });
   campaignMapImageDraft = "";
@@ -5933,6 +6127,7 @@ function renderDungeonRunSheet(map, data, isDm) {
 function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const maps = mapsForCampaign(campaign.id);
   const activeMap = activeMapForCampaign(campaign.id);
+  const sceneTemplates = Array.isArray(window.MAP_SCENE_TEMPLATES) ? window.MAP_SCENE_TEMPLATES : [];
   const mapTabs = maps.map(map => `<button type="button" class="${map.id === activeMap?.id ? "active" : ""}" data-campaign-map-select="${escapeHtml(map.id)}">${escapeHtml(map.name)}</button>`).join("");
   const createForm = isDm ? `<details class="map-create">
     <summary>Create or upload a map</summary>
@@ -5943,6 +6138,13 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label>Rows<input name="rows" type="number" min="4" max="80" value="16"></label>
         <label>Grid size<input name="gridSize" type="number" min="28" max="72" value="44"></label>
       </div>
+      <label>Start from a scene
+        <select name="sceneTemplate">
+          <option value="blank">Blank canvas or uploaded art</option>
+          ${sceneTemplates.map(scene => `<option value="${escapeHtml(scene.id)}">${escapeHtml(scene.name)} - ${escapeHtml(scene.size)}</option>`).join("")}
+        </select>
+        <small class="field-hint">Scene templates choose sensible dimensions and remain fully editable.</small>
+      </label>
       <label class="map-grid-toggle"><input name="gridEnabled" type="checkbox" checked><span><strong>Show tactical grid</strong><small>Turn this off for theater maps, city art, or free-position scenes.</small></span></label>
       <label>Image URL<input name="background" placeholder="Paste a map image URL, or upload below"></label>
       <label>Upload map image<input type="file" accept="image/*" data-campaign-map-upload><small class="field-hint" data-map-upload-status>No image selected</small></label>
@@ -5966,6 +6168,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </section>`;
   }
   const data = normalizeMapData(activeMap.data);
+  const viewport = mapViewportState(activeMap.id);
+  const effectiveCellSize = data.gridSize * viewport.zoom;
   const sessionState = data.session.state;
   const playerCanSeeMap = isDm || sessionState === "live";
   const allTiles = [...BUILT_IN_MAP_TILES, ...data.customTiles];
@@ -5983,19 +6187,21 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     <button type="button" data-map-fog="cover-all" data-map-id="${escapeHtml(activeMap.id)}">Cover all</button>
     <button type="button" data-map-fog="reveal-all" data-map-id="${escapeHtml(activeMap.id)}">Reveal all</button>
   </div>` : "";
-  const toolButtons = playerCanSeeMap ? `<div class="map-editor-tools" aria-label="Map editor tools">
-    <button type="button" class="${selectedMapTool === "token" ? "active" : ""}" data-map-tool="token">Move tokens</button>
-    ${isDm ? `<button type="button" class="${selectedMapTool === "paint" ? "active" : ""}" data-map-tool="paint">Paint tiles</button>
-    <button type="button" class="${selectedMapTool === "erase" ? "active" : ""}" data-map-tool="erase">Erase tiles</button>
-    <button type="button" class="${selectedMapTool === "fog-paint" ? "active" : ""}" data-map-tool="fog-paint">Add fog</button>
-    <button type="button" class="${selectedMapTool === "fog-erase" ? "active" : ""}" data-map-tool="fog-erase">Reveal fog</button>` : ""}
-    <button type="button" class="${selectedMapTool === "ping" ? "active" : ""}" data-map-tool="ping">Ping</button>
-    <button type="button" class="${selectedMapTool === "ruler" ? "active" : ""}" data-map-tool="ruler">Ruler</button>
-  </div>` : "";
+  const toolRail = playerCanSeeMap ? `<nav class="map-tool-rail" aria-label="Map editor tools">
+    <button type="button" class="${selectedMapTool === "pan" ? "active" : ""}" data-map-tool="pan" title="Pan map (Space)"><span>H</span><small>Pan</small></button>
+    <button type="button" class="${selectedMapTool === "token" ? "active" : ""}" data-map-tool="token" title="Select and move tokens (T)"><span>T</span><small>Move</small></button>
+    ${isDm ? `<button type="button" class="${selectedMapTool === "paint" ? "active" : ""}" data-map-tool="paint" title="Paint tiles (D)"><span>D</span><small>Draw</small></button>
+    <button type="button" class="${selectedMapTool === "erase" ? "active" : ""}" data-map-tool="erase" title="Erase tiles"><span>E</span><small>Erase</small></button>
+    <button type="button" class="${selectedMapTool === "fog-paint" ? "active" : ""}" data-map-tool="fog-paint" title="Add fog of war (F)"><span>F</span><small>Fog</small></button>
+    <button type="button" class="${selectedMapTool === "fog-erase" ? "active" : ""}" data-map-tool="fog-erase" title="Reveal fog"><span>V</span><small>Reveal</small></button>` : ""}
+    <button type="button" class="${selectedMapTool === "ping" ? "active" : ""}" data-map-tool="ping" title="Ping a location (X)"><span>X</span><small>Ping</small></button>
+    <button type="button" class="${selectedMapTool === "ruler" ? "active" : ""}" data-map-tool="ruler" title="Measure distance (R)"><span>R</span><small>Ruler</small></button>
+    ${isDm ? `<button type="button" data-map-undo="${escapeHtml(activeMap.id)}" title="Undo last tile, fog, or scene edit" ${mapEditHistory.get(activeMap.id)?.length ? "" : "disabled"}><span>U</span><small>Undo</small></button>` : ""}
+  </nav>` : "";
   const tilePalette = isDm ? `<div class="map-tile-palette">
     ${allTiles.map(tile => `<button type="button" class="map-tile-swatch ${selectedMapTile === tile.id ? "active" : ""}" data-map-tile="${escapeHtml(tile.id)}" title="${escapeHtml(tile.name)}">
       <span style="${mapTileStyle(activeMap, tile.id)}"></span>
-      <small>${escapeHtml(tile.name)}</small>
+      <small>${escapeHtml(tile.name)}</small><em>${escapeHtml(tile.category)}</em>
     </button>`).join("")}
   </div>
   <details class="map-custom-tile">
@@ -6012,7 +6218,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const paintedTiles = data.tiles.map(tile => {
     const x = Math.min(data.columns - 1, Math.max(0, Number(tile.x || 0)));
     const y = Math.min(data.rows - 1, Math.max(0, Number(tile.y || 0)));
-    return `<div class="map-cell-tile" style="--x:${x};--y:${y};${tileStyles.get(tile.tileId) || mapTileStyle(activeMap, tile.tileId)}"></div>`;
+    return `<div class="map-cell-tile" data-cell-x="${x}" data-cell-y="${y}" style="--x:${x};--y:${y};${tileStyles.get(tile.tileId) || mapTileStyle(activeMap, tile.tileId)}"></div>`;
   }).join("");
   const tokenCards = data.tokens.filter(token => mapTokenVisibleForRole(data, token, isDm)).map(token => {
     const character = characterForMapToken(token);
@@ -6048,16 +6254,40 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     const label = character?.name || token.name || "Token";
     const portrait = character?.portrait || token.portrait || "";
     const size = mapTokenSize(token);
-    return `<button type="button" class="map-token ${token.kind === "monster" ? "enemy-token" : ""} ${selectedMapToken === token.id ? "selected" : ""} ${token.hidden ? "hidden-token" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--size:${size};--token:${escapeHtml(token.color || tokenColor(label))}" title="${escapeHtml(`${label} (${size}x${size})`)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</button>`;
+    const combatant = data.encounter.combatants.find(item => item.tokenId === token.id);
+    const characterStats = character ? derived(character) : null;
+    const maxHp = Math.max(1, Number(combatant?.maxHp || characterStats?.hp || token.quickStats?.maxHp || 1));
+    const hp = Math.min(maxHp, Math.max(0, Number(combatant?.hp ?? character?.currentHp ?? maxHp)));
+    const healthPercent = Math.round((hp / maxHp) * 100);
+    return `<button type="button" class="map-token ${token.kind === "monster" ? "enemy-token" : ""} ${selectedMapToken === token.id ? "selected" : ""} ${token.hidden ? "hidden-token" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--size:${size};--token:${escapeHtml(token.color || tokenColor(label))}" aria-label="${escapeHtml(`${label}, ${hp} of ${maxHp} hit points`)}" title="${escapeHtml(`${label} (${size}x${size})`)}">
+      <span class="map-token-face">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</span>
+      ${data.display.tokenNames ? `<span class="map-token-name">${escapeHtml(label)}</span>` : ""}
+      ${data.display.tokenHealth ? `<span class="map-token-health" title="${hp}/${maxHp} HP"><i style="width:${healthPercent}%"></i></span>` : ""}
+    </button>`;
   }).join("");
   const fogCells = data.fog.enabled ? data.fog.cells.map(cell => {
     const [x, y] = String(cell).split(",").map(Number);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return "";
-    return `<div class="map-fog-cell" style="--x:${Math.min(data.columns - 1, Math.max(0, x))};--y:${Math.min(data.rows - 1, Math.max(0, y))};"></div>`;
+    const boundedX = Math.min(data.columns - 1, Math.max(0, x));
+    const boundedY = Math.min(data.rows - 1, Math.max(0, y));
+    return `<div class="map-fog-cell" data-cell-x="${boundedX}" data-cell-y="${boundedY}" style="--x:${boundedX};--y:${boundedY};"></div>`;
   }).join("") : "";
   const pings = data.pings.filter(ping => Date.now() - Number(ping.time || 0) < 15000).map(ping =>
     `<div class="map-ping" style="--x:${Number(ping.x)};--y:${Number(ping.y)};"><span></span><small>${escapeHtml(ping.by || "Ping")}</small></div>`
   ).join("");
+  if (!isDm) selectedMapSidebar = "tokens";
+  const sceneGallery = sceneTemplates.map(scene => `<article class="map-scene-card">
+    <div class="map-scene-preview" style="${mapTileStyle(activeMap, scene.previewTile)}"></div>
+    <div><small>${escapeHtml(scene.category)} &middot; ${escapeHtml(scene.size)}</small><strong>${escapeHtml(scene.name)}</strong><p>${escapeHtml(scene.description)}</p></div>
+    <button type="button" data-map-scene="${escapeHtml(scene.id)}" data-map-id="${escapeHtml(activeMap.id)}">Apply</button>
+  </article>`).join("");
+  const dockTabs = `<div class="map-dock-tabs" role="tablist" aria-label="Map panels">
+    <button type="button" class="${selectedMapSidebar === "tokens" ? "active" : ""}" data-map-sidebar="tokens">Tokens</button>
+    ${isDm ? `<button type="button" class="${selectedMapSidebar === "tiles" ? "active" : ""}" data-map-sidebar="tiles">Tiles</button><button type="button" class="${selectedMapSidebar === "scene" ? "active" : ""}" data-map-sidebar="scene">Scenes</button>` : ""}
+  </div>`;
+  let dockContent = `<div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</div>`;
+  if (isDm && selectedMapSidebar === "tiles") dockContent = `<div class="map-dock-heading"><div><small>Brush</small><strong>Paint the terrain</strong></div><label>Size<select data-map-brush-size><option value="1" ${selectedMapBrushSize === 1 ? "selected" : ""}>1 x 1</option><option value="2" ${selectedMapBrushSize === 2 ? "selected" : ""}>2 x 2</option><option value="3" ${selectedMapBrushSize === 3 ? "selected" : ""}>3 x 3</option></select></label></div>${tilePalette}`;
+  if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene library</small><strong>Start with a playable layout</strong></div></div><p class="map-dock-note">Applying a scene replaces painted terrain and board dimensions. Tokens are kept and clamped onto the new board.</p>${sceneGallery}<details class="map-asset-library"><summary>More free map art and tiles</summary><p>Use CC0 packs as custom tiles or upload your own finished battle map.</p><a href="https://kenney.nl/assets/roguelike-rpg-pack" target="_blank" rel="noreferrer">Kenney Roguelike / RPG pack</a><a href="https://opengameart.org/node/135781" target="_blank" rel="noreferrer">OpenGameArt Top Down Dungeon pack</a><small>Both linked packs are listed as CC0. Keep the included license file with downloaded assets.</small></details></div>`;
   const settingsForm = isDm ? `<details class="map-settings">
     <summary>Map settings</summary>
     <form data-campaign-map-settings="${escapeHtml(activeMap.id)}">
@@ -6068,6 +6298,12 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label>Grid size<input name="gridSize" type="number" min="28" max="72" value="${data.gridSize}"></label>
       </div>
       <label class="map-grid-toggle"><input name="gridEnabled" type="checkbox" ${data.gridEnabled ? "checked" : ""}><span><strong>Show tactical grid</strong><small>${data.gridEnabled ? "Grid lines are visible and token movement snaps to squares." : "Grid lines are hidden and token movement uses free positioning."}</small></span></label>
+      <div class="map-display-settings">
+        <label>Grid color<input name="gridColor" type="color" value="${escapeHtml(data.display.gridColor)}"></label>
+        <label>Grid strength<input name="gridOpacity" type="range" min="0.08" max="0.8" step="0.04" value="${data.display.gridOpacity}"></label>
+        <label class="map-grid-toggle"><input name="tokenNames" type="checkbox" ${data.display.tokenNames ? "checked" : ""}><span><strong>Token names</strong><small>Show labels below tokens.</small></span></label>
+        <label class="map-grid-toggle"><input name="tokenHealth" type="checkbox" ${data.display.tokenHealth ? "checked" : ""}><span><strong>Health bars</strong><small>Show current encounter HP.</small></span></label>
+      </div>
       <label>Image URL<input name="background" value="${escapeHtml(data.background)}"></label>
       <label>Replace uploaded image<input type="file" accept="image/*" data-campaign-map-upload><small class="field-hint" data-map-upload-status>No new image selected</small></label>
       <div class="map-control-row">
@@ -6119,13 +6355,23 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     ${settingsForm}
     ${creatureForm}
     ${fogControls}
-    ${toolButtons}
-    ${isDm ? tilePalette : ""}
-    ${runSheet}
-    ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace">
-      <aside class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</aside>
-      <div class="battle-map-shell">
-        <div class="battle-map-board ${data.gridEnabled ? "" : "gridless"}" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;${boardBaseStyle}">
+    ${runSheet ? `<details class="map-run-drawer"><summary>Encounter and dungeon run sheet</summary>${runSheet}</details>` : ""}
+    ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace map-vtt-workspace">
+      ${toolRail}
+      <aside class="map-side-dock">${dockTabs}<div class="map-dock-body">${dockContent}</div></aside>
+      <div class="map-canvas-column">
+        <div class="map-viewport-bar">
+          <div><strong>${escapeHtml(activeMap.name)}</strong><small>${data.scene?.name ? escapeHtml(data.scene.name) : data.background ? "Uploaded battle map" : "Custom canvas"}</small></div>
+          <div class="map-zoom-controls" aria-label="Map zoom">
+            ${isDm ? `<button type="button" data-map-quick-grid="${escapeHtml(activeMap.id)}" aria-pressed="${data.gridEnabled}">${data.gridEnabled ? "Grid on" : "Grid off"}</button>` : ""}
+            <button type="button" data-map-zoom="out" data-map-id="${escapeHtml(activeMap.id)}" aria-label="Zoom out">-</button>
+            <span data-map-zoom-label="${escapeHtml(activeMap.id)}">${Math.round(viewport.zoom * 100)}%</span>
+            <button type="button" data-map-zoom="in" data-map-id="${escapeHtml(activeMap.id)}" aria-label="Zoom in">+</button>
+            <button type="button" data-map-zoom="fit" data-map-id="${escapeHtml(activeMap.id)}">Fit</button>
+          </div>
+        </div>
+        <div class="battle-map-shell tool-${escapeHtml(selectedMapTool)}" data-map-shell="${escapeHtml(activeMap.id)}">
+        <div class="battle-map-board ${data.gridEnabled ? "" : "gridless"}" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${effectiveCellSize}px;--grid-color:${escapeHtml(data.display.gridColor)};--grid-opacity:${data.display.gridOpacity};--grid-thickness:${data.display.gridThickness}px;${boardBaseStyle}">
           ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : data.tiles.length ? "" : `<div class="battle-map-empty">No map art uploaded</div>`}
           <div class="battle-map-tiles">${paintedTiles}</div>
           ${data.gridEnabled ? `<div class="battle-map-grid" aria-hidden="true"></div>` : ""}
@@ -6133,6 +6379,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
           ${tokenButtons}
           <div class="battle-map-pings" aria-hidden="true">${pings}</div>
         </div>
+        </div>
+        <div class="map-shortcut-hint"><span><kbd>Space</kbd> pan</span><span><kbd>Wheel + Ctrl</kbd> zoom</span><span><kbd>T</kbd> tokens</span><span><kbd>F</kbd> fog</span><span><kbd>R</kbd> ruler</span><span><kbd>X</kbd> ping</span></div>
       </div>
     </div>`}
   </section>`;
@@ -6346,6 +6594,21 @@ function renderCampaigns() {
         </form>
       </section>
     </div>`;
+  const activeMap = activeMapForCampaign(campaign.id);
+  if (activeMap) {
+    const state = mapViewportState(activeMap.id);
+    requestAnimationFrame(() => {
+      const shell = document.querySelector(`[data-map-shell="${activeMap.id}"]`);
+      if (!shell) return;
+      if (!state.initialized) {
+        state.initialized = true;
+        fitCampaignMap(activeMap.id);
+      } else {
+        shell.scrollLeft = state.scrollLeft;
+        shell.scrollTop = state.scrollTop;
+      }
+    });
+  }
 }
 
 function valueByLevel(level, rows) {
@@ -8351,10 +8614,54 @@ function initEvents() {
       });
       return;
     }
+    const mapZoom = event.target.closest("[data-map-zoom]");
+    if (mapZoom) {
+      const mapId = mapZoom.dataset.mapId;
+      const state = mapViewportState(mapId);
+      if (mapZoom.dataset.mapZoom === "fit") fitCampaignMap(mapId);
+      else setCampaignMapZoom(mapId, state.zoom + (mapZoom.dataset.mapZoom === "in" ? .15 : -.15));
+      return;
+    }
+    const mapQuickGrid = event.target.closest("[data-map-quick-grid]");
+    if (mapQuickGrid) {
+      const map = campaignMapById(mapQuickGrid.dataset.mapQuickGrid);
+      if (map && canEditCampaign(map.campaign_id)) {
+        const data = normalizeMapData(map.data);
+        data.gridEnabled = !data.gridEnabled;
+        map.data = data;
+        saveCampaignMap(map, data.gridEnabled ? "Grid shown" : "Grid hidden", { preserveTokens: true });
+      }
+      return;
+    }
+    const mapSidebar = event.target.closest("[data-map-sidebar]");
+    if (mapSidebar) {
+      selectedMapSidebar = mapSidebar.dataset.mapSidebar || "tokens";
+      renderCampaigns();
+      return;
+    }
+    const mapUndo = event.target.closest("[data-map-undo]");
+    if (mapUndo) {
+      if (!mapUndo.disabled) undoCampaignMapEdit(mapUndo.dataset.mapUndo);
+      return;
+    }
+    const mapScene = event.target.closest("[data-map-scene]");
+    if (mapScene) {
+      const scene = (window.MAP_SCENE_TEMPLATES || []).find(item => item.id === mapScene.dataset.mapScene);
+      confirmAction({
+        title: `Apply ${scene?.name || "scene"}?`,
+        message: "This replaces painted terrain and resizes the board. Existing tokens stay on the map, and you can undo the change.",
+        confirmLabel: "Apply scene",
+        onConfirm: () => applyCampaignMapScene(mapScene.dataset.mapId, mapScene.dataset.mapScene)
+      });
+      return;
+    }
     const mapTool = event.target.closest("[data-map-tool]");
     if (mapTool) {
       selectedMapTool = mapTool.dataset.mapTool || "token";
       if (selectedMapTool !== "ruler") selectedMapRulerStart = null;
+      if (selectedMapTool === "token") selectedMapSidebar = "tokens";
+      if (selectedMapTool === "paint" || selectedMapTool === "erase") selectedMapSidebar = "tiles";
+      if (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase") selectedMapSidebar = "scene";
       renderCampaigns();
       return;
     }
@@ -8362,6 +8669,7 @@ function initEvents() {
     if (mapTile) {
       selectedMapTile = mapTile.dataset.mapTile || selectedMapTile;
       selectedMapTool = "paint";
+      selectedMapSidebar = "tiles";
       renderCampaigns();
       return;
     }
@@ -8463,6 +8771,7 @@ function initEvents() {
     }
     const mapToken = event.target.closest("[data-map-token-select]");
     if (mapToken) {
+      if (Date.now() < suppressMapClickUntil) return;
       if (mapToken.disabled) return;
       selectedMapToken = mapToken.dataset.mapTokenSelect;
       activeMapId = mapToken.dataset.mapId || activeMapId;
@@ -8472,16 +8781,15 @@ function initEvents() {
     }
     const mapBoard = event.target.closest("[data-campaign-map-board]");
     if (mapBoard && !event.target.closest("[data-map-token-select]")) {
+      if (Date.now() < suppressMapClickUntil || selectedMapTool === "pan" || mapSpacePan) return;
       const map = campaignMapById(mapBoard.dataset.campaignMapBoard);
       if (!map) return;
       const data = normalizeMapData(map.data);
-      const rect = mapBoard.getBoundingClientRect();
-      const rawX = (event.clientX - rect.left) / data.gridSize;
-      const rawY = (event.clientY - rect.top) / data.gridSize;
-      const x = data.gridEnabled ? Math.floor(rawX) : rawX;
-      const y = data.gridEnabled ? Math.floor(rawY) : rawY;
-      const cellX = Math.floor(rawX);
-      const cellY = Math.floor(rawY);
+      const cell = mapBoardCellFromPointer(mapBoard, event, data);
+      const x = data.gridEnabled ? cell.x : cell.rawX;
+      const y = data.gridEnabled ? cell.y : cell.rawY;
+      const cellX = cell.x;
+      const cellY = cell.y;
       if (canEditCampaign(map.campaign_id) && selectedMapTool === "paint") paintCampaignMapTile(map.id, selectedMapTile, cellX, cellY, "paint");
       else if (canEditCampaign(map.campaign_id) && selectedMapTool === "erase") paintCampaignMapTile(map.id, selectedMapTile, cellX, cellY, "erase");
       else if (canEditCampaign(map.campaign_id) && (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase")) updateCampaignFog(map.id, selectedMapTool, cellX, cellY);
@@ -8757,6 +9065,11 @@ function initEvents() {
     if (creatureCreate) addCampaignCreatureToken(creatureCreate.dataset.campaignCreatureCreate, values);
   });
   $("#campaign-detail")?.addEventListener("change", event => {
+    const brushSize = event.target.closest("[data-map-brush-size]");
+    if (brushSize) {
+      selectedMapBrushSize = Math.min(3, Math.max(1, Number(brushSize.value || 1)));
+      return;
+    }
     const tileUpload = event.target.closest("[data-campaign-tile-upload]");
     const upload = event.target.closest("[data-campaign-map-upload]") || tileUpload;
     if (!upload) return;
@@ -8783,6 +9096,161 @@ function initEvents() {
       if (status) status.textContent = `${file.name} ready`;
     };
     reader.readAsDataURL(file);
+  });
+  const campaignDetail = $("#campaign-detail");
+  campaignDetail?.addEventListener("scroll", event => {
+    const shell = event.target.closest?.("[data-map-shell]");
+    if (!shell) return;
+    const state = mapViewportState(shell.dataset.mapShell);
+    state.scrollLeft = shell.scrollLeft;
+    state.scrollTop = shell.scrollTop;
+  }, true);
+  campaignDetail?.addEventListener("wheel", event => {
+    const shell = event.target.closest("[data-map-shell]");
+    if (!shell || (!event.ctrlKey && !event.metaKey)) return;
+    event.preventDefault();
+    const state = mapViewportState(shell.dataset.mapShell);
+    const rect = shell.getBoundingClientRect();
+    const direction = event.deltaY < 0 ? .12 : -.12;
+    setCampaignMapZoom(shell.dataset.mapShell, state.zoom + direction, {
+      anchorX: event.clientX - rect.left,
+      anchorY: event.clientY - rect.top
+    });
+  }, { passive: false });
+  campaignDetail?.addEventListener("pointerdown", event => {
+    if (event.button !== 0) return;
+    const shell = event.target.closest("[data-map-shell]");
+    const board = event.target.closest("[data-campaign-map-board]");
+    if (!shell || !board) return;
+    const map = campaignMapById(board.dataset.campaignMapBoard);
+    if (!map) return;
+    if (selectedMapTool === "pan" || mapSpacePan) {
+      mapPointerState = { type: "pan", pointerId: event.pointerId, shell, startX: event.clientX, startY: event.clientY, scrollLeft: shell.scrollLeft, scrollTop: shell.scrollTop, moved: false };
+      shell.classList.add("is-panning");
+      shell.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+      return;
+    }
+    const tokenElement = event.target.closest(".map-token[data-map-token-select]");
+    if (tokenElement && !tokenElement.disabled) {
+      const data = normalizeMapData(map.data);
+      const token = data.tokens.find(item => item.id === tokenElement.dataset.mapTokenSelect);
+      if (!token || !canMoveMapToken(token, map.campaign_id)) return;
+      mapPointerState = { type: "token", pointerId: event.pointerId, board, map, data, token, tokenElement, startX: event.clientX, startY: event.clientY, position: { x: token.x, y: token.y }, moved: false };
+      tokenElement.classList.add("dragging");
+      tokenElement.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+      return;
+    }
+    if (canEditCampaign(map.campaign_id) && ["paint", "erase", "fog-paint", "fog-erase"].includes(selectedMapTool)) {
+      const data = normalizeMapData(map.data);
+      pushMapEditHistory(map.id, data);
+      map.data = data;
+      const cell = mapBoardCellFromPointer(board, event, data);
+      const changed = applyMapBrushToData(data, selectedMapTool, selectedMapTile, cell.x, cell.y, selectedMapBrushSize);
+      syncMapBrushVisual(board, map, data, changed);
+      mapPointerState = { type: "paint", pointerId: event.pointerId, board, map, data, lastCell: `${cell.x}:${cell.y}`, moved: false };
+      board.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    }
+  });
+  campaignDetail?.addEventListener("pointermove", event => {
+    const state = mapPointerState;
+    if (!state || state.pointerId !== event.pointerId) return;
+    if (state.type === "pan") {
+      const deltaX = event.clientX - state.startX;
+      const deltaY = event.clientY - state.startY;
+      if (Math.abs(deltaX) + Math.abs(deltaY) > 3) state.moved = true;
+      state.shell.scrollLeft = state.scrollLeft - deltaX;
+      state.shell.scrollTop = state.scrollTop - deltaY;
+      return;
+    }
+    if (state.type === "token") {
+      if (Math.abs(event.clientX - state.startX) + Math.abs(event.clientY - state.startY) > 4) state.moved = true;
+      if (!state.moved) return;
+      const cell = mapBoardCellFromPointer(state.board, event, state.data);
+      const x = state.data.gridEnabled ? cell.x : cell.rawX;
+      const y = state.data.gridEnabled ? cell.y : cell.rawY;
+      state.position = clampMapTokenPosition(state.data, state.token, x, y);
+      state.tokenElement.style.setProperty("--x", state.position.x);
+      state.tokenElement.style.setProperty("--y", state.position.y);
+      return;
+    }
+    if (state.type === "paint") {
+      const cell = mapBoardCellFromPointer(state.board, event, state.data);
+      const key = `${cell.x}:${cell.y}`;
+      if (key === state.lastCell) return;
+      state.lastCell = key;
+      state.moved = true;
+      const changed = applyMapBrushToData(state.data, selectedMapTool, selectedMapTile, cell.x, cell.y, selectedMapBrushSize);
+      syncMapBrushVisual(state.board, state.map, state.data, changed);
+    }
+  });
+  const finishMapPointer = event => {
+    const state = mapPointerState;
+    if (!state || state.pointerId !== event.pointerId) return;
+    mapPointerState = null;
+    if (state.type === "pan") {
+      state.shell.classList.remove("is-panning");
+      const viewport = mapViewportState(state.shell.dataset.mapShell);
+      viewport.scrollLeft = state.shell.scrollLeft;
+      viewport.scrollTop = state.shell.scrollTop;
+      if (state.moved) suppressMapClickUntil = Date.now() + 250;
+      return;
+    }
+    if (state.type === "token") {
+      state.tokenElement.classList.remove("dragging");
+      if (state.moved) {
+        suppressMapClickUntil = Date.now() + 250;
+        selectedMapToken = state.token.id;
+        moveCampaignMapToken(state.map.id, state.token.id, state.position.x, state.position.y);
+      }
+      return;
+    }
+    if (state.type === "paint") {
+      suppressMapClickUntil = Date.now() + 250;
+      saveCampaignMap(state.map, "Map terrain saved", { preserveTokens: true });
+    }
+  };
+  campaignDetail?.addEventListener("pointerup", finishMapPointer);
+  campaignDetail?.addEventListener("pointercancel", finishMapPointer);
+  document.addEventListener("keydown", event => {
+    if (!document.querySelector("[data-map-shell]")) return;
+    const typing = event.target.matches?.("input, textarea, select, [contenteditable='true']");
+    if (typing) return;
+    if (event.code === "Space") {
+      mapSpacePan = true;
+      event.preventDefault();
+      document.querySelector("[data-map-shell]")?.classList.add("space-pan");
+      return;
+    }
+    const keyTools = { t: "token", d: "paint", e: "erase", f: "fog-paint", v: "fog-erase", r: "ruler", x: "ping", h: "pan" };
+    const nextTool = keyTools[event.key.toLowerCase()];
+    if (nextTool && (canEditCampaign(campaignMapById(activeMapId)?.campaign_id) || !["paint", "erase", "fog-paint", "fog-erase"].includes(nextTool))) {
+      selectedMapTool = nextTool;
+      if (nextTool === "token") selectedMapSidebar = "tokens";
+      if (nextTool === "paint" || nextTool === "erase") selectedMapSidebar = "tiles";
+      if (nextTool === "fog-paint" || nextTool === "fog-erase") selectedMapSidebar = "scene";
+      selectedMapRulerStart = null;
+      renderCampaigns();
+      event.preventDefault();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && canEditCampaign(campaignMapById(activeMapId)?.campaign_id)) {
+      undoCampaignMapEdit(activeMapId);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === "Escape") {
+      selectedMapToken = null;
+      selectedMapRulerStart = null;
+      renderCampaigns();
+    }
+  });
+  document.addEventListener("keyup", event => {
+    if (event.code !== "Space") return;
+    mapSpacePan = false;
+    document.querySelectorAll("[data-map-shell]").forEach(shell => shell.classList.remove("space-pan"));
   });
   $("#refresh-campaigns")?.addEventListener("click", loadCampaigns);
   $("#campaign-sign-in")?.addEventListener("click", () => {

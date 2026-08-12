@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Map workspace visual fixture</title>
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    body { margin: 0; padding: 20px; background: #0d1118; }
+    main { max-width: 1380px; margin: auto; }
+    .battle-map-board { --cols: 24; --rows: 16; --cell: 44px; --grid-color: #fff; --grid-opacity: .28; --grid-thickness: 1px; background: radial-gradient(circle at 48% 45%,#527144 0 26%,#315335 27% 60%,#1e3827 61%); }
+  </style>
+</head>
+<body>
+<main>
+  <div class="campaign-map-workspace map-vtt-workspace">
+    <nav class="map-tool-rail" aria-label="Map editor tools">
+      <button type="button"><span>H</span><small>Pan</small></button>
+      <button type="button" class="active"><span>T</span><small>Move</small></button>
+      <button type="button"><span>D</span><small>Draw</small></button>
+      <button type="button"><span>E</span><small>Erase</small></button>
+      <button type="button"><span>F</span><small>Fog</small></button>
+      <button type="button"><span>V</span><small>Reveal</small></button>
+      <button type="button"><span>X</span><small>Ping</small></button>
+      <button type="button"><span>R</span><small>Ruler</small></button>
+    </nav>
+    <aside class="map-side-dock">
+      <div class="map-dock-tabs"><button class="active">Tokens</button><button>Tiles</button><button>Scenes</button></div>
+      <div class="map-dock-body">
+        <div class="map-token-list">
+          <article class="map-token-card active"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#8f2f2f">A</span><strong>Astrid Vale</strong><small>Visible to players</small></button><div class="map-token-size-row"><small>Token size: 1x1</small><span><button>-</button><button>+</button></span></div></article>
+          <article class="map-token-card"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#315f89">M</span><strong>Mira Ember</strong><small>Visible to players</small></button><div class="map-token-size-row"><small>Token size: 1x1</small><span><button>-</button><button>+</button></span></div></article>
+          <article class="map-token-card"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#8f2f2f">V</span><strong>Vampire Spawn</strong><small>Skirmisher - hidden</small></button><div class="map-token-toolbar"><button>Reveal</button><button>Rename</button><button>Color</button><button>Delete</button></div></article>
+        </div>
+      </div>
+    </aside>
+    <div class="map-canvas-column">
+      <div class="map-viewport-bar"><div><strong>Moonlit Forest Ambush</strong><small>Forest Clearing</small></div><div class="map-zoom-controls"><button>Grid on</button><button>-</button><span>78%</span><button>+</button><button>Fit</button></div></div>
+      <div class="battle-map-shell tool-token">
+        <div class="battle-map-board">
+          <div class="map-cell-tile" style="--x:8;--y:7;background:#8a633f"></div>
+          <div class="map-cell-tile" style="--x:9;--y:7;background:#8a633f"></div>
+          <div class="battle-map-grid"></div>
+          <button class="map-token selected" style="--x:10;--y:8;--size:1;--token:#8f2f2f"><span class="map-token-face">A</span><span class="map-token-name">Astrid Vale</span><span class="map-token-health"><i style="width:82%"></i></span></button>
+          <button class="map-token enemy-token" style="--x:15;--y:6;--size:2;--token:#702d32"><span class="map-token-face">V</span><span class="map-token-name">Vampire Spawn</span><span class="map-token-health"><i style="width:46%"></i></span></button>
+          <div class="battle-map-pings"><div class="map-ping" style="--x:18;--y:10"><span></span><small>DM</small></div></div>
+        </div>
+      </div>
+      <div class="map-shortcut-hint"><span><kbd>Space</kbd> pan</span><span><kbd>Wheel + Ctrl</kbd> zoom</span><span><kbd>T</kbd> tokens</span><span><kbd>F</kbd> fog</span><span><kbd>R</kbd> ruler</span><span><kbd>X</kbd> ping</span></div>
+    </div>
+  </div>
+</main>
+</body>
+</html>
