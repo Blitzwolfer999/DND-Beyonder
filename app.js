@@ -293,6 +293,10 @@ let selectedMapTool = "token";
 let selectedMapTile = "stone-floor";
 let selectedMapSidebar = "tokens";
 let selectedMapBrushSize = 1;
+let selectedMapTileCategory = "All";
+let mapTileSearch = "";
+let selectedMapTokenCategory = "All";
+let mapTokenSearch = "";
 let selectedMapRulerStart = null;
 let mapSpacePan = false;
 let mapPointerState = null;
@@ -343,7 +347,17 @@ const BUILT_IN_MAP_TILES = [
   { id: "deep-water", name: "Deep Water", category: "Hazard", style: "background:#153f62;background-image:radial-gradient(ellipse at 28% 42%,rgba(85,164,195,.35),transparent 45%),linear-gradient(145deg,rgba(255,255,255,.12) 12%,transparent 13%);background-size:42px 34px,23px 23px;" },
   { id: "lava", name: "Lava", category: "Hazard", style: "background:#9b2f1e;background-image:radial-gradient(circle at 30% 35%,#ffb13a 0 12%,transparent 13%),linear-gradient(45deg,rgba(0,0,0,.28),transparent);" },
   { id: "acid", name: "Acid", category: "Hazard", style: "background:#6c8e28;background-image:radial-gradient(circle at 30% 32%,rgba(213,245,90,.62) 0 8%,transparent 9%),radial-gradient(circle at 78% 69%,rgba(25,45,12,.38) 0 12%,transparent 13%);background-size:28px 28px;" },
-  { id: "shadow", name: "Shadow", category: "Overlay", style: "background:rgba(18,14,22,.7);background-image:radial-gradient(circle,rgba(255,255,255,.06),transparent 55%);" }
+  { id: "shadow", name: "Shadow", category: "Hazard", style: "background:rgba(18,14,22,.7);background-image:radial-gradient(circle,rgba(255,255,255,.06),transparent 55%);" },
+  { id: "wooden-door", name: "Wooden Door", category: "Props", kind: "prop", style: "background-color:transparent;background-image:linear-gradient(90deg,transparent 13%,#3a2212 14% 20%,#8a5b31 21% 79%,#3a2212 80% 86%,transparent 87%),radial-gradient(circle at 68% 50%,#e2b95e 0 5%,transparent 6%);" },
+  { id: "stone-stairs", name: "Stone Stairs", category: "Props", kind: "prop", style: "background-color:transparent;background-image:repeating-linear-gradient(0deg,#4c4a48 0 4px,#8b8781 4px 8px);box-shadow:inset 0 0 0 5px transparent;" },
+  { id: "treasure-chest", name: "Treasure Chest", category: "Props", kind: "prop", style: "background-color:transparent;background-image:linear-gradient(transparent 25%,#3b2414 26% 31%,#9c6631 32% 70%,#4b2a14 71% 77%,transparent 78%),linear-gradient(90deg,transparent 40%,#e3b657 41% 59%,transparent 60%);background-size:100% 100%;" },
+  { id: "wooden-table", name: "Wooden Table", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(ellipse at center,#9b693b 0 48%,#3e2515 49% 58%,transparent 59%);" },
+  { id: "ancient-tree", name: "Ancient Tree", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 42%,#4f7f43 0 34%,#2f5a35 35% 48%,transparent 49%),linear-gradient(90deg,transparent 43%,#604023 44% 56%,transparent 57%);" },
+  { id: "boulder", name: "Boulder", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 54%,#98948c 0 34%,#55534f 35% 49%,transparent 50%),linear-gradient(145deg,transparent 45%,rgba(255,255,255,.25) 46% 49%,transparent 50%);" },
+  { id: "campfire", name: "Campfire", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 76%,#3a2115 0 22%,transparent 23%),radial-gradient(ellipse at 50% 56%,#fff083 0 14%,#f58d32 15% 28%,#b82e21 29% 42%,transparent 43%);" },
+  { id: "stone-pillar", name: "Stone Pillar", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 50%,#b2aea5 0 27%,#6b6862 28% 39%,#34322f 40% 46%,transparent 47%);" },
+  { id: "wooden-bridge", name: "Wooden Bridge", category: "Props", kind: "prop", style: "background-color:transparent;background-image:repeating-linear-gradient(90deg,transparent 0 7%,#5c341d 8% 11%,#9a6738 12% 28%);" },
+  { id: "arcane-rune", name: "Arcane Rune", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(circle,transparent 0 24%,#7bd8ef 25% 29%,transparent 30% 42%,#7bd8ef 43% 47%,transparent 48%),conic-gradient(from 45deg,transparent 0 12%,rgba(123,216,239,.8) 13% 16%,transparent 17% 37%,rgba(123,216,239,.8) 38% 41%,transparent 42% 100%);filter:drop-shadow(0 0 5px #45c5e5);" }
 ];
 
 function readJson(key, fallback) {
@@ -681,6 +695,72 @@ function tokenColor(name = "") {
   const total = [...String(name)].reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return palette[total % palette.length];
 }
+function mapTokenLibrary() {
+  return Array.isArray(window.MAP_TOKEN_LIBRARY) ? window.MAP_TOKEN_LIBRARY : [];
+}
+function mapTokenPreset(presetId) {
+  return mapTokenLibrary().find(preset => preset.id === presetId) || null;
+}
+function mapTokenPortrait(token, character = null) {
+  if (character?.portrait) return character.portrait;
+  if (token?.portrait) return token.portrait;
+  const preset = mapTokenPreset(token?.presetId);
+  return preset && typeof window.tokenPresetPortrait === "function" ? window.tokenPresetPortrait(preset) : "";
+}
+function firstOpenMapPosition(data, size = 1) {
+  const occupied = new Set();
+  data.tokens.forEach(token => {
+    const tokenSize = mapTokenSize(token);
+    for (let y = 0; y < tokenSize; y += 1) for (let x = 0; x < tokenSize; x += 1) occupied.add(mapCellKey(Number(token.x || 0) + x, Number(token.y || 0) + y));
+  });
+  for (let y = 0; y <= data.rows - size; y += 1) {
+    for (let x = 0; x <= data.columns - size; x += 1) {
+      let clear = true;
+      for (let offsetY = 0; offsetY < size; offsetY += 1) for (let offsetX = 0; offsetX < size; offsetX += 1) if (occupied.has(mapCellKey(x + offsetX, y + offsetY))) clear = false;
+      if (clear) return { x, y };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+async function addCampaignPresetToken(mapId, presetId) {
+  const map = campaignMapById(mapId);
+  const preset = mapTokenPreset(presetId);
+  if (!map || !preset || !canEditCampaign(map.campaign_id)) { toast("Only the DM can add library tokens"); return; }
+  const latest = await fetchCampaignMap(map.id);
+  if (latest?.data) map.data = normalizeMapData(latest.data);
+  const data = normalizeMapData(map.data);
+  const size = mapTokenSize(preset);
+  const position = firstOpenMapPosition(data, size);
+  const token = {
+    id: `library-${preset.id}-${crypto.randomUUID()}`,
+    presetId: preset.id,
+    kind: preset.category === "NPC" ? "npc" : "monster",
+    side: preset.side === "ally" ? "ally" : "enemy",
+    role: preset.role,
+    name: preset.name,
+    portrait: "",
+    size,
+    color: preset.color,
+    x: position.x,
+    y: position.y,
+    hidden: preset.side !== "ally",
+    quickStats: {
+      ac: preset.ac,
+      maxHp: preset.hp,
+      initiativeBonus: preset.initiativeBonus,
+      attackBonus: preset.attackBonus,
+      saveDc: preset.saveDc,
+      damage: preset.damage
+    },
+    sourceNote: "DND Beyonder quick-run profile; use your chosen rules source for a complete stat block."
+  };
+  data.tokens.push(token);
+  map.data = data;
+  selectedMapToken = token.id;
+  selectedMapTool = "token";
+  selectedMapSidebar = "tokens";
+  await saveCampaignMap(map, `${preset.name} added to the map`);
+}
 function mapTokenSize(token) {
   return Math.min(4, Math.max(1, Math.round(Number(token?.size || 1))));
 }
@@ -751,6 +831,7 @@ function pushMapEditHistory(mapId, data) {
     columns: data.columns,
     rows: data.rows,
     tiles: JSON.parse(JSON.stringify(data.tiles)),
+    overlays: JSON.parse(JSON.stringify(data.overlays)),
     fog: JSON.parse(JSON.stringify(data.fog)),
     scene: data.scene ? JSON.parse(JSON.stringify(data.scene)) : null
   });
@@ -766,6 +847,7 @@ async function undoCampaignMapEdit(mapId) {
   data.columns = prior.columns;
   data.rows = prior.rows;
   data.tiles = prior.tiles;
+  data.overlays = prior.overlays || [];
   data.fog = prior.fog;
   data.scene = prior.scene;
   data.tokens = data.tokens.map(token => ({ ...token, ...clampMapTokenPosition(data, token, token.x, token.y) }));
@@ -773,10 +855,12 @@ async function undoCampaignMapEdit(mapId) {
   await saveCampaignMap(map, "Map edit undone", { preserveTokens: true });
 }
 function applyMapBrushToData(data, tool, tileId, originX, originY, brushSize = 1) {
-  if (typeof window.paintMapDataCells === "function") return window.paintMapDataCells(data, tool, tileId, originX, originY, brushSize);
+  const assetKind = mapTileDefinition({ data }, tileId)?.kind === "prop" ? "prop" : "terrain";
+  if (typeof window.paintMapDataCells === "function") return window.paintMapDataCells(data, tool, tileId, originX, originY, brushSize, assetKind);
   const size = Math.min(4, Math.max(1, Number(brushSize || 1)));
   const changed = [];
   const tileMap = new Map(data.tiles.map(tile => [mapCellKey(tile.x, tile.y), tile]));
+  const overlayMap = new Map(data.overlays.map(tile => [mapCellKey(tile.x, tile.y), tile]));
   const fogCells = new Set(data.fog.cells);
   for (let offsetY = 0; offsetY < size; offsetY += 1) {
     for (let offsetX = 0; offsetX < size; offsetX += 1) {
@@ -784,8 +868,12 @@ function applyMapBrushToData(data, tool, tileId, originX, originY, brushSize = 1
       const y = originY + offsetY;
       if (x < 0 || y < 0 || x >= data.columns || y >= data.rows) continue;
       const key = mapCellKey(x, y);
-      if (tool === "paint") tileMap.set(key, { x, y, tileId });
-      if (tool === "erase") tileMap.delete(key);
+      if (tool === "paint" && assetKind === "prop") overlayMap.set(key, { x, y, tileId });
+      if (tool === "paint" && assetKind !== "prop") tileMap.set(key, { x, y, tileId });
+      if (tool === "erase") {
+        if (overlayMap.has(key)) overlayMap.delete(key);
+        else tileMap.delete(key);
+      }
       if (tool === "fog-paint") {
         data.fog.enabled = true;
         fogCells.add(key);
@@ -795,12 +883,14 @@ function applyMapBrushToData(data, tool, tileId, originX, originY, brushSize = 1
     }
   }
   data.tiles = [...tileMap.values()];
+  data.overlays = [...overlayMap.values()];
   data.fog.cells = [...fogCells];
   if (!data.fog.cells.length) data.fog.enabled = false;
   return changed;
 }
 function syncMapBrushVisual(board, map, data, cells) {
   const tileLayer = board.querySelector(".battle-map-tiles");
+  const overlayLayer = board.querySelector(".battle-map-overlays");
   const fogLayer = board.querySelector(".battle-map-fog");
   cells.forEach(({ x, y }) => {
     tileLayer?.querySelectorAll(`[data-cell-x="${x}"][data-cell-y="${y}"]`).forEach(node => node.remove());
@@ -812,6 +902,16 @@ function syncMapBrushVisual(board, map, data, cells) {
       element.dataset.cellY = String(y);
       element.style.cssText = `--x:${x};--y:${y};${mapTileStyle(map, tile.tileId)}`;
       tileLayer.appendChild(element);
+    }
+    overlayLayer?.querySelectorAll(`[data-cell-x="${x}"][data-cell-y="${y}"]`).forEach(node => node.remove());
+    const overlay = data.overlays.find(item => Number(item.x) === x && Number(item.y) === y);
+    if (overlay && overlayLayer) {
+      const element = document.createElement("div");
+      element.className = "map-cell-prop";
+      element.dataset.cellX = String(x);
+      element.dataset.cellY = String(y);
+      element.style.cssText = `--x:${x};--y:${y};${mapTileStyle(map, overlay.tileId)}`;
+      overlayLayer.appendChild(element);
     }
     fogLayer?.querySelectorAll(`[data-cell-x="${x}"][data-cell-y="${y}"]`).forEach(node => node.remove());
     if (data.fog.enabled && data.fog.cells.includes(mapCellKey(x, y)) && fogLayer) {
@@ -1336,7 +1436,7 @@ async function addCampaignCustomTile(mapId, values) {
   if (!url) { toast("Upload a tile image or paste an image URL"); return; }
   const name = String(values.tileName || "").trim() || "Custom Tile";
   map.data = normalizeMapData(map.data);
-  const customTile = { id: `custom-${Date.now().toString(36)}`, name, category: "Custom", url };
+  const customTile = { id: `custom-${Date.now().toString(36)}`, name, category: "Custom", kind: values.tileKind === "terrain" ? "terrain" : "prop", url };
   map.data.customTiles = [...map.data.customTiles, customTile].slice(-24);
   campaignTileImageDraft = "";
   selectedMapTile = customTile.id;
@@ -6128,6 +6228,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const maps = mapsForCampaign(campaign.id);
   const activeMap = activeMapForCampaign(campaign.id);
   const sceneTemplates = Array.isArray(window.MAP_SCENE_TEMPLATES) ? window.MAP_SCENE_TEMPLATES : [];
+  const assetPacks = Array.isArray(window.MAP_ASSET_LIBRARY) ? window.MAP_ASSET_LIBRARY : [];
+  const tokenPresets = mapTokenLibrary();
   const mapTabs = maps.map(map => `<button type="button" class="${map.id === activeMap?.id ? "active" : ""}" data-campaign-map-select="${escapeHtml(map.id)}">${escapeHtml(map.name)}</button>`).join("");
   const createForm = isDm ? `<details class="map-create">
     <summary>Create or upload a map</summary>
@@ -6155,7 +6257,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     return `<section class="campaign-panel campaign-map-panel campaign-map-room">
       <div class="campaign-map-hero">
         <div>
-          <span class="eyebrow">MAP ROOM</span>
+          <span class="eyebrow">MAP STUDIO 2.0</span>
           <h3>Encounter maps</h3>
           <p>${isDm ? "Create a grid map, upload art, and place party tokens." : "The DM has not shared a battle map yet."}</p>
         </div>
@@ -6174,6 +6276,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const playerCanSeeMap = isDm || sessionState === "live";
   const allTiles = [...BUILT_IN_MAP_TILES, ...data.customTiles];
   if (!allTiles.some(tile => tile.id === selectedMapTile)) selectedMapTile = allTiles[0]?.id || "stone-floor";
+  const tileCategories = ["All", ...new Set(allTiles.map(tile => tile.category || "Other"))];
+  if (!tileCategories.includes(selectedMapTileCategory)) selectedMapTileCategory = "All";
   const tileStyles = new Map(allTiles.map(tile => [tile.id, mapTileStyle(activeMap, tile.id)]));
   const boardBaseStyle = data.dungeon?.wallTile ? tileStyles.get(data.dungeon.wallTile) || mapTileStyle(activeMap, data.dungeon.wallTile) : "";
   const sessionLabel = sessionState === "live" ? "Live" : sessionState === "paused" ? "Paused" : sessionState === "ended" ? "Ended" : "Draft";
@@ -6198,10 +6302,13 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     <button type="button" class="${selectedMapTool === "ruler" ? "active" : ""}" data-map-tool="ruler" title="Measure distance (R)"><span>R</span><small>Ruler</small></button>
     ${isDm ? `<button type="button" data-map-undo="${escapeHtml(activeMap.id)}" title="Undo last tile, fog, or scene edit" ${mapEditHistory.get(activeMap.id)?.length ? "" : "disabled"}><span>U</span><small>Undo</small></button>` : ""}
   </nav>` : "";
-  const tilePalette = isDm ? `<div class="map-tile-palette">
-    ${allTiles.map(tile => `<button type="button" class="map-tile-swatch ${selectedMapTile === tile.id ? "active" : ""}" data-map-tile="${escapeHtml(tile.id)}" title="${escapeHtml(tile.name)}">
+  const visiblePaletteTiles = allTiles.filter(tile => selectedMapTileCategory === "All" || tile.category === selectedMapTileCategory);
+  const tilePalette = isDm ? `<div class="map-library-filter"><label><span>Find terrain or props</span><input type="search" value="${escapeHtml(mapTileSearch)}" placeholder="Search tiles, doors, trees..." data-map-tile-search></label></div>
+  <div class="map-library-categories" aria-label="Tile categories">${tileCategories.map(category => `<button type="button" class="${selectedMapTileCategory === category ? "active" : ""}" data-map-tile-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div>
+  <div class="map-tile-palette">
+    ${visiblePaletteTiles.map(tile => `<button type="button" class="map-tile-swatch ${selectedMapTile === tile.id ? "active" : ""}" data-map-tile="${escapeHtml(tile.id)}" data-library-search="${escapeHtml(`${tile.name} ${tile.category}`.toLowerCase())}" title="${escapeHtml(tile.name)}" ${mapTileSearch && !`${tile.name} ${tile.category}`.toLowerCase().includes(mapTileSearch.toLowerCase()) ? "hidden" : ""}>
       <span style="${mapTileStyle(activeMap, tile.id)}"></span>
-      <small>${escapeHtml(tile.name)}</small><em>${escapeHtml(tile.category)}</em>
+      <small>${escapeHtml(tile.name)}</small><em>${escapeHtml(tile.kind === "prop" ? "Prop overlay" : tile.category)}</em>
     </button>`).join("")}
   </div>
   <details class="map-custom-tile">
@@ -6211,6 +6318,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label>Tile name<input name="tileName" maxlength="40" placeholder="Torchlight, rug, bridge..."></label>
         <label>Tile image URL<input name="tileUrl" placeholder="Paste a small image URL"></label>
       </div>
+      <label>Asset behavior<select name="tileKind"><option value="prop">Prop overlay (keeps terrain below)</option><option value="terrain">Terrain tile (replaces the square)</option></select></label>
       <label>Upload tile image<input type="file" accept="image/*" data-campaign-tile-upload><small class="field-hint" data-tile-upload-status>No tile selected</small></label>
       <button class="button primary small" type="submit">Add tile</button>
     </form>
@@ -6220,11 +6328,16 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     const y = Math.min(data.rows - 1, Math.max(0, Number(tile.y || 0)));
     return `<div class="map-cell-tile" data-cell-x="${x}" data-cell-y="${y}" style="--x:${x};--y:${y};${tileStyles.get(tile.tileId) || mapTileStyle(activeMap, tile.tileId)}"></div>`;
   }).join("");
+  const paintedProps = data.overlays.map(tile => {
+    const x = Math.min(data.columns - 1, Math.max(0, Number(tile.x || 0)));
+    const y = Math.min(data.rows - 1, Math.max(0, Number(tile.y || 0)));
+    return `<div class="map-cell-prop" data-cell-x="${x}" data-cell-y="${y}" style="--x:${x};--y:${y};${tileStyles.get(tile.tileId) || mapTileStyle(activeMap, tile.tileId)}"></div>`;
+  }).join("");
   const tokenCards = data.tokens.filter(token => mapTokenVisibleForRole(data, token, isDm)).map(token => {
     const character = characterForMapToken(token);
     const canMove = canMoveMapToken(token, campaign.id);
     const label = character?.name || token.name || "Token";
-    const portrait = character?.portrait || token.portrait || "";
+    const portrait = mapTokenPortrait(token, character);
     const size = mapTokenSize(token);
     const hiddenText = token.hidden ? "Hidden from players" : "Visible to players";
     return `<article class="map-token-card ${selectedMapToken === token.id ? "active" : ""}">
@@ -6242,6 +6355,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       </div>
       ${isDm ? `<div class="map-token-toolbar">
         <button type="button" data-map-token-toggle-hidden="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">${token.hidden ? "Reveal" : "Hide"}</button>
+        <button type="button" data-map-token-toggle-side="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">${token.side === "ally" ? "Make enemy" : "Make ally"}</button>
         <button type="button" data-map-token-rename="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Rename</button>
         <button type="button" data-map-token-color="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Color</button>
         <button type="button" data-map-token-delete="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}">Delete</button>
@@ -6252,7 +6366,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     const character = characterForMapToken(token);
     const canMove = canMoveMapToken(token, campaign.id);
     const label = character?.name || token.name || "Token";
-    const portrait = character?.portrait || token.portrait || "";
+    const portrait = mapTokenPortrait(token, character);
     const size = mapTokenSize(token);
     const combatant = data.encounter.combatants.find(item => item.tokenId === token.id);
     const characterStats = character ? derived(character) : null;
@@ -6276,18 +6390,40 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     `<div class="map-ping" style="--x:${Number(ping.x)};--y:${Number(ping.y)};"><span></span><small>${escapeHtml(ping.by || "Ping")}</small></div>`
   ).join("");
   if (!isDm) selectedMapSidebar = "tokens";
+  const tokenCategories = ["All", ...new Set(tokenPresets.map(preset => preset.category))];
+  if (!tokenCategories.includes(selectedMapTokenCategory)) selectedMapTokenCategory = "All";
+  const visibleTokenPresets = tokenPresets.filter(preset => selectedMapTokenCategory === "All" || preset.category === selectedMapTokenCategory);
+  const tokenPresetCards = visibleTokenPresets.map(preset => {
+    const portrait = typeof window.tokenPresetPortrait === "function" ? window.tokenPresetPortrait(preset) : "";
+    const searchable = `${preset.name} ${preset.category} ${preset.role}`.toLowerCase();
+    return `<article class="map-token-preset-card" data-library-search="${escapeHtml(searchable)}" ${mapTokenSearch && !searchable.includes(mapTokenSearch.toLowerCase()) ? "hidden" : ""}>
+      <span class="map-token-preset-portrait" style="--token:${escapeHtml(preset.color)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(preset.name.charAt(0))}</span>
+      <div><small>${escapeHtml(preset.category)} &middot; ${escapeHtml(preset.role)}</small><strong>${escapeHtml(preset.name)}</strong><span>AC ${preset.ac} &middot; HP ${preset.hp} &middot; ${escapeHtml(preset.damage)}</span></div>
+      <button type="button" data-map-token-preset-add="${escapeHtml(preset.id)}" data-map-id="${escapeHtml(activeMap.id)}">Add</button>
+    </article>`;
+  }).join("");
+  const tokenBrowser = isDm ? `<section class="map-token-browser">
+    <div class="map-dock-heading"><div><small>Quick tokens</small><strong>Monsters and NPCs</strong></div><span class="map-library-count">${tokenPresets.length}</span></div>
+    <div class="map-library-filter"><label><span>Find a token</span><input type="search" value="${escapeHtml(mapTokenSearch)}" placeholder="Goblin, undead, guard..." data-map-token-search></label></div>
+    <div class="map-library-categories" aria-label="Token categories">${tokenCategories.map(category => `<button type="button" class="${selectedMapTokenCategory === category ? "active" : ""}" data-map-token-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div>
+    <div class="map-token-preset-list">${tokenPresetCards || `<p class="map-dock-note">No presets match this filter.</p>`}</div>
+  </section>` : `<div class="map-player-tool-summary"><strong>Player map tools</strong><p>Move your own character token, pan and zoom the map, measure distance, and ping locations for the party. Monster and NPC controls remain with the DM.</p></div>`;
   const sceneGallery = sceneTemplates.map(scene => `<article class="map-scene-card">
     <div class="map-scene-preview" style="${mapTileStyle(activeMap, scene.previewTile)}"></div>
     <div><small>${escapeHtml(scene.category)} &middot; ${escapeHtml(scene.size)}</small><strong>${escapeHtml(scene.name)}</strong><p>${escapeHtml(scene.description)}</p></div>
     <button type="button" data-map-scene="${escapeHtml(scene.id)}" data-map-id="${escapeHtml(activeMap.id)}">Apply</button>
   </article>`).join("");
+  const assetPackCards = assetPacks.map(pack => `<article class="map-asset-card">
+    <div><small>${escapeHtml(pack.type)} &middot; ${escapeHtml(pack.license)}</small><strong>${escapeHtml(pack.name)}</strong><span>by ${escapeHtml(pack.author)}</span><p>${escapeHtml(pack.description)}</p></div>
+    <a href="${escapeHtml(pack.sourceUrl)}" target="_blank" rel="noreferrer">Open source pack</a>
+  </article>`).join("");
   const dockTabs = `<div class="map-dock-tabs" role="tablist" aria-label="Map panels">
     <button type="button" class="${selectedMapSidebar === "tokens" ? "active" : ""}" data-map-sidebar="tokens">Tokens</button>
     ${isDm ? `<button type="button" class="${selectedMapSidebar === "tiles" ? "active" : ""}" data-map-sidebar="tiles">Tiles</button><button type="button" class="${selectedMapSidebar === "scene" ? "active" : ""}" data-map-sidebar="scene">Scenes</button>` : ""}
   </div>`;
-  let dockContent = `<div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</div>`;
+  let dockContent = `${tokenBrowser}<div class="map-token-list-heading"><strong>Tokens on this map</strong><span>${data.tokens.length}</span></div><div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens or choose a quick token above." : "No tokens have been placed yet."}</p>`}</div>`;
   if (isDm && selectedMapSidebar === "tiles") dockContent = `<div class="map-dock-heading"><div><small>Brush</small><strong>Paint the terrain</strong></div><label>Size<select data-map-brush-size><option value="1" ${selectedMapBrushSize === 1 ? "selected" : ""}>1 x 1</option><option value="2" ${selectedMapBrushSize === 2 ? "selected" : ""}>2 x 2</option><option value="3" ${selectedMapBrushSize === 3 ? "selected" : ""}>3 x 3</option></select></label></div>${tilePalette}`;
-  if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene library</small><strong>Start with a playable layout</strong></div></div><p class="map-dock-note">Applying a scene replaces painted terrain and board dimensions. Tokens are kept and clamped onto the new board.</p>${sceneGallery}<details class="map-asset-library"><summary>More free map art and tiles</summary><p>Use CC0 packs as custom tiles or upload your own finished battle map.</p><a href="https://kenney.nl/assets/roguelike-rpg-pack" target="_blank" rel="noreferrer">Kenney Roguelike / RPG pack</a><a href="https://opengameart.org/node/135781" target="_blank" rel="noreferrer">OpenGameArt Top Down Dungeon pack</a><small>Both linked packs are listed as CC0. Keep the included license file with downloaded assets.</small></details></div>`;
+  if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene library</small><strong>Start with a playable layout</strong></div></div><p class="map-dock-note">Applying a scene replaces painted terrain and board dimensions. Tokens are kept and clamped onto the new board.</p>${sceneGallery}<div class="map-asset-library-head"><div><small>Verified free sources</small><strong>Fantasy map and tileset library</strong></div><button type="button" data-map-open-settings="${escapeHtml(activeMap.id)}">Import map</button></div><p class="map-dock-note">These source packs are listed as CC0 or public domain. Download from the author page, then import the finished map above or upload individual images as custom terrain and props.</p><div class="map-asset-card-list">${assetPackCards}</div></div>`;
   const settingsForm = isDm ? `<details class="map-settings">
     <summary>Map settings</summary>
     <form data-campaign-map-settings="${escapeHtml(activeMap.id)}">
@@ -6336,7 +6472,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   return `<section class="campaign-panel campaign-map-panel campaign-map-room">
     <div class="campaign-map-hero">
       <div>
-        <span class="eyebrow">MAP ROOM</span>
+        <span class="eyebrow">MAP STUDIO 2.0</span>
         <h3>${escapeHtml(activeMap.name)}</h3>
         <p>${isDm ? "Run the table from a dark tactical workspace: start the session, control fog, place tokens, ping, measure, and track play." : "The live table appears here when the DM starts the session. You can move tokens connected to your own character."}</p>
       </div>
@@ -6375,6 +6511,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
           ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : data.tiles.length ? "" : `<div class="battle-map-empty">No map art uploaded</div>`}
           <div class="battle-map-tiles">${paintedTiles}</div>
           ${data.gridEnabled ? `<div class="battle-map-grid" aria-hidden="true"></div>` : ""}
+          <div class="battle-map-overlays" aria-hidden="true">${paintedProps}</div>
           <div class="battle-map-fog ${isDm ? "dm-fog" : ""}" aria-hidden="true">${fogCells}</div>
           ${tokenButtons}
           <div class="battle-map-pings" aria-hidden="true">${pings}</div>
@@ -8639,6 +8776,32 @@ function initEvents() {
       renderCampaigns();
       return;
     }
+    const tokenPresetAdd = event.target.closest("[data-map-token-preset-add]");
+    if (tokenPresetAdd) {
+      addCampaignPresetToken(tokenPresetAdd.dataset.mapId, tokenPresetAdd.dataset.mapTokenPresetAdd);
+      return;
+    }
+    const tokenCategory = event.target.closest("[data-map-token-category]");
+    if (tokenCategory) {
+      selectedMapTokenCategory = tokenCategory.dataset.mapTokenCategory || "All";
+      renderCampaigns();
+      return;
+    }
+    const tileCategory = event.target.closest("[data-map-tile-category]");
+    if (tileCategory) {
+      selectedMapTileCategory = tileCategory.dataset.mapTileCategory || "All";
+      renderCampaigns();
+      return;
+    }
+    const mapOpenSettings = event.target.closest("[data-map-open-settings]");
+    if (mapOpenSettings) {
+      const settings = document.querySelector(".map-settings");
+      if (settings) {
+        settings.open = true;
+        settings.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
     const mapUndo = event.target.closest("[data-map-undo]");
     if (mapUndo) {
       if (!mapUndo.disabled) undoCampaignMapEdit(mapUndo.dataset.mapUndo);
@@ -8738,6 +8901,16 @@ function initEvents() {
       const map = campaignMapById(mapTokenHide.dataset.mapId);
       const token = normalizeMapData(map?.data).tokens.find(item => item.id === mapTokenHide.dataset.mapTokenToggleHidden);
       if (token) updateCampaignMapToken(map.id, token.id, { hidden: !token.hidden }, token.hidden ? "Token revealed" : "Token hidden");
+      return;
+    }
+    const mapTokenSide = event.target.closest("[data-map-token-toggle-side]");
+    if (mapTokenSide) {
+      const map = campaignMapById(mapTokenSide.dataset.mapId);
+      const token = normalizeMapData(map?.data).tokens.find(item => item.id === mapTokenSide.dataset.mapTokenToggleSide);
+      if (token) {
+        const side = token.side === "ally" ? "enemy" : "ally";
+        updateCampaignMapToken(map.id, token.id, { side, kind: side === "ally" ? "npc" : "monster", hidden: side === "enemy" ? token.hidden : false }, side === "ally" ? "Token marked as an ally" : "Token marked as an enemy");
+      }
       return;
     }
     const mapTokenRename = event.target.closest("[data-map-token-rename]");
@@ -9063,6 +9236,18 @@ function initEvents() {
     if (mapSettings) updateCampaignMapSettings(mapSettings.dataset.campaignMapSettings, values);
     if (tileCreate) addCampaignCustomTile(tileCreate.dataset.campaignTileCreate, values);
     if (creatureCreate) addCampaignCreatureToken(creatureCreate.dataset.campaignCreatureCreate, values);
+  });
+  $("#campaign-detail")?.addEventListener("input", event => {
+    const tileSearch = event.target.closest("[data-map-tile-search]");
+    const tokenSearch = event.target.closest("[data-map-token-search]");
+    if (!tileSearch && !tokenSearch) return;
+    const search = String(event.target.value || "").trim().toLowerCase();
+    if (tileSearch) mapTileSearch = search;
+    if (tokenSearch) mapTokenSearch = search;
+    const selector = tileSearch ? ".map-tile-swatch[data-library-search]" : ".map-token-preset-card[data-library-search]";
+    event.target.closest(".map-dock-body")?.querySelectorAll(selector).forEach(card => {
+      card.hidden = Boolean(search && !String(card.dataset.librarySearch || "").includes(search));
+    });
   });
   $("#campaign-detail")?.addEventListener("change", event => {
     const brushSize = event.target.closest("[data-map-brush-size]");

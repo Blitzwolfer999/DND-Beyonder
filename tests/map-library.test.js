@@ -1,9 +1,14 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { MAP_SCENE_TEMPLATES, SCENE_TILE_IDS, buildMapScene, paintMapDataCells } = require("../map-library.js");
+const { MAP_SCENE_TEMPLATES, MAP_ASSET_LIBRARY, SCENE_TILE_IDS, buildMapScene, paintMapDataCells } = require("../map-library.js");
 
 assert.ok(MAP_SCENE_TEMPLATES.length >= 6, "expected a useful scene library");
+assert.ok(MAP_ASSET_LIBRARY.length >= 6, "expected a curated external asset library");
+MAP_ASSET_LIBRARY.forEach(pack => {
+  assert.match(pack.sourceUrl, /^https:\/\//);
+  assert.match(pack.license, /CC0|public domain/i);
+});
 const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
 for (const tileId of SCENE_TILE_IDS) assert.match(appSource, new RegExp(`id: ["']${tileId}["']`), `${tileId} should have a rendered tile style`);
 
@@ -35,4 +40,8 @@ paintMapDataCells(brushMap, "fog-paint", "", 0, 0, 2);
 assert.equal(brushMap.fog.cells.length, 4, "fog brush should cover four cells");
 paintMapDataCells(brushMap, "fog-erase", "", 0, 0, 2);
 assert.equal(brushMap.fog.enabled, false, "revealing the final cells should disable empty fog");
+paintMapDataCells(brushMap, "paint", "treasure-chest", 3, 3, 1, "prop");
+assert.equal(brushMap.overlays.length, 1, "prop painting should preserve terrain in a separate layer");
+paintMapDataCells(brushMap, "erase", "", 3, 3, 1);
+assert.equal(brushMap.overlays.length, 0, "erase should remove a prop before terrain");
 console.log(`map-library tests passed (${MAP_SCENE_TEMPLATES.length} scene templates)`);

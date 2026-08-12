@@ -27,6 +27,16 @@
     <aside class="map-side-dock">
       <div class="map-dock-tabs"><button class="active">Tokens</button><button>Tiles</button><button>Scenes</button></div>
       <div class="map-dock-body">
+        <section class="map-token-browser">
+          <div class="map-dock-heading"><div><small>Quick tokens</small><strong>Monsters and NPCs</strong></div><span class="map-library-count">32</span></div>
+          <div class="map-library-filter"><label><span>Find a token</span><input type="search" placeholder="Goblin, undead, guard..."></label></div>
+          <div class="map-library-categories"><button class="active">All</button><button>NPC</button><button>Humanoid</button><button>Beast</button><button>Undead</button></div>
+          <div class="map-token-preset-list">
+            <article class="map-token-preset-card"><span class="map-token-preset-portrait" style="--token:#4e7135">GR</span><div><small>Humanoid - Skirmisher</small><strong>Goblin Raider</strong><span>AC 15 - HP 10 - 1d6 + 2</span></div><button>Add</button></article>
+            <article class="map-token-preset-card"><span class="map-token-preset-portrait" style="--token:#315b78">TG</span><div><small>NPC - Defender</small><strong>Town Guard</strong><span>AC 16 - HP 18 - 1d8 + 2</span></div><button>Add</button></article>
+          </div>
+        </section>
+        <div class="map-token-list-heading"><strong>Tokens on this map</strong><span>3</span></div>
         <div class="map-token-list">
           <article class="map-token-card active"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#8f2f2f">A</span><strong>Astrid Vale</strong><small>Visible to players</small></button><div class="map-token-size-row"><small>Token size: 1x1</small><span><button>-</button><button>+</button></span></div></article>
           <article class="map-token-card"><button class="map-token-pick"><span class="map-token-avatar" style="--token:#315f89">M</span><strong>Mira Ember</strong><small>Visible to players</small></button><div class="map-token-size-row"><small>Token size: 1x1</small><span><button>-</button><button>+</button></span></div></article>
@@ -41,6 +51,7 @@
           <div class="map-cell-tile" style="--x:8;--y:7;background:#8a633f"></div>
           <div class="map-cell-tile" style="--x:9;--y:7;background:#8a633f"></div>
           <div class="battle-map-grid"></div>
+          <div class="battle-map-overlays"><div class="map-cell-prop" style="--x:12;--y:8;background-color:transparent;background-image:radial-gradient(ellipse at center,#9b693b 0 48%,#3e2515 49% 58%,transparent 59%)"></div></div>
           <button class="map-token selected" style="--x:10;--y:8;--size:1;--token:#8f2f2f"><span class="map-token-face">A</span><span class="map-token-name">Astrid Vale</span><span class="map-token-health"><i style="width:82%"></i></span></button>
           <button class="map-token enemy-token" style="--x:15;--y:6;--size:2;--token:#702d32"><span class="map-token-face">V</span><span class="map-token-name">Vampire Spawn</span><span class="map-token-health"><i style="width:46%"></i></span></button>
           <div class="battle-map-pings"><div class="map-ping" style="--x:18;--y:10"><span></span><small>DM</small></div></div>

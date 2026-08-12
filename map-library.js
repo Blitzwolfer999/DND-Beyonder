@@ -10,6 +10,16 @@
     { id: "snow-ruins", name: "Snowbound Ruins", category: "Wilderness", size: "30 x 20", previewTile: "snow", description: "Frozen ruins with broken walls, slick ice, and an exposed central approach." },
   ];
 
+  const MAP_ASSET_LIBRARY = [
+    { id: "scribble-dungeons", name: "Scribble Dungeons", author: "Kenney", type: "Tiles, props, and tokens", license: "CC0", sourceUrl: "https://opengameart.org/content/scribble-dungeons", description: "A cohesive hand-drawn set with 256 PNG assets, vector sources, and a sample map." },
+    { id: "top-down-dungeon", name: "Top Down Dungeon Pack", author: "Screaming Brain Studios", type: "Dungeon tiles", license: "CC0", sourceUrl: "https://opengameart.org/content/top-down-dungeon-pack", description: "A large 64px library of stone, dirt, sand, grass, wood, metal, and wall autotiles." },
+    { id: "dungeon-pack", name: "Dungeon Pack", author: "nato", type: "Tiles, props, and creatures", license: "CC0", sourceUrl: "https://opengameart.org/content/dungeon-pack", description: "A compact top-down set with dungeon terrain, props, characters, enemies, and bosses." },
+    { id: "forest-tilemap", name: "Forest Tilemap", author: "Vomdrache", type: "Wilderness tiles", license: "CC0", sourceUrl: "https://opengameart.org/content/forest-tilemap", description: "Fantasy grasslands, forest growth, trees, and crystal terrain for outdoor encounters." },
+    { id: "simple-map-tiles", name: "Simple Map Tiles", author: "MELLE", type: "Fantasy world maps", license: "CC0", sourceUrl: "https://opengameart.org/content/simple-map-tiles", description: "Parchment, settlements, mountains, forests, roads, and an example fantasy region map." },
+    { id: "spears-maps", name: "Spears of the Dawn Maps", author: "Sine Nomine Publishing", type: "Ready maps", license: "CC0 / public domain", sourceUrl: "https://opengameart.org/content/maps-for-an-africanfantasy-inspired-book-spears-of-the-dawn", description: "Villages, shrines, tombs, and dungeons supplied as unkeyed maps and editable source files." },
+    { id: "fantasy-world-map", name: "Fantasy World Map", author: "Belohlavek", type: "Ready world map", license: "CC0", sourceUrl: "https://opengameart.org/content/fantasy-world-map", description: "A large finished fantasy world map suitable for travel, lore, and campaign overview scenes." },
+  ];
+
   const SCENE_TILE_IDS = [
     "stone-floor", "flagstone", "cracked-stone", "mossy-stone", "crypt-floor", "dungeon-wall", "brick-wall", "cave-floor", "chasm",
     "wood-planks", "dark-wood", "cobblestone", "marble", "roof-tile", "rug", "grass", "forest", "dirt", "sand", "snow", "ice",
@@ -204,11 +214,12 @@
     return { ...scene, id: template.id, name: template.name, category: template.category, description: template.description };
   }
 
-  function paintMapDataCells(data, tool, tileId, originX, originY, brushSize = 1) {
+  function paintMapDataCells(data, tool, tileId, originX, originY, brushSize = 1, assetKind = "terrain") {
     const size = Math.min(4, Math.max(1, Number(brushSize || 1)));
     const changed = [];
     const key = (x, y) => `${Math.max(0, Number(x) || 0)},${Math.max(0, Number(y) || 0)}`;
     const tileMap = new Map((data.tiles || []).map(tile => [key(tile.x, tile.y), tile]));
+    const overlayMap = new Map((data.overlays || []).map(tile => [key(tile.x, tile.y), tile]));
     const fogCells = new Set(data.fog?.cells || []);
     data.fog = data.fog || { enabled: false, cells: [] };
     for (let offsetY = 0; offsetY < size; offsetY += 1) {
@@ -217,8 +228,12 @@
         const y = originY + offsetY;
         if (x < 0 || y < 0 || x >= data.columns || y >= data.rows) continue;
         const cellKey = key(x, y);
-        if (tool === "paint") tileMap.set(cellKey, { x, y, tileId });
-        if (tool === "erase") tileMap.delete(cellKey);
+        if (tool === "paint" && assetKind === "prop") overlayMap.set(cellKey, { x, y, tileId });
+        if (tool === "paint" && assetKind !== "prop") tileMap.set(cellKey, { x, y, tileId });
+        if (tool === "erase") {
+          if (overlayMap.has(cellKey)) overlayMap.delete(cellKey);
+          else tileMap.delete(cellKey);
+        }
         if (tool === "fog-paint") {
           data.fog.enabled = true;
           fogCells.add(cellKey);
@@ -228,14 +243,16 @@
       }
     }
     data.tiles = [...tileMap.values()];
+    data.overlays = [...overlayMap.values()];
     data.fog.cells = [...fogCells];
     if (!data.fog.cells.length) data.fog.enabled = false;
     return changed;
   }
 
   root.MAP_SCENE_TEMPLATES = MAP_SCENE_TEMPLATES;
+  root.MAP_ASSET_LIBRARY = MAP_ASSET_LIBRARY;
   root.MAP_SCENE_TILE_IDS = SCENE_TILE_IDS;
   root.buildMapScene = buildMapScene;
   root.paintMapDataCells = paintMapDataCells;
-  if (typeof module !== "undefined" && module.exports) module.exports = { MAP_SCENE_TEMPLATES, SCENE_TILE_IDS, buildMapScene, paintMapDataCells };
+  if (typeof module !== "undefined" && module.exports) module.exports = { MAP_SCENE_TEMPLATES, MAP_ASSET_LIBRARY, SCENE_TILE_IDS, buildMapScene, paintMapDataCells };
 })(typeof window !== "undefined" ? window : globalThis);
