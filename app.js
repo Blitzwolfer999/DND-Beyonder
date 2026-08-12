@@ -295,6 +295,9 @@ let selectedMapRulerStart = null;
 let campaignMapImageDraft = "";
 let campaignTileImageDraft = "";
 let campaignLiveTimer = null;
+let dungeonWorkshopPreview = null;
+let dungeonWorkshopCr = 5;
+let dungeonWorkshopTheme = "random";
 let deletedCharacters = readJson(DELETED_KEY, {});
 let rollHistory = readJson(ROLL_KEY, []);
 restoreRecoverySnapshotIfEmpty("initial load");
@@ -529,6 +532,22 @@ function reportCampaignError(error, fallbackMessage, showToast = true) {
 function normalizeMapData(data = {}) {
   const session = data.session && typeof data.session === "object" ? data.session : {};
   const fog = data.fog && typeof data.fog === "object" ? data.fog : {};
+  const encounter = data.encounter && typeof data.encounter === "object" ? data.encounter : {};
+  const encounterStatus = ["ready", "active", "paused", "ended"].includes(encounter.status) ? encounter.status : "ready";
+  const combatants = Array.isArray(encounter.combatants) ? encounter.combatants.map((combatant, index) => ({
+    ...combatant,
+    id: String(combatant.id || `combatant-${index + 1}`),
+    name: String(combatant.name || "Combatant"),
+    side: combatant.side === "ally" ? "ally" : "enemy",
+    hp: Math.max(0, Number(combatant.hp ?? combatant.maxHp ?? 1)),
+    maxHp: Math.max(1, Number(combatant.maxHp || combatant.hp || 1)),
+    ac: Math.max(0, Number(combatant.ac || 10)),
+    initiative: combatant.initiative === null || combatant.initiative === undefined ? null : Number(combatant.initiative),
+    initiativeBonus: Number(combatant.initiativeBonus || 0),
+    hidden: Boolean(combatant.hidden),
+    defeated: Boolean(combatant.defeated),
+    conditions: Array.isArray(combatant.conditions) ? combatant.conditions.map(String).slice(0, 8) : []
+  })).slice(0, 120) : [];
   return {
     columns: Math.min(80, Math.max(4, Number(data.columns || 24))),
     rows: Math.min(80, Math.max(4, Number(data.rows || 16))),
@@ -555,7 +574,15 @@ function normalizeMapData(data = {}) {
     stickers: Array.isArray(data.stickers) ? data.stickers : [],
     tokens: Array.isArray(data.tokens) ? data.tokens : [],
     tiles: Array.isArray(data.tiles) ? data.tiles : [],
-    customTiles: Array.isArray(data.customTiles) ? data.customTiles : []
+    customTiles: Array.isArray(data.customTiles) ? data.customTiles : [],
+    dungeon: data.dungeon && typeof data.dungeon === "object" ? data.dungeon : null,
+    encounter: {
+      status: encounterStatus,
+      round: Math.max(0, Number(encounter.round || 0)),
+      turnIndex: Math.max(0, Number(encounter.turnIndex || 0)),
+      combatants,
+      updatedAt: encounter.updatedAt || ""
+    }
   };
 }
 function mapCellKey(x, y) {
@@ -719,6 +746,252 @@ async function createCampaignMap(campaignId, values) {
   renderCampaigns();
   toast(`${name} created`);
 }
+function dungeonLibrary() {
+  return window.DUNGEON_LIBRARY || { crOptions: [3, 5, 9, 11, 14, 17, 20], themes: [] };
+}
+function nextDungeonSeed() {
+  const words = ["ember", "moon", "rune", "thorn", "iron", "mist", "cinder", "echo", "storm", "hollow"];
+  return `${words[Math.floor(Math.random() * words.length)]}-${Date.now().toString(36).slice(-5)}`;
+}
+function generateDungeonWorkshopPreview(values = {}) {
+  if (typeof window.generateCrDungeon !== "function") {
+    toast("Dungeon challenge data did not load. Refresh the page and try again.");
+    return null;
+  }
+  dungeonWorkshopCr = dungeonLibrary().crOptions.includes(Number(values.targetCr)) ? Number(values.targetCr) : dungeonWorkshopCr;
+  dungeonWorkshopTheme = values.themeId || dungeonWorkshopTheme || "random";
+  dungeonWorkshopPreview = window.generateCrDungeon({
+    targetCr: dungeonWorkshopCr,
+    themeId: dungeonWorkshopTheme,
+    seed: String(values.seed || nextDungeonSeed()).trim(),
+    gridEnabled: values.gridEnabled !== false && values.gridEnabled !== "false"
+  });
+  renderDungeonWorkshop();
+  return dungeonWorkshopPreview;
+}
+function ensureDungeonWorkshopPreview() {
+  if (!dungeonWorkshopPreview && typeof window.generateCrDungeon === "function") {
+    dungeonWorkshopPreview = window.generateCrDungeon({ targetCr: dungeonWorkshopCr, themeId: dungeonWorkshopTheme, seed: "first-descent" });
+  }
+  return dungeonWorkshopPreview;
+}
+async function createDungeonCampaignMap(campaignId) {
+  const preview = ensureDungeonWorkshopPreview();
+  if (!preview) { toast("Generate a dungeon challenge first"); return; }
+  if (!cloudUser || !cloudClient) { toast("Sign in to add a dungeon to a campaign"); return; }
+  if (!canEditCampaign(campaignId)) { toast("Choose a campaign where you are the DM"); return; }
+  const data = normalizeMapData(JSON.parse(JSON.stringify(preview.mapData)));
+  const links = campaignCharacters.filter(link => link.campaign_id === campaignId);
+  const mapDraft = { campaign_id: campaignId, data };
+  const partyTokens = tokensForCampaignMap(mapDraft, links);
+  const entrance = data.dungeon?.rooms?.find(room => room.role === "entrance");
+  partyTokens.forEach((token, index) => {
+    token.x = Number(entrance?.x || 1) + 1 + (index % Math.max(1, Number(entrance?.width || 4) - 2));
+    token.y = Number(entrance?.y || 1) + 1 + Math.floor(index / Math.max(1, Number(entrance?.width || 4) - 2));
+    Object.assign(token, clampMapTokenPosition(data, token, token.x, token.y));
+  });
+  data.tokens = [...data.tokens, ...partyTokens];
+  const now = new Date().toISOString();
+  data.session.updatedAt = now;
+  data.encounter.updatedAt = now;
+  const { data: inserted, error } = await cloudClient.from("campaign_maps").insert({
+    campaign_id: campaignId,
+    owner_id: cloudUser.id,
+    name: preview.name,
+    data,
+    updated_at: now
+  }).select("id, campaign_id, owner_id, name, data, updated_at").single();
+  if (error) { reportCampaignError(error, "Could not create dungeon map"); return; }
+  activeCampaignId = campaignId;
+  activeMapId = inserted.id;
+  campaignMaps = [...campaignMaps.filter(map => map.id !== inserted.id), inserted];
+  saveCampaignCache();
+  renderCampaigns();
+  toast(`${preview.name} added with ${data.tokens.length} ready tokens`);
+  setTimeout(() => $(".campaign-map-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+}
+function downloadDungeonWorkshopPack() {
+  const preview = ensureDungeonWorkshopPreview();
+  if (!preview) return;
+  const payload = {
+    format: "DND Beyonder Dungeon Pack",
+    version: 1,
+    name: preview.name,
+    targetCr: preview.targetCr,
+    mapData: preview.mapData
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${String(preview.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "dungeon-pack"}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  toast("Dungeon pack downloaded");
+}
+function mapCombatantFromToken(token) {
+  const character = characterForMapToken(token);
+  if (character) {
+    const stats = derived(character);
+    const maximumHp = stats.hp;
+    return {
+      id: `combat-${token.id}`,
+      tokenId: token.id,
+      name: character.name || token.name || "Hero",
+      side: "ally",
+      role: "character",
+      ac: stats.ac,
+      hp: Math.max(0, Math.min(maximumHp, Number(character.currentHp ?? maximumHp))),
+      maxHp: maximumHp,
+      initiative: null,
+      initiativeBonus: stats.initiative,
+      hidden: false,
+      defeated: false,
+      conditions: [...(character.conditions || [])]
+    };
+  }
+  const quick = token.quickStats || {};
+  const maximumHp = Math.max(1, Number(quick.maxHp || token.maxHp || 1));
+  return {
+    id: `combat-${token.id}`,
+    tokenId: token.id,
+    name: token.name || "Creature",
+    side: token.side === "ally" ? "ally" : "enemy",
+    role: token.role || "creature",
+    ac: Math.max(0, Number(quick.ac || token.ac || 10)),
+    hp: maximumHp,
+    maxHp: maximumHp,
+    initiative: null,
+    initiativeBonus: Number(quick.initiativeBonus || 0),
+    hidden: Boolean(token.hidden),
+    defeated: false,
+    conditions: []
+  };
+}
+function syncMapEncounterCombatants(map, reroll = false) {
+  const data = normalizeMapData(map.data);
+  const prior = new Map(data.encounter.combatants.map(combatant => [combatant.tokenId, combatant]));
+  const combatants = data.tokens.map(token => {
+    const base = mapCombatantFromToken(token);
+    const old = prior.get(token.id);
+    const merged = old ? { ...base, ...old, name: base.name, ac: base.ac, maxHp: base.maxHp, hidden: Boolean(token.hidden) } : base;
+    if (reroll || merged.initiative === null || merged.initiative === undefined) merged.initiative = Math.floor(Math.random() * 20) + 1 + Number(merged.initiativeBonus || 0);
+    merged.hp = Math.max(0, Math.min(merged.maxHp, Number(merged.hp)));
+    merged.defeated = merged.hp <= 0;
+    return merged;
+  }).sort((a, b) => Number(b.initiative || 0) - Number(a.initiative || 0) || Number(b.initiativeBonus || 0) - Number(a.initiativeBonus || 0));
+  data.encounter.combatants = combatants;
+  data.encounter.turnIndex = Math.min(Math.max(0, data.encounter.turnIndex), Math.max(0, combatants.length - 1));
+  map.data = data;
+  return data;
+}
+async function startMapEncounter(mapId, reroll = false) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can start combat"); return; }
+  const latest = await fetchCampaignMap(map.id);
+  if (latest?.data) map.data = normalizeMapData(latest.data);
+  const data = syncMapEncounterCombatants(map, reroll || normalizeMapData(map.data).encounter.status !== "active");
+  if (!data.encounter.combatants.length) { toast("Add party or enemy tokens before starting combat"); return; }
+  data.encounter.status = "active";
+  data.encounter.round = 1;
+  data.encounter.turnIndex = 0;
+  data.encounter.updatedAt = new Date().toISOString();
+  map.data = data;
+  await saveCampaignMap(map, reroll ? "Initiative rerolled" : "Combat started", { preserveTokens: true });
+}
+async function setMapEncounterStatus(mapId, status) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can control combat"); return; }
+  const data = normalizeMapData(map.data);
+  data.encounter.status = ["active", "paused", "ended"].includes(status) ? status : "ready";
+  if (status === "ended") { data.encounter.round = 0; data.encounter.turnIndex = 0; }
+  data.encounter.updatedAt = new Date().toISOString();
+  map.data = data;
+  await saveCampaignMap(map, status === "paused" ? "Combat paused" : status === "active" ? "Combat resumed" : "Combat ended", { preserveTokens: true });
+}
+async function advanceMapEncounter(mapId, direction = 1) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can advance turns"); return; }
+  const data = normalizeMapData(map.data);
+  const count = data.encounter.combatants.length;
+  if (!count || data.encounter.status !== "active") { toast("Start combat first"); return; }
+  const current = data.encounter.turnIndex;
+  if (direction > 0) {
+    data.encounter.turnIndex = (current + 1) % count;
+    if (data.encounter.turnIndex === 0) data.encounter.round += 1;
+  } else {
+    data.encounter.turnIndex = (current - 1 + count) % count;
+    if (current === 0) data.encounter.round = Math.max(1, data.encounter.round - 1);
+  }
+  data.encounter.updatedAt = new Date().toISOString();
+  map.data = data;
+  await saveCampaignMap(map, "", { preserveTokens: true });
+}
+async function adjustMapCombatantHp(mapId, combatantId, delta) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can adjust encounter HP"); return; }
+  const data = normalizeMapData(map.data);
+  const combatant = data.encounter.combatants.find(item => item.id === combatantId);
+  if (!combatant) return;
+  combatant.hp = Math.max(0, Math.min(combatant.maxHp, Number(combatant.hp) + Number(delta || 0)));
+  combatant.defeated = combatant.hp <= 0;
+  const token = data.tokens.find(item => item.id === combatant.tokenId);
+  const character = token ? characterForMapToken(token) : null;
+  if (character) {
+    character.currentHp = combatant.hp;
+    character.updatedAt = Date.now();
+    persistCharacters();
+  }
+  data.encounter.updatedAt = new Date().toISOString();
+  map.data = data;
+  await saveCampaignMap(map, "", { preserveTokens: true });
+}
+async function editMapCombatant(mapId, combatantId, field) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit combatants"); return; }
+  const data = normalizeMapData(map.data);
+  const combatant = data.encounter.combatants.find(item => item.id === combatantId);
+  if (!combatant) return;
+  if (field === "initiative") {
+    const activeId = data.encounter.combatants[data.encounter.turnIndex]?.id;
+    const value = prompt("Initiative total", String(combatant.initiative ?? 0));
+    if (value === null || !Number.isFinite(Number(value))) return;
+    combatant.initiative = Number(value);
+    data.encounter.combatants.sort((a, b) => Number(b.initiative || 0) - Number(a.initiative || 0));
+    data.encounter.turnIndex = Math.max(0, data.encounter.combatants.findIndex(item => item.id === activeId));
+  }
+  if (field === "condition") {
+    const value = prompt("Condition or note (leave blank to clear)", (combatant.conditions || []).join(", "));
+    if (value === null) return;
+    combatant.conditions = String(value).split(",").map(item => item.trim()).filter(Boolean).slice(0, 8);
+    const token = data.tokens.find(item => item.id === combatant.tokenId);
+    const character = token ? characterForMapToken(token) : null;
+    if (character) {
+      character.conditions = [...combatant.conditions];
+      character.updatedAt = Date.now();
+      persistCharacters();
+    }
+  }
+  data.encounter.updatedAt = new Date().toISOString();
+  map.data = data;
+  await saveCampaignMap(map, "Combatant updated", { preserveTokens: true });
+}
+function rollMapCombatant(mapId, combatantId, kind = "attack") {
+  const map = campaignMapById(mapId);
+  const data = normalizeMapData(map?.data);
+  const combatant = data.encounter.combatants.find(item => item.id === combatantId);
+  const token = data.tokens.find(item => item.id === combatant?.tokenId);
+  if (!map || !combatant || !token) return;
+  if (kind === "damage") {
+    const expression = String(token.quickStats?.damage || "1d6");
+    const match = expression.match(/(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
+    if (!match) return;
+    const modifier = match[3] ? Number(match[4] || 0) * (match[3] === "-" ? -1 : 1) : 0;
+    roll(Number(match[2]), Number(match[1]), modifier, `${combatant.name} damage`, "normal");
+    return;
+  }
+  rollOnSheet(`${combatant.name} attack`, Number(token.quickStats?.attackBonus || 0), "normal", { campaignId: map.campaign_id, source: "map" });
+}
 async function updateCampaignMapSettings(mapId, values) {
   const map = campaignMapById(mapId);
   if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit map settings"); return; }
@@ -756,7 +1029,8 @@ async function ensureCampaignMapTokens(mapId) {
   } else {
     map.data = normalizeMapData(map.data);
   }
-  map.data.tokens = tokensForCampaignMap(map, links);
+  const nonCharacterTokens = map.data.tokens.filter(token => token.kind === "monster" || token.kind === "npc" || (!token.characterId && !token.ownerUserId));
+  map.data.tokens = [...nonCharacterTokens, ...tokensForCampaignMap(map, links)];
   await saveCampaignMap(map, "Party tokens added");
 }
 async function moveCampaignMapToken(mapId, tokenId, x, y) {
@@ -874,6 +1148,51 @@ async function addCampaignCustomTile(mapId, values) {
   selectedMapTile = customTile.id;
   selectedMapTool = "paint";
   await saveCampaignMap(map, `${name} added to tiles`, { preserveTokens: true });
+}
+async function addCampaignCreatureToken(mapId, values) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can add creature tokens"); return; }
+  const latest = await fetchCampaignMap(map.id);
+  if (latest?.data) map.data = normalizeMapData(latest.data);
+  const data = normalizeMapData(map.data);
+  const name = String(values.name || "").trim() || "Unknown Creature";
+  const size = Math.min(4, Math.max(1, Number(values.size || 1)));
+  const maximumHp = Math.max(1, Number(values.hp || 10));
+  const token = {
+    id: `monster-${crypto.randomUUID()}`,
+    kind: values.side === "ally" ? "npc" : "monster",
+    side: values.side === "ally" ? "ally" : "enemy",
+    role: String(values.role || "creature").trim() || "creature",
+    name,
+    portrait: "",
+    size,
+    color: String(values.color || "").trim() || tokenColor(name),
+    x: Math.min(data.columns - size, Math.max(0, Number(values.x || 1))),
+    y: Math.min(data.rows - size, Math.max(0, Number(values.y || 1))),
+    hidden: values.hidden === "on",
+    quickStats: {
+      ac: Math.max(0, Number(values.ac || 10)),
+      maxHp: maximumHp,
+      initiativeBonus: Number(values.initiativeBonus || 0),
+      attackBonus: Number(values.attackBonus || 0),
+      saveDc: Math.max(0, Number(values.saveDc || 10)),
+      damage: String(values.damage || "1d6").trim() || "1d6"
+    },
+    sourceNote: "DM-created quick-run profile."
+  };
+  data.tokens.push(token);
+  if (data.encounter.status === "active" || data.encounter.status === "paused") {
+    const activeId = data.encounter.combatants[data.encounter.turnIndex]?.id;
+    const combatant = mapCombatantFromToken(token);
+    combatant.initiative = Math.floor(Math.random() * 20) + 1 + combatant.initiativeBonus;
+    data.encounter.combatants.push(combatant);
+    data.encounter.combatants.sort((a, b) => Number(b.initiative || 0) - Number(a.initiative || 0));
+    data.encounter.turnIndex = Math.max(0, data.encounter.combatants.findIndex(item => item.id === activeId));
+  }
+  map.data = data;
+  selectedMapToken = token.id;
+  selectedMapTool = "token";
+  await saveCampaignMap(map, `${name} added to the map`);
 }
 async function setCampaignMapSession(mapId, state) {
   const map = campaignMapById(mapId);
@@ -5485,6 +5804,132 @@ function campaignPartyCard(character, link, ownerLabel, isDm, campaignId) {
   </article>`;
 }
 
+function dungeonPreviewSvg(preview) {
+  if (!preview?.mapData) return "";
+  const data = preview.mapData;
+  const dungeon = data.dungeon || {};
+  const hazardTile = preview.theme?.hazardTile;
+  const floorRects = data.tiles.map(tile => `<rect x="${Number(tile.x)}" y="${Number(tile.y)}" width="1" height="1" fill="${tile.tileId === hazardTile ? escapeHtml(dungeon.accent || "#8f2f2f") : "#d7c7a9"}"/>`).join("");
+  const roomMarkers = (dungeon.rooms || []).map(room => `<g><circle cx="${Number(room.center?.x || 0) + 0.5}" cy="${Number(room.center?.y || 0) + 0.5}" r="0.85" fill="${room.role === "boss" ? escapeHtml(dungeon.accent || "#8f2f2f") : "#1d2835"}" stroke="#f7e7c8" stroke-width="0.14"/><text x="${Number(room.center?.x || 0) + 0.5}" y="${Number(room.center?.y || 0) + 0.82}" text-anchor="middle" fill="#fff" font-size="0.8" font-family="sans-serif" font-weight="700">${room.index}</text></g>`).join("");
+  return `<svg class="dungeon-preview-map" viewBox="0 0 ${data.columns} ${data.rows}" role="img" aria-label="Generated map preview for ${escapeHtml(preview.name)}">
+    <rect width="${data.columns}" height="${data.rows}" fill="#252321"/>
+    ${floorRects}${roomMarkers}
+  </svg>`;
+}
+function renderDungeonWorkshop() {
+  const target = $("#dungeon-workshop");
+  if (!target) return;
+  const preview = ensureDungeonWorkshopPreview();
+  const library = dungeonLibrary();
+  if (!preview) {
+    target.innerHTML = `<div class="campaign-panel"><h2>CR Challenge dungeon packs</h2><p>Dungeon generator data is unavailable. Refresh the page to reload it.</p></div>`;
+    return;
+  }
+  const dungeon = preview.mapData.dungeon;
+  const dmCampaigns = campaigns.filter(campaign => campaignRole(campaign.id) === "dm" || campaign.owner_id === cloudUser?.id);
+  const selectedCampaign = dmCampaigns.some(campaign => campaign.id === activeCampaignId) ? activeCampaignId : dmCampaigns[0]?.id || "";
+  const boss = dungeon.boss;
+  const monsterCount = preview.mapData.tokens.filter(token => token.kind === "monster").length;
+  const themeOptions = [`<option value="random" ${dungeonWorkshopTheme === "random" ? "selected" : ""}>Surprise me</option>`, ...library.themes.map(theme => `<option value="${escapeHtml(theme.id)}" ${dungeonWorkshopTheme === theme.id ? "selected" : ""}>${escapeHtml(theme.name)}</option>`)].join("");
+  target.innerHTML = `<div class="dungeon-workshop-head">
+      <div><span class="eyebrow">DM MAP PACKS</span><h2>CR Challenge generator</h2><p>Build a connected, editable dungeon with keyed rooms, fog, enemy tokens, boss notes, and a ready initiative roster.</p></div>
+      <span class="dungeon-library-count">${library.themes.length} themes<br><small>${library.crOptions.length} CR tiers</small></span>
+    </div>
+    <div class="dungeon-generator-layout">
+      <form id="dungeon-challenge-form" class="dungeon-generator-controls">
+        <label>Target boss CR<select name="targetCr">${library.crOptions.map(cr => `<option value="${cr}" ${Number(dungeonWorkshopCr) === cr ? "selected" : ""}>CR ${cr}</option>`).join("")}</select></label>
+        <label>Dungeon theme<select name="themeId">${themeOptions}</select></label>
+        <label>Repeatable seed<input name="seed" value="${escapeHtml(dungeon.seed)}" maxlength="48" placeholder="moon-vault"></label>
+        <label class="map-grid-toggle"><input name="gridEnabled" type="checkbox" ${preview.mapData.gridEnabled ? "checked" : ""}><span><strong>Use a 5-foot grid</strong><small>Turn off the visible grid after saving for a freer scene.</small></span></label>
+        <button class="button primary" type="submit">Generate challenge</button>
+        <button class="button ghost" type="button" data-dungeon-reroll>Reroll seed</button>
+        <p class="dungeon-balance-note"><strong>CR note:</strong> this targets the boss profile. Party size, rests, terrain, and the full adventuring day still affect difficulty.</p>
+      </form>
+      <article class="dungeon-pack-preview" style="--dungeon-accent:${escapeHtml(dungeon.accent || "#8f2f2f")}">
+        <div class="dungeon-preview-visual">
+          ${dungeonPreviewSvg(preview)}
+          <span class="dungeon-cr-seal">CR<strong>${preview.targetCr}</strong></span>
+        </div>
+        <div class="dungeon-preview-copy">
+          <span class="eyebrow">${escapeHtml(dungeon.themeName)} &middot; ${escapeHtml(dungeon.tone)}</span>
+          <h3>${escapeHtml(preview.name)}</h3>
+          <p>${escapeHtml(dungeon.hook)}</p>
+          <div class="dungeon-stat-row">
+            <span><small>Rooms</small><strong>${dungeon.rooms.length}</strong></span>
+            <span><small>Enemies</small><strong>${monsterCount}</strong></span>
+            <span><small>Map</small><strong>${preview.mapData.columns}x${preview.mapData.rows}</strong></span>
+          </div>
+          <div class="dungeon-boss-preview">
+            <span class="dungeon-icon">${escapeHtml(dungeon.themeIcon || "DM")}</span>
+            <div><small>Final encounter</small><strong>${escapeHtml(boss.name)}</strong><p>AC ${boss.quickStats.ac} &middot; HP ${boss.quickStats.maxHp} &middot; Attack +${boss.quickStats.attackBonus} &middot; ${escapeHtml(boss.quickStats.damage)}</p></div>
+          </div>
+          <details><summary>Pack contents and creature inspiration</summary>
+            <p><strong>Twist:</strong> ${escapeHtml(dungeon.twist)}</p>
+            <p><strong>Reward:</strong> ${escapeHtml(dungeon.treasure)}</p>
+            <p><strong>Reference shelf:</strong> ${dungeon.referenceCreatures.map(escapeHtml).join(", ")}.</p>
+            <p class="field-hint">Quick profiles and room text are original play aids. Substitute exact stat blocks from sources you own whenever desired.</p>
+          </details>
+          <div class="dungeon-pack-actions">
+            <label>Add to DM campaign<select data-dungeon-campaign ${dmCampaigns.length ? "" : "disabled"}>${dmCampaigns.length ? dmCampaigns.map(campaign => `<option value="${escapeHtml(campaign.id)}" ${campaign.id === selectedCampaign ? "selected" : ""}>${escapeHtml(campaign.name)}</option>`).join("") : `<option>Sign in and create a campaign first</option>`}</select></label>
+            <button class="button primary" type="button" data-dungeon-add ${dmCampaigns.length ? "" : "disabled"}>Add and open map</button>
+            <button class="button ghost" type="button" data-dungeon-download>Download pack JSON</button>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="dungeon-theme-strip" aria-label="Available dungeon themes">${library.themes.map(theme => `<button type="button" class="${dungeonWorkshopTheme === theme.id || dungeon.themeId === theme.id ? "active" : ""}" data-dungeon-theme="${escapeHtml(theme.id)}"><span>${escapeHtml(theme.icon)}</span>${escapeHtml(theme.name)}</button>`).join("")}</div>`;
+}
+function renderMapEncounterTracker(map, data, isDm) {
+  const encounter = data.encounter;
+  const tokenById = new Map(data.tokens.map(token => [token.id, token]));
+  const combatants = encounter.combatants.filter(combatant => isDm || combatant.side === "ally" || !tokenById.get(combatant.tokenId)?.hidden);
+  const active = encounter.status === "active" ? encounter.combatants[encounter.turnIndex] : null;
+  const statusLabel = encounter.status === "active" ? `Round ${encounter.round}` : encounter.status === "paused" ? `Paused at round ${encounter.round}` : encounter.status === "ended" ? "Combat ended" : "Ready to roll";
+  return `<section class="map-encounter-tracker ${encounter.status}">
+    <div class="map-encounter-head">
+      <div><span class="eyebrow">COMBAT TRACKER</span><h4>${escapeHtml(statusLabel)}</h4>${active ? `<p>Current turn: <strong>${escapeHtml(active.name)}</strong></p>` : `<p>${data.tokens.length} map token${data.tokens.length === 1 ? "" : "s"} available.</p>`}</div>
+      ${isDm ? `<div class="map-encounter-actions">
+        ${encounter.status === "active" ? `<button type="button" data-map-combat-turn="-1" data-map-id="${escapeHtml(map.id)}">Previous</button><button type="button" class="primary" data-map-combat-turn="1" data-map-id="${escapeHtml(map.id)}">Next turn</button><button type="button" data-map-combat-status="paused" data-map-id="${escapeHtml(map.id)}">Pause</button>` : encounter.status === "paused" ? `<button type="button" class="primary" data-map-combat-status="active" data-map-id="${escapeHtml(map.id)}">Resume</button>` : `<button type="button" class="primary" data-map-combat-start data-map-id="${escapeHtml(map.id)}">Roll initiative</button>`}
+        <button type="button" data-map-combat-reroll data-map-id="${escapeHtml(map.id)}">Reroll all</button>
+        ${encounter.status === "active" || encounter.status === "paused" ? `<button type="button" data-map-combat-status="ended" data-map-id="${escapeHtml(map.id)}">End combat</button>` : ""}
+      </div>` : ""}
+    </div>
+    <ol class="map-initiative-list">
+      ${combatants.length ? combatants.map(combatant => {
+        const current = active?.id === combatant.id;
+        const token = tokenById.get(combatant.tokenId);
+        const quick = token?.quickStats || {};
+        const hpPercent = Math.max(0, Math.min(100, Math.round((combatant.hp / combatant.maxHp) * 100)));
+        return `<li class="${current ? "current" : ""} ${combatant.defeated ? "defeated" : ""}">
+          <button type="button" class="initiative-score" ${isDm ? `data-map-combat-edit="initiative" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}"` : "disabled"} title="${isDm ? "Edit initiative" : "Initiative"}">${combatant.initiative ?? "-"}</button>
+          <div class="initiative-creature"><strong>${escapeHtml(combatant.name)}</strong><small>${combatant.side === "ally" ? "Hero" : escapeHtml(combatant.role || "Enemy")} &middot; AC ${combatant.ac}${quick.saveDc ? ` &middot; DC ${quick.saveDc}` : ""}</small><span class="combat-hp-bar"><i style="width:${hpPercent}%"></i></span>${combatant.conditions?.length ? `<em>${combatant.conditions.map(escapeHtml).join(", ")}</em>` : ""}</div>
+          <div class="initiative-hp"><strong>${combatant.hp}/${combatant.maxHp}</strong>${isDm ? `<span><button type="button" data-map-combat-hp="-5" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}">-5</button><button type="button" data-map-combat-hp="-1" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}">-1</button><button type="button" data-map-combat-hp="1" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}">+1</button><button type="button" data-map-combat-hp="5" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}">+5</button></span>` : ""}</div>
+          ${isDm ? `<div class="initiative-tools"><button type="button" data-map-combat-edit="condition" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}">Condition</button>${quick.attackBonus !== undefined ? `<button type="button" data-map-combat-roll="attack" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}">Attack</button><button type="button" data-map-combat-roll="damage" data-map-id="${escapeHtml(map.id)}" data-combatant-id="${escapeHtml(combatant.id)}">Damage</button>` : ""}</div>` : ""}
+        </li>`;
+      }).join("") : `<li class="empty-log"><p>${isDm ? "Add party tokens or create a CR Challenge dungeon, then roll initiative." : "The DM has not started an encounter."}</p></li>`}
+    </ol>
+  </section>`;
+}
+function renderDungeonRunSheet(map, data, isDm) {
+  const dungeon = data.dungeon;
+  const tracker = renderMapEncounterTracker(map, data, isDm);
+  if (!dungeon) return tracker;
+  const dungeonRooms = Array.isArray(dungeon.rooms) ? dungeon.rooms : [];
+  const dungeonEncounters = Array.isArray(dungeon.encounters) ? dungeon.encounters : [];
+  const roomRows = isDm ? dungeonRooms.map(room => {
+    const encounter = dungeonEncounters.find(item => item.id === room.encounterId);
+    return `<details class="dungeon-room-key ${room.role}"><summary><span>${room.index}</span><div><strong>${escapeHtml(room.name)}</strong><small>${escapeHtml(room.role)}</small></div></summary><p class="read-aloud">${escapeHtml(room.readAloud)}</p>${room.hazard ? `<p><strong>Hazard:</strong> ${escapeHtml(room.hazard)}</p>` : ""}${room.secret ? `<p><strong>Secret:</strong> ${escapeHtml(room.secret)}</p>` : ""}${room.reward ? `<p><strong>Reward:</strong> ${escapeHtml(room.reward)}</p>` : ""}${encounter ? `<p><strong>Encounter:</strong> ${encounter.creatures.map(creature => escapeHtml(creature.name)).join(", ")}</p><p><strong>Tactics:</strong> ${escapeHtml(encounter.tactics)}</p>` : ""}</details>`;
+  }).join("") : "";
+  return `<section class="dungeon-run-sheet" style="--dungeon-accent:${escapeHtml(dungeon.accent || "#8f2f2f")}">
+    <div class="dungeon-run-brief">
+      <span class="dungeon-icon">${escapeHtml(dungeon.themeIcon || "DM")}</span>
+      <div><span class="eyebrow">CR ${Number(dungeon.targetCr)} &middot; ${escapeHtml(dungeon.themeName)}</span><h4>${escapeHtml(dungeon.title)}</h4><p>${escapeHtml(isDm ? dungeon.hook : dungeon.summary)}</p></div>
+      <div class="dungeon-run-boss"><small>${isDm ? "Boss" : "Threat"}</small><strong>${escapeHtml(isDm ? dungeon.boss.name : dungeon.themeName)}</strong>${isDm ? `<span>AC ${dungeon.boss.quickStats.ac} &middot; HP ${dungeon.boss.quickStats.maxHp} &middot; +${dungeon.boss.quickStats.attackBonus} to hit</span>` : ""}</div>
+    </div>
+    ${isDm ? `<div class="dungeon-run-grid"><div><h5>Adventure notes</h5><p><strong>Twist:</strong> ${escapeHtml(dungeon.twist)}</p><p><strong>Hazard motif:</strong> ${escapeHtml(dungeon.hazard)}</p><p><strong>Treasure:</strong> ${escapeHtml(dungeon.treasure)}</p><p><strong>Creature shelf:</strong> ${(Array.isArray(dungeon.referenceCreatures) ? dungeon.referenceCreatures : []).map(escapeHtml).join(", ")}.</p></div><div class="dungeon-room-list"><h5>Room key</h5>${roomRows}</div></div>` : ""}
+  </section>${tracker}`;
+}
+
 function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const maps = mapsForCampaign(campaign.id);
   const activeMap = activeMapForCampaign(campaign.id);
@@ -5525,6 +5970,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const playerCanSeeMap = isDm || sessionState === "live";
   const allTiles = [...BUILT_IN_MAP_TILES, ...data.customTiles];
   if (!allTiles.some(tile => tile.id === selectedMapTile)) selectedMapTile = allTiles[0]?.id || "stone-floor";
+  const tileStyles = new Map(allTiles.map(tile => [tile.id, mapTileStyle(activeMap, tile.id)]));
+  const boardBaseStyle = data.dungeon?.wallTile ? tileStyles.get(data.dungeon.wallTile) || mapTileStyle(activeMap, data.dungeon.wallTile) : "";
   const sessionLabel = sessionState === "live" ? "Live" : sessionState === "paused" ? "Paused" : sessionState === "ended" ? "Ended" : "Draft";
   const sessionControls = isDm ? `<div class="map-session-controls">
     <span class="tag">${sessionLabel}</span>
@@ -5565,7 +6012,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const paintedTiles = data.tiles.map(tile => {
     const x = Math.min(data.columns - 1, Math.max(0, Number(tile.x || 0)));
     const y = Math.min(data.rows - 1, Math.max(0, Number(tile.y || 0)));
-    return `<div class="map-cell-tile" style="--x:${x};--y:${y};${mapTileStyle(activeMap, tile.tileId)}"></div>`;
+    return `<div class="map-cell-tile" style="--x:${x};--y:${y};${tileStyles.get(tile.tileId) || mapTileStyle(activeMap, tile.tileId)}"></div>`;
   }).join("");
   const tokenCards = data.tokens.filter(token => mapTokenVisibleForRole(data, token, isDm)).map(token => {
     const character = characterForMapToken(token);
@@ -5578,7 +6025,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       <button type="button" class="map-token-pick" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"}>
         <span class="map-token-avatar" style="--token:${escapeHtml(token.color)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</span>
         <strong>${escapeHtml(label)}</strong>
-        <small>${isDm ? hiddenText : canMove ? data.gridEnabled ? "Click, then choose a square" : "Click, then choose a spot" : "DM controlled"}</small>
+        <small>${token.kind === "monster" ? `${escapeHtml(token.role || "Enemy")} &middot; ${hiddenText}` : isDm ? hiddenText : canMove ? data.gridEnabled ? "Click, then choose a square" : "Click, then choose a spot" : "DM controlled"}</small>
       </button>
       <div class="map-token-size-row">
         <small>Token size: ${size}x${size}</small>
@@ -5601,7 +6048,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     const label = character?.name || token.name || "Token";
     const portrait = character?.portrait || token.portrait || "";
     const size = mapTokenSize(token);
-    return `<button type="button" class="map-token ${selectedMapToken === token.id ? "selected" : ""} ${token.hidden ? "hidden-token" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--size:${size};--token:${escapeHtml(token.color || tokenColor(label))}" title="${escapeHtml(`${label} (${size}x${size})`)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</button>`;
+    return `<button type="button" class="map-token ${token.kind === "monster" ? "enemy-token" : ""} ${selectedMapToken === token.id ? "selected" : ""} ${token.hidden ? "hidden-token" : ""}" data-map-token-select="${escapeHtml(token.id)}" data-map-id="${escapeHtml(activeMap.id)}" ${canMove ? "" : "disabled"} style="--x:${Number(token.x)};--y:${Number(token.y)};--size:${size};--token:${escapeHtml(token.color || tokenColor(label))}" title="${escapeHtml(`${label} (${size}x${size})`)}">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</button>`;
   }).join("");
   const fogCells = data.fog.enabled ? data.fog.cells.map(cell => {
     const [x, y] = String(cell).split(",").map(Number);
@@ -5629,6 +6076,27 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       </div>
     </form>
   </details>` : "";
+  const creatureForm = isDm ? `<details class="map-creature-create">
+    <summary>Add creature or NPC token</summary>
+    <form data-campaign-creature-create="${escapeHtml(activeMap.id)}">
+      <div class="map-creature-form-grid">
+        <label>Token name<input name="name" required maxlength="60" placeholder="Vampire Spawn"></label>
+        <label>Role<input name="role" maxlength="30" placeholder="Skirmisher"></label>
+        <label>Side<select name="side"><option value="enemy">Enemy</option><option value="ally">Ally / NPC</option></select></label>
+        <label>Size<select name="size"><option value="1">1x1 Medium</option><option value="2">2x2 Large</option><option value="3">3x3 Huge</option><option value="4">4x4 Gargantuan</option></select></label>
+        <label>AC<input name="ac" type="number" min="0" max="40" value="14"></label>
+        <label>HP<input name="hp" type="number" min="1" max="2000" value="30"></label>
+        <label>Initiative bonus<input name="initiativeBonus" type="number" min="-10" max="20" value="2"></label>
+        <label>Attack bonus<input name="attackBonus" type="number" min="-10" max="30" value="5"></label>
+        <label>Save DC<input name="saveDc" type="number" min="0" max="40" value="13"></label>
+        <label>Damage<input name="damage" maxlength="24" value="2d6 + 3"></label>
+        <label>Token color<input name="color" type="color" value="#8f2f2f"></label>
+        <label class="map-grid-toggle"><input name="hidden" type="checkbox" checked><span><strong>Start hidden</strong><small>Players will not see the token until you reveal it.</small></span></label>
+      </div>
+      <button class="button primary small" type="submit">Place creature</button>
+    </form>
+  </details>` : "";
+  const runSheet = playerCanSeeMap ? renderDungeonRunSheet(activeMap, data, isDm) : "";
   return `<section class="campaign-panel campaign-map-panel campaign-map-room">
     <div class="campaign-map-hero">
       <div>
@@ -5649,14 +6117,16 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     ${sessionControls}
     ${createForm}
     ${settingsForm}
+    ${creatureForm}
     ${fogControls}
     ${toolButtons}
     ${isDm ? tilePalette : ""}
+    ${runSheet}
     ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace">
       <aside class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens to place characters on this map." : "No tokens have been placed yet."}</p>`}</aside>
       <div class="battle-map-shell">
-        <div class="battle-map-board ${data.gridEnabled ? "" : "gridless"}" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;">
-          ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : `<div class="battle-map-empty">No map art uploaded</div>`}
+        <div class="battle-map-board ${data.gridEnabled ? "" : "gridless"}" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${data.gridSize}px;${boardBaseStyle}">
+          ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : data.tiles.length ? "" : `<div class="battle-map-empty">No map art uploaded</div>`}
           <div class="battle-map-tiles">${paintedTiles}</div>
           ${data.gridEnabled ? `<div class="battle-map-grid" aria-hidden="true"></div>` : ""}
           <div class="battle-map-fog ${isDm ? "dm-fog" : ""}" aria-hidden="true">${fogCells}</div>
@@ -5775,6 +6245,7 @@ function renderCampaigns() {
   warning?.classList.toggle("hidden", signedIn);
   $("#create-campaign-form")?.classList.toggle("hidden", !signedIn);
   $("#join-campaign-form")?.classList.toggle("hidden", !signedIn);
+  renderDungeonWorkshop();
   if (!signedIn) {
     $("#campaign-list").innerHTML = `<p>Sign in to see campaigns.</p>`;
     $("#campaign-detail").innerHTML = `<div class="empty-state"><span>⚑</span><h2>No account connected</h2><p>Campaigns need cloud sync so DMs and players can share sheets.</p></div>`;
@@ -7762,6 +8233,32 @@ function initEvents() {
       }
       return;
     }
+    const dungeonThemeButton = event.target.closest("[data-dungeon-theme]");
+    if (dungeonThemeButton) {
+      dungeonWorkshopTheme = dungeonThemeButton.dataset.dungeonTheme || "random";
+      generateDungeonWorkshopPreview({
+        targetCr: dungeonWorkshopCr,
+        themeId: dungeonWorkshopTheme,
+        seed: dungeonWorkshopPreview?.mapData?.dungeon?.seed || nextDungeonSeed(),
+        gridEnabled: dungeonWorkshopPreview?.mapData?.gridEnabled !== false
+      });
+      return;
+    }
+    if (event.target.closest("[data-dungeon-reroll]")) {
+      generateDungeonWorkshopPreview({ targetCr: dungeonWorkshopCr, themeId: dungeonWorkshopTheme, seed: nextDungeonSeed(), gridEnabled: dungeonWorkshopPreview?.mapData?.gridEnabled !== false });
+      return;
+    }
+    const dungeonAdd = event.target.closest("[data-dungeon-add]");
+    if (dungeonAdd) {
+      if (dungeonAdd.disabled) return;
+      const campaignId = $("[data-dungeon-campaign]")?.value || "";
+      createDungeonCampaignMap(campaignId);
+      return;
+    }
+    if (event.target.closest("[data-dungeon-download]")) {
+      downloadDungeonWorkshopPack();
+      return;
+    }
     const campaignSelect = event.target.closest("[data-campaign-select]");
     if (campaignSelect) {
       activeCampaignId = campaignSelect.dataset.campaignSelect;
@@ -7877,6 +8374,41 @@ function initEvents() {
     if (mapSession) {
       if (mapSession.disabled) return;
       setCampaignMapSession(mapSession.dataset.mapId, mapSession.dataset.mapSession);
+      return;
+    }
+    const combatStart = event.target.closest("[data-map-combat-start]");
+    if (combatStart) {
+      startMapEncounter(combatStart.dataset.mapId);
+      return;
+    }
+    const combatReroll = event.target.closest("[data-map-combat-reroll]");
+    if (combatReroll) {
+      startMapEncounter(combatReroll.dataset.mapId, true);
+      return;
+    }
+    const combatStatus = event.target.closest("[data-map-combat-status]");
+    if (combatStatus) {
+      setMapEncounterStatus(combatStatus.dataset.mapId, combatStatus.dataset.mapCombatStatus);
+      return;
+    }
+    const combatTurn = event.target.closest("[data-map-combat-turn]");
+    if (combatTurn) {
+      advanceMapEncounter(combatTurn.dataset.mapId, Number(combatTurn.dataset.mapCombatTurn || 1));
+      return;
+    }
+    const combatHp = event.target.closest("[data-map-combat-hp]");
+    if (combatHp) {
+      adjustMapCombatantHp(combatHp.dataset.mapId, combatHp.dataset.combatantId, Number(combatHp.dataset.mapCombatHp || 0));
+      return;
+    }
+    const combatEdit = event.target.closest("[data-map-combat-edit]");
+    if (combatEdit) {
+      editMapCombatant(combatEdit.dataset.mapId, combatEdit.dataset.combatantId, combatEdit.dataset.mapCombatEdit);
+      return;
+    }
+    const combatRoll = event.target.closest("[data-map-combat-roll]");
+    if (combatRoll) {
+      rollMapCombatant(combatRoll.dataset.mapId, combatRoll.dataset.combatantId, combatRoll.dataset.mapCombatRoll);
       return;
     }
     const mapFog = event.target.closest("[data-map-fog]");
@@ -8188,6 +8720,14 @@ function initEvents() {
     renderItemTemplates();
     toast(`${name} added to inventory`);
   });
+  $("#dungeon-workshop")?.addEventListener("submit", event => {
+    const formEl = event.target.closest("#dungeon-challenge-form");
+    if (!formEl) return;
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(formEl));
+    values.gridEnabled = Boolean(formEl.elements.gridEnabled?.checked);
+    generateDungeonWorkshopPreview(values);
+  });
   $("#create-campaign-form")?.addEventListener("submit", event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -8205,14 +8745,16 @@ function initEvents() {
     const mapCreate = event.target.closest("[data-campaign-map-create]");
     const mapSettings = event.target.closest("[data-campaign-map-settings]");
     const tileCreate = event.target.closest("[data-campaign-tile-create]");
-    if (!formEl && !mapCreate && !mapSettings && !tileCreate) return;
+    const creatureCreate = event.target.closest("[data-campaign-creature-create]");
+    if (!formEl && !mapCreate && !mapSettings && !tileCreate && !creatureCreate) return;
     event.preventDefault();
-    const targetForm = formEl || mapCreate || mapSettings || tileCreate;
+    const targetForm = formEl || mapCreate || mapSettings || tileCreate || creatureCreate;
     const values = Object.fromEntries(new FormData(targetForm));
     if (formEl) shareCharacterWithCampaign(formEl.dataset.campaignShare, values.characterId);
     if (mapCreate) createCampaignMap(mapCreate.dataset.campaignMapCreate, values);
     if (mapSettings) updateCampaignMapSettings(mapSettings.dataset.campaignMapSettings, values);
     if (tileCreate) addCampaignCustomTile(tileCreate.dataset.campaignTileCreate, values);
+    if (creatureCreate) addCampaignCreatureToken(creatureCreate.dataset.campaignCreatureCreate, values);
   });
   $("#campaign-detail")?.addEventListener("change", event => {
     const tileUpload = event.target.closest("[data-campaign-tile-upload]");
