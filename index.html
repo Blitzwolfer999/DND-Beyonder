@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=spell-state-1">
+  <link rel="stylesheet" href="styles.css?v=pregen-variety-1">
 </head>
 <body>
   <div class="app-shell">
@@ -253,6 +253,7 @@
                 </div>
                 <div class="field-stack">
                   <label>Character name<input name="name" required maxlength="40" placeholder="e.g. Lyra Moonfall"></label>
+                  <button type="button" class="button ghost small" id="standard-name-generator">Generate a species name</button>
                   <label>Player name<input name="player" maxlength="40" placeholder="Your name"></label>
                   <label>Pronouns<input name="pronouns" maxlength="30" placeholder="e.g. she / her"></label>
                 </div>
@@ -618,6 +619,7 @@
   <script src="spell-metadata.js?v=spell-mechanics-1"></script>
   <script src="content-summaries.js?v=obojima-2"></script>
   <script src="subclass-features.js?v=obojima-2"></script>
+  <script src="name-data.js?v=names-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js?v=supabase-ifvyg-3"></script>
   <script>
@@ -626,6 +628,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=spell-state-1"></script>
+  <script src="app.js?v=pregen-variety-3"></script>
 </body>
 </html>

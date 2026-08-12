@@ -207,6 +207,17 @@ const QUICK_SPELL_COUNTS = {
   Paladin: { 0: 0, 1: 2 }, Ranger: { 0: 0, 1: 2 }, Sorcerer: { 0: 4, 1: 2 },
   Warlock: { 0: 2, 1: 2 }, Wizard: { 0: 3, 1: 6 }, Artificer: { 0: 2, 1: 3 }
 };
+const WIZARD_SPELL_PREFERENCES = {
+  1: ["Shield", "Magic Missile", "Mage Armor", "Detect Magic", "Find Familiar", "Sleep", "Absorb Elements", "Feather Fall"],
+  2: ["Misty Step", "Web", "Invisibility", "Mirror Image", "Hold Person", "Suggestion"],
+  3: ["Counterspell", "Fireball", "Dispel Magic", "Fly", "Haste", "Hypnotic Pattern"],
+  4: ["Polymorph", "Dimension Door", "Greater Invisibility", "Banishment", "Arcane Eye"],
+  5: ["Wall of Force", "Teleportation Circle", "Hold Monster", "Cone of Cold", "Scrying"],
+  6: ["Disintegrate", "Globe of Invulnerability", "Contingency", "Mass Suggestion"],
+  7: ["Teleport", "Forcecage", "Plane Shift", "Simulacrum"],
+  8: ["Maze", "Mind Blank", "Clone", "Demiplane"],
+  9: ["Wish", "Foresight", "Meteor Swarm", "Time Stop"]
+};
 const PREMADE_HEROES = [
   { key: "ironward", name: "Branna Ironward", className: "Fighter", species: "Dwarf", background: "Soldier", role: "Defender", pitch: "A shield-bearing veteran who keeps danger pointed at herself.", level: 1 },
   { key: "brightbrook", name: "Mira Brightbrook", className: "Cleric", species: "Human", background: "Acolyte", role: "Healer", pitch: "A steady divine caster with healing, blessings, and sturdy armor.", level: 1, subclass: "Life Domain" },
@@ -215,12 +226,6 @@ const PREMADE_HEROES = [
   { key: "embersong", name: "Kael Embersong", className: "Bard", species: "Tiefling", background: "Entertainer", role: "Face", pitch: "A silver-tongued performer with support magic and social skills.", level: 1 },
   { key: "ashtrail", name: "Rowan Ashtrail", className: "Ranger", species: "Human", background: "Outlander", role: "Wilderness striker", pitch: "A tracker with ranged combat, survival skills, and practical magic.", level: 1 }
 ];
-const QUICK_NAMES = {
-  Aasimar: ["Seraphine", "Valen", "Astra"], Dragonborn: ["Arjhan", "Kava", "Rhogar"], Dwarf: ["Brynja", "Dain", "Torga"],
-  Elf: ["Aelar", "Lia", "Thalion"], Gnome: ["Fizzwick", "Nissa", "Wrenn"], Goliath: ["Korr", "Nalla", "Vimak"],
-  Halfling: ["Bree", "Milo", "Roscoe"], Human: ["Elara", "Garrick", "Rowan"], Orc: ["Dren", "Morga", "Thokk"],
-  Tiefling: ["Ash", "Hope", "Mordai"]
-};
 const CONDITIONS = ["Blinded", "Charmed", "Deafened", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Exhaustion"];
 const STORAGE_KEY = "arcanaForge.characters.v1";
 const PROFILE_KEY = "arcanaForge.profile.v1";
@@ -236,7 +241,7 @@ const RECOVERY_SNAPSHOT_KEY = "arcanaForge.recoverySnapshots.v1";
 const MAX_RECOVERY_SNAPSHOTS = 5;
 const BACKUP_META_KEY = "arcanaForge.cloudBackupMeta.v1";
 const THEME_KEY = "dndb.theme";
-const QUICK_BUILD_VERSION = 5;
+const QUICK_BUILD_VERSION = 6;
 const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
 const BUILDER_STEP_COUNT = 7;
 
@@ -261,6 +266,8 @@ let quickStep = 1;
 let quickClass = "Fighter";
 let prebuildClass = "Fighter";
 let prebuildSubclass = "";
+let lastGeneratedName = "";
+const recentGeneratedNames = new Map();
 let drawing = false;
 let drawEnabled = false;
 let portraitData = "";
@@ -2747,21 +2754,58 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
   return additions;
 }
 
-function balancedLeveledSpellChoices(lists, allowed, limit, preferredNames = []) {
+function prebuildSpellSlotCounts(className, level, rulesEdition, subclass = "") {
+  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return THIRD_CASTER_SLOTS[level - 1] || [];
+  if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(className)) return FULL_CASTER_SLOTS[level - 1] || [];
+  if (["Paladin", "Ranger"].includes(className)) return (rulesEdition === "2024" ? HALF_CASTER_SLOTS_2024 : HALF_CASTER_SLOTS_2014)[level - 1] || [];
+  if (className === "Artificer") return HALF_CASTER_SLOTS_2024[level - 1] || [];
+  return [];
+}
+
+function spellLevelTargets(levels, limit, slotCounts = []) {
+  const targets = new Map(levels.map(level => [level, 0]));
+  if (!levels.length || limit <= 0) return targets;
+  const ordered = levels.slice().sort((a, b) => a - b);
+  ordered.forEach(level => {
+    if ([...targets.values()].reduce((sum, value) => sum + value, 0) < limit) targets.set(level, 1);
+  });
+  const weighted = [];
+  const maximumSlots = Math.max(1, ...ordered.map(level => Number(slotCounts[level - 1] || 0)));
+  for (let round = 0; round < maximumSlots; round += 1) {
+    ordered.forEach(level => {
+      if (Number(slotCounts[level - 1] || 1) > round) weighted.push(level);
+    });
+  }
+  const cycle = weighted.length ? weighted : ordered;
+  let index = 0;
+  while ([...targets.values()].reduce((sum, value) => sum + value, 0) < limit) {
+    const level = cycle[index % cycle.length];
+    targets.set(level, Number(targets.get(level) || 0) + 1);
+    index += 1;
+  }
+  return targets;
+}
+
+function balancedLeveledSpellChoices(lists, allowed, limit, preferredNames = [], slotCounts = []) {
   const byLevel = new Map();
   for (let spellLevel = 1; spellLevel <= allowed; spellLevel += 1) {
     const spells = (lists[spellLevel] || []).map(name => ({ name, level: spellLevel }));
     if (spells.length) byLevel.set(spellLevel, spells);
   }
-  const levels = [...byLevel.keys()].sort((a, b) => b - a);
+  const levels = [...byLevel.keys()].sort((a, b) => a - b);
+  const targets = spellLevelTargets(levels, limit, slotCounts);
   const selected = [];
   const add = spell => {
     if (!spell || selected.length >= limit || selected.some(item => item.name === spell.name)) return false;
     selected.push(spell);
     return true;
   };
-  levels.forEach(level => add(byLevel.get(level)[0]));
-  preferredNames.forEach(name => add(levels.flatMap(level => byLevel.get(level)).find(spell => spell.name === name)));
+  levels.forEach(level => {
+    const preferred = preferredNames.map(name => byLevel.get(level).find(spell => spell.name === name)).filter(Boolean);
+    [...preferred, ...byLevel.get(level)].forEach(spell => {
+      if (selected.filter(item => item.level === level).length < Number(targets.get(level) || 0)) add(spell);
+    });
+  });
   while (selected.length < limit) {
     let added = false;
     for (const level of levels) {
@@ -2770,6 +2814,44 @@ function balancedLeveledSpellChoices(lists, allowed, limit, preferredNames = [])
       if (selected.length >= limit) break;
     }
     if (!added) break;
+  }
+  return selected;
+}
+
+function wizardSpellChoices(lists, level, rulesEdition, profileSpells = []) {
+  const selected = [];
+  const counts = new Map();
+  const addAtLevel = spellLevel => {
+    const names = lists[spellLevel] || [];
+    const preferences = [...profileSpells, ...(WIZARD_SPELL_PREFERENCES[spellLevel] || [])];
+    const name = [...preferences, ...names].find(candidate => names.includes(candidate) && !selected.some(spell => spell.name === candidate));
+    if (!name) return false;
+    selected.push({ name, level: spellLevel });
+    counts.set(spellLevel, Number(counts.get(spellLevel) || 0) + 1);
+    return true;
+  };
+  let previousMaximum = 0;
+  for (let classLevel = 1; classLevel <= level; classLevel += 1) {
+    const maximum = maxSpellLevel("Wizard", classLevel, rulesEdition);
+    const amount = classLevel === 1 ? 6 : 2;
+    for (let choice = 0; choice < amount; choice += 1) {
+      let targetLevel = 1;
+      if (classLevel > 1 && maximum > previousMaximum) {
+        targetLevel = maximum;
+      } else {
+        const slots = FULL_CASTER_SLOTS[classLevel - 1] || [];
+        targetLevel = Array.from({ length: maximum }, (_, index) => index + 1)
+          .sort((a, b) => {
+            const aRatio = Number(counts.get(a) || 0) / Math.max(1, Number(slots[a - 1] || 0));
+            const bRatio = Number(counts.get(b) || 0) / Math.max(1, Number(slots[b - 1] || 0));
+            return aRatio - bRatio || a - b;
+          })[0] || 1;
+      }
+      if (!addAtLevel(targetLevel)) {
+        Array.from({ length: maximum }, (_, index) => index + 1).some(addAtLevel);
+      }
+    }
+    previousMaximum = maximum;
   }
   return selected;
 }
@@ -2791,25 +2873,11 @@ function prebuildSpellChoices(className, level, subclass, characterData, rulesEd
     .slice(0, Math.max(0, cantripLimit))
     .forEach(name => addUnique(name, 0));
   if (className === "Wizard") {
-    const addWizardSpells = (classLevel, amount) => {
-      const maximum = maxSpellLevel(className, classLevel, rulesEdition, subclass);
-      const pool = Object.entries(lists)
-        .filter(([spellLevel]) => Number(spellLevel) > 0 && Number(spellLevel) <= maximum)
-        .flatMap(([spellLevel, names]) => names.map(name => ({ name, level: Number(spellLevel) })))
-        .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
-      const preferred = (profile.spells || []).map(name => pool.find(spell => spell.name === name)).filter(Boolean);
-      for (const spell of [...preferred, ...pool]) {
-        if (amount <= 0) break;
-        const before = chosen.length;
-        addUnique(spell.name, spell.level);
-        if (chosen.length > before) amount -= 1;
-      }
-    };
-    addWizardSpells(1, 6);
-    for (let classLevel = 2; classLevel <= level; classLevel += 1) addWizardSpells(classLevel, 2);
+    wizardSpellChoices(lists, level, rulesEdition, profile.spells || []).forEach(spell => addUnique(spell.name, spell.level));
     return chosen;
   }
-  balancedLeveledSpellChoices(lists, allowed, Math.max(0, spellLimit), profile.spells || [])
+  const slots = className === "Warlock" ? [] : prebuildSpellSlotCounts(className, level, rulesEdition, subclass);
+  balancedLeveledSpellChoices(lists, allowed, Math.max(0, spellLimit), profile.spells || [], slots)
     .forEach(spell => addUnique(spell.name, spell.level));
   if (className === "Warlock") {
     [[11, 6], [13, 7], [15, 8], [17, 9]].forEach(([unlock, spellLevel]) => {
@@ -2880,7 +2948,7 @@ function buildPrebuiltCharacter(preview = false) {
   const spellSeed = { className, level, edition, subclass, ...finalAbilities };
   const character = {
     id: preview ? "prebuild-preview" : crypto.randomUUID(),
-    name: $("#prebuild-name")?.value.trim() || generateQuickName(false),
+    name: $("#prebuild-name")?.value.trim() || (preview ? "Preview Hero" : generateQuickName(false, species)),
     player: $("#prebuild-player")?.value.trim() || "",
     pronouns: "",
     level,
@@ -3034,7 +3102,7 @@ function buildQuickCharacter(preview = false, overrides = null) {
   const feats = origin.originFeat ? [origin.originFeat] : [];
   const character = {
     id: preview ? "quick-preview" : crypto.randomUUID(),
-    name: overrides?.name || $("#quick-name")?.value.trim() || generateQuickName(false),
+    name: overrides?.name || $("#quick-name")?.value.trim() || (preview ? "Preview Hero" : generateQuickName(false, species)),
     player: overrides?.player || $("#quick-player")?.value.trim() || "",
     pronouns: "",
     level,
@@ -3189,7 +3257,7 @@ function initializePrebuildBuilder() {
   prebuildClass = RULES.classes[prebuildClass] ? prebuildClass : "Fighter";
   prebuildSubclass = defaultSubclassFor(prebuildClass, Number($("#prebuild-level")?.value || 3));
   renderPrebuildOptions(true);
-  if (!$("#prebuild-name")?.value) $("#prebuild-name").value = generateQuickName(false);
+  if (!$("#prebuild-name")?.value) $("#prebuild-name").value = generateQuickName(false, $("#prebuild-species")?.value);
   renderPrebuildSummary();
 }
 
@@ -3220,10 +3288,36 @@ function showCreationMethod(method) {
   if (standard) setStep(currentStep);
 }
 
-function generateQuickName(writeToField = true) {
-  const species = $("#quick-species")?.value || "Human";
-  const pool = QUICK_NAMES[species] || ["Arden", "Kael", "Mira", "Rowan", "Tamsin", "Vale"];
-  const name = pool[Math.floor(Math.random() * pool.length)];
+function generatedNameStyle(species) {
+  const direct = typeof SPECIES_NAME_STYLE !== "undefined" ? SPECIES_NAME_STYLE[species] : "";
+  if (direct) return direct;
+  if (/elf/i.test(species)) return "Elf";
+  if (/dwarf|duergar/i.test(species)) return "Dwarf";
+  if (/gnome/i.test(species)) return "Gnome";
+  if (/orc/i.test(species)) return "Orc";
+  if (/genasi|triton|sea|locathah/i.test(species)) return "Aquatic";
+  return "Fantasy";
+}
+
+function randomNamePart(parts) {
+  return parts?.length ? parts[Math.floor(Math.random() * parts.length)] : "";
+}
+
+function generateQuickName(writeToField = true, speciesOverride = "") {
+  const species = speciesOverride || $("#quick-species")?.value || $("#prebuild-species")?.value || "Human";
+  const styles = typeof FANTASY_NAME_STYLES !== "undefined" ? FANTASY_NAME_STYLES : {};
+  const style = styles[generatedNameStyle(species)] || styles.Fantasy || { given: ["Arden"], family: ["Vale"] };
+  const recent = recentGeneratedNames.get(species) || [];
+  let name = "";
+  for (let attempt = 0; attempt < 30 && (!name || name === lastGeneratedName || recent.includes(name)); attempt += 1) {
+    const given = style.given?.length
+      ? randomNamePart(style.given)
+      : `${randomNamePart(style.starts)}${randomNamePart(style.ends)}`;
+    const family = randomNamePart(style.family);
+    name = `${given}${family ? ` ${family}` : ""}`.trim();
+  }
+  lastGeneratedName = name;
+  recentGeneratedNames.set(species, [name, ...recent.filter(entry => entry !== name)].slice(0, 12));
   if (writeToField && $("#quick-name")) $("#quick-name").value = name;
   return name;
 }
@@ -3340,7 +3434,7 @@ function surprisePrebuild() {
   renderPrebuildOptions(true);
   const speciesOptions = [...($("#prebuild-species")?.options || [])];
   if (speciesOptions.length) $("#prebuild-species").value = speciesOptions[Math.floor(Math.random() * speciesOptions.length)].value;
-  if ($("#prebuild-name")) $("#prebuild-name").value = generateQuickName(false);
+  if ($("#prebuild-name")) $("#prebuild-name").value = generateQuickName(false, $("#prebuild-species")?.value);
   if ($("#prebuild-player")) $("#prebuild-player").value = "";
   renderPrebuildSummary();
 }
@@ -4039,16 +4133,22 @@ function preparedEntryClass(entry, character) {
   return typeof entry === "string" ? primaryClassName(character) : entry.className || primaryClassName(character);
 }
 
-function defaultWizardPreparedNames(book, limit) {
+function defaultWizardPreparedNames(book, limit, level = 1) {
   const selected = [];
   const add = name => {
     if (name && selected.length < limit && !selected.includes(name)) selected.push(name);
   };
   const leveled = (book || []).filter(spell => Number(spell.level || 0) > 0);
-  const levels = [...new Set(leveled.map(spell => Number(spell.level)))].sort((a, b) => b - a);
-  levels.forEach(level => add(leveled.filter(spell => Number(spell.level) === level).sort((a, b) => a.name.localeCompare(b.name))[0]?.name));
-  (QUICK_BUILD_PROFILES.Wizard.spells || []).forEach(add);
-  leveled.slice().sort((a, b) => Number(b.level) - Number(a.level) || a.name.localeCompare(b.name)).forEach(spell => add(spell.name));
+  const levels = [...new Set(leveled.map(spell => Number(spell.level)))].sort((a, b) => a - b);
+  const targets = spellLevelTargets(levels, limit, FULL_CASTER_SLOTS[Math.max(1, Number(level || 1)) - 1] || []);
+  levels.forEach(spellLevel => {
+    const pool = leveled.filter(spell => Number(spell.level) === spellLevel);
+    const preferences = [...(QUICK_BUILD_PROFILES.Wizard.spells || []), ...(WIZARD_SPELL_PREFERENCES[spellLevel] || [])];
+    [...preferences.map(name => pool.find(spell => spell.name === name)).filter(Boolean), ...pool].forEach(spell => {
+      if (selected.filter(name => pool.some(candidate => candidate.name === name)).length < Number(targets.get(spellLevel) || 0)) add(spell.name);
+    });
+  });
+  leveled.slice().sort((a, b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name)).forEach(spell => add(spell.name));
   return selected;
 }
 
@@ -4060,7 +4160,7 @@ function preparedNamesForClass(character, className) {
   if ((character.preparedSpellClasses || []).includes(className)) return new Set(stored);
   const entry = classEntry(character, className) || { level: character.level || 1 };
   const limit = preparedSpellLimitFor(className, entry.level, character.edition, classSubclassName(character, className), withClassContext(character, className, entry.level));
-  return new Set(defaultWizardPreparedNames(classSpellRecords(character, className, true), limit));
+  return new Set(defaultWizardPreparedNames(classSpellRecords(character, className, true), limit, entry.level));
 }
 
 function reconcilePreparedSpells(character, previous = null) {
@@ -5923,7 +6023,10 @@ function rebuildGeneratedSpells(characterId) {
 }
 
 function renderSpellPreparationControls(character, spellcastingClasses, canControl) {
-  const repairIssue = (character.quickBuilt || character.prebuilt || character.premade) ? generatedSpellIssue(character) : "";
+  const generatedCharacter = Boolean(character.quickBuilt || character.prebuilt || character.premade);
+  const repairIssue = generatedCharacter ? generatedSpellIssue(character) : "";
+  const hasGeneratorUpgrade = generatedCharacter && Number(character.quickBuildVersion || 0) < QUICK_BUILD_VERSION;
+  const repairMessage = repairIssue || (hasGeneratorUpgrade ? "A newer slot-aware spell setup is available for this generated character." : "");
   return `<div class="spell-preparation-grid">${spellcastingClasses.map(entry => {
     const policy = spellPreparationPolicy(character.edition, entry.name, classSubclassName(character, entry.name));
     const limit = preparedSpellLimitFor(entry.name, entry.level, character.edition, classSubclassName(character, entry.name), withClassContext(character, entry.name, entry.level));
@@ -5931,7 +6034,7 @@ function renderSpellPreparationControls(character, spellcastingClasses, canContr
     const bookCount = policy === "spellbook" ? classSpellRecords(character, entry.name, true).length : 0;
     const noun = policy === "level" && character.edition === "2014" ? "known" : "prepared";
     return `<article class="spell-preparation-card"><div><small>${escapeHtml(entry.name)} SPELLS</small><strong>${prepared}/${limit} ${noun}</strong>${bookCount ? `<span>${bookCount} in spellbook</span>` : ""}<p>${escapeHtml(spellPreparationRuleText(character, entry.name))}</p></div>${canControl ? `<button type="button" class="button small ghost" data-manage-spells="${escapeHtml(entry.name)}" data-character="${character.id}">Manage spells</button>` : `<span class="spell-change-lock">View only</span>`}</article>`;
-  }).join("")}</div>${canControl && repairIssue ? `<div class="spell-repair-callout"><div><strong>Generated spell setup needs repair</strong><p>${escapeHtml(repairIssue)} Rebuild it using the character's current class levels.</p></div><button type="button" class="button primary small" data-repair-generated-spells="${character.id}">Repair generated spells</button></div>` : ""}`;
+  }).join("")}</div>${canControl && repairMessage ? `<div class="spell-repair-callout"><div><strong>Generated spell setup update</strong><p>${escapeHtml(repairMessage)} Rebuild it using the character's current class levels.</p></div><button type="button" class="button primary small" data-repair-generated-spells="${character.id}">Rebuild generated spells</button></div>` : ""}`;
 }
 
 function spellsReadyToCast(character, allSpells) {
@@ -7131,7 +7234,7 @@ function initEvents() {
       return;
     }
     if (event.target.closest("#prebuild-name-generator")) {
-      if ($("#prebuild-name")) $("#prebuild-name").value = generateQuickName(false);
+      if ($("#prebuild-name")) $("#prebuild-name").value = generateQuickName(false, $("#prebuild-species")?.value);
       renderPrebuildSummary();
       return;
     }
@@ -7806,6 +7909,10 @@ function initEvents() {
   $("#quick-back").addEventListener("click", () => setQuickStep(quickStep - 1));
   $("#quick-surprise").addEventListener("click", surpriseQuickBuild);
   $("#quick-name-generator").addEventListener("click", () => { generateQuickName(true); renderQuickSummary(); });
+  $("#standard-name-generator")?.addEventListener("click", () => {
+    if (form.elements.name) form.elements.name.value = generateQuickName(false, $("#species-select")?.value || "Human");
+    updatePreview();
+  });
   $("#quick-create").addEventListener("click", createQuickCharacter);
   $("#quick-species").addEventListener("change", renderQuickOrigin);
   $("#quick-background").addEventListener("change", renderQuickOrigin);
