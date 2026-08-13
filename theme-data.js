@@ -158,5 +158,190 @@ const CHARACTER_THEMES = [
       { className: "Bard", subclasses: { 2014: "College of Swords", 2024: "College of Swords" }, title: "Blade Bard", playstyle: "A stylish weapon user with inspiration, flourishes, social expertise, and full spellcasting.", abilities: ["CHA", "DEX", "CON", "WIS", "INT", "STR"], skills: ["Performance", "Persuasion", "Acrobatics", "Insight", "Deception"], feats: ["War Caster", "Defensive Duelist", "Mobile", "Inspiring Leader"], fightingStyle: "Dueling", equipment: ["Studded Leather Armor", "Rapier", "Dagger", "Backpack"], spells: ["Vicious Mockery", "Minor Illusion", "Healing Word", "Dissonant Whispers", "Heroism", "Thunderwave", "Mirror Image", "Suggestion", "Hypnotic Pattern", "Greater Invisibility"] },
       { className: "Fighter", subclasses: { 2014: "Battle Master", 2024: "Battle Master" }, title: "Master Fencer", playstyle: "A dependable martial duelist using maneuvers, reactions, and superior positioning.", abilities: ["DEX", "CON", "CHA", "WIS", "STR", "INT"], skills: ["Acrobatics", "Persuasion", "Insight", "Perception"], feats: ["Defensive Duelist", "Piercer", "Mobile", "Martial Adept"], fightingStyle: "Dueling", masteries: ["Rapier", "Dagger", "Light Crossbow"], equipment: ["Studded Leather Armor", "Rapier", "Light Crossbow", "Dagger", "Backpack"] }
     ]
+  },
+  {
+    id: "berserker",
+    name: "Berserker",
+    icon: "RAGE",
+    description: "Fly into a furious rage and overwhelm enemies with raw, relentless physical power.",
+    aliases: ["barbarian", "rage", "frenzy", "brute", "viking", "savage", "warrior"],
+    branches: [
+      { className: "Barbarian", subclasses: { 2014: "Path of the Berserker", 2024: "Path of the Berserker" }, title: "Frenzied Berserker", playstyle: "A front-line juggernaut who trades caution for overwhelming melee damage.", abilities: ["STR", "CON", "DEX", "WIS", "CHA", "INT"], skills: ["Athletics", "Intimidation", "Perception", "Survival"], feats: ["Great Weapon Master", "Tough", "Sentinel", "Crusher"], masteries: ["Greataxe", "Handaxe"], equipment: ["Greataxe", "Handaxe", "Handaxe", "Explorer's Pack"] },
+      { className: "Barbarian", subclasses: { 2014: "Path of the Zealot", 2024: "Path of the Zealot" }, title: "Battle Zealot", playstyle: "A divinely furious warrior who keeps fighting long past the point others would fall.", abilities: ["STR", "CON", "CHA", "WIS", "DEX", "INT"], skills: ["Athletics", "Religion", "Intimidation", "Perception"], feats: ["Great Weapon Master", "Tough", "Sentinel", "Resilient"], masteries: ["Greatsword", "Javelin"], equipment: ["Greatsword", "Javelin", "Javelin", "Explorer's Pack"] },
+      { className: "Barbarian", subclasses: { 2014: "Path of Wild Magic", 2024: "Path of Wild Magic" }, title: "Wild Rager", playstyle: "A chaotic bruiser whose rage triggers unpredictable surges of primal magic.", abilities: ["STR", "CON", "DEX", "WIS", "INT", "CHA"], skills: ["Athletics", "Nature", "Arcana", "Perception"], feats: ["Tough", "Great Weapon Master", "Crusher", "Alert"], masteries: ["Greataxe", "Handaxe"] },
+      { className: "Fighter", subclasses: { 2014: "Champion", 2024: "Champion" }, title: "Relentless Champion", playstyle: "A simple, sturdy weapon master with reliable critical hits and staying power.", abilities: ["STR", "CON", "DEX", "WIS", "CHA", "INT"], skills: ["Athletics", "Intimidation", "Perception", "Survival"], feats: ["Great Weapon Master", "Tough", "Sentinel", "Piercer"], fightingStyle: "Great Weapon Fighting", masteries: ["Greatsword", "Handaxe"], equipment: ["Chain Mail", "Greatsword", "Handaxe", "Explorer's Pack"] }
+    ]
+  },
+  {
+    id: "warlord",
+    name: "Warlord",
+    icon: "CMD",
+    description: "Lead from the front, rally your allies, and turn a party into a coordinated war machine.",
+    aliases: ["commander", "leader", "tactician", "captain", "general", "marshal"],
+    branches: [
+      { className: "Fighter", subclasses: { 2014: "Purple Dragon Knight", 2024: "Purple Dragon Knight" }, title: "Banneret Commander", playstyle: "An inspiring armored leader who bolsters allies and holds the line.", abilities: ["STR", "CHA", "CON", "WIS", "DEX", "INT"], skills: ["Athletics", "Persuasion", "Intimidation", "Insight"], feats: ["Sentinel", "Inspiring Leader", "Heavy Armor Master", "Tough"], fightingStyle: "Defense", masteries: ["Longsword", "Javelin"], equipment: ["Chain Mail", "Longsword", "Shield", "Javelin", "Explorer's Pack"] },
+      { className: "Bard", subclasses: { 2014: "College of Valor", 2024: "College of Valor" }, title: "Valor Skald", playstyle: "A battlefield bard who fights up front and empowers allies with song.", abilities: ["CHA", "CON", "STR", "DEX", "WIS", "INT"], skills: ["Performance", "Persuasion", "Athletics", "Intimidation"], feats: ["War Caster", "Inspiring Leader", "Resilient", "Tough"], fightingStyle: "Dueling", spells: ["Vicious Mockery", "Blade Ward", "Healing Word", "Heroism", "Thunderwave", "Aid", "Shatter", "Enhance Ability", "Haste", "Dispel Magic"] },
+      { className: "Paladin", subclasses: { 2014: "Oath of the Crown", 2024: "Oath of the Crown" }, title: "Crown Knight", playstyle: "A steadfast guardian sworn to protect the group and rally the fallen.", abilities: ["STR", "CHA", "CON", "WIS", "DEX", "INT"], skills: ["Persuasion", "Athletics", "Insight", "Intimidation"], feats: ["Sentinel", "Inspiring Leader", "Heavy Armor Master", "War Caster"], fightingStyle: "Protection", masteries: ["Longsword", "Javelin"], spells: ["Bless", "Command", "Shield of Faith", "Aid", "Warding Bond", "Aura of Vitality", "Spirit Guardians", "Aura of Purity"] },
+      { className: "Cleric", subclasses: { 2014: "War Domain", 2024: "War Domain" }, title: "War Priest", playstyle: "An armored divine caster who blends weapon attacks with battlefield miracles.", abilities: ["WIS", "STR", "CON", "DEX", "CHA", "INT"], skills: ["Religion", "Athletics", "Intimidation", "Insight"], feats: ["War Caster", "Resilient", "Inspiring Leader", "Sentinel"], spells: ["Guidance", "Sacred Flame", "Bless", "Shield of Faith", "Spiritual Weapon", "Aid", "Spirit Guardians", "Crusader's Mantle", "Guardian of Faith"] }
+    ]
+  },
+  {
+    id: "samurai",
+    name: "Samurai",
+    icon: "SAM",
+    description: "Master the blade with unbreakable discipline, honor, and perfectly timed resolve.",
+    aliases: ["ronin", "bushido", "honorable", "kensei", "blademaster", "swordmaster"],
+    branches: [
+      { className: "Fighter", subclasses: { 2014: "Samurai", 2024: "Samurai" }, title: "Sword Saint", playstyle: "A disciplined duelist with unbreakable resolve and precise, decisive strikes.", abilities: ["DEX", "CON", "WIS", "STR", "CHA", "INT"], skills: ["Athletics", "History", "Insight", "Perception"], feats: ["Alert", "Piercer", "Resilient", "Sentinel"], fightingStyle: "Dueling", masteries: ["Longsword", "Longbow"], equipment: ["Half Plate", "Longsword", "Longbow", "Explorer's Pack"] },
+      { className: "Monk", subclasses: { 2014: "Way of the Kensei", 2024: "Way of the Kensei" }, title: "Kensei", playstyle: "A weapon-focused martial artist who treats blade and bow as extensions of ki.", abilities: ["DEX", "WIS", "CON", "STR", "INT", "CHA"], skills: ["Acrobatics", "History", "Insight", "Athletics"], feats: ["Alert", "Mobile", "Piercer", "Resilient"], masteries: ["Longsword", "Shortbow"] },
+      { className: "Paladin", subclasses: { 2014: "Oath of Conquest", 2024: "Oath of Conquest" }, title: "Iron Oathbound", playstyle: "A dominating armored warrior who breaks enemy morale through fear and force.", abilities: ["STR", "CHA", "CON", "WIS", "DEX", "INT"], skills: ["Athletics", "Intimidation", "Insight", "History"], feats: ["Sentinel", "Great Weapon Master", "Heavy Armor Master", "War Caster"], fightingStyle: "Defense", masteries: ["Longsword", "Javelin"], spells: ["Command", "Armor of Agathys", "Wrathful Smite", "Hold Person", "Spiritual Weapon", "Fear", "Bestow Curse", "Dominate Person"] }
+    ]
+  },
+  {
+    id: "illusionist",
+    name: "Illusionist",
+    icon: "ILL",
+    description: "Bend perception itself—weave decoys, invisibility, and mind-fooling phantasms.",
+    aliases: ["illusion", "trickster", "mirage", "deceiver", "phantasm", "mirror"],
+    branches: [
+      { className: "Wizard", subclasses: { 2014: "School of Illusion", 2024: "School of Illusion" }, title: "Master Illusionist", playstyle: "A cunning caster who bends perception, creating decoys, cover, and confusion.", abilities: ["INT", "DEX", "CON", "WIS", "CHA", "STR"], skills: ["Arcana", "Investigation", "Deception", "Perception"], feats: ["War Caster", "Fey Touched", "Alert", "Resilient"], spells: ["Minor Illusion", "Prestidigitation", "Silent Image", "Disguise Self", "Mirror Image", "Invisibility", "Phantasmal Force", "Hypnotic Pattern", "Major Image", "Greater Invisibility"] },
+      { className: "Bard", subclasses: { 2014: "College of Glamour", 2024: "College of Glamour" }, title: "Glamour Weaver", playstyle: "A dazzling performer who charms crowds and beguiles enemies with fey splendor.", abilities: ["CHA", "DEX", "CON", "WIS", "INT", "STR"], skills: ["Deception", "Performance", "Persuasion", "Insight"], feats: ["War Caster", "Fey Touched", "Inspiring Leader", "Resilient"], spells: ["Vicious Mockery", "Minor Illusion", "Charm Person", "Disguise Self", "Mirror Image", "Suggestion", "Major Image", "Hypnotic Pattern", "Greater Invisibility"] },
+      { className: "Warlock", subclasses: { 2014: "The Archfey", 2024: "The Archfey" }, title: "Archfey Trickster", playstyle: "An occult caster wielding beguiling fey magic, teleportation, and illusions.", abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Deception", "Arcana", "Persuasion", "Insight"], feats: ["War Caster", "Fey Touched", "Spell Sniper", "Resilient"], spells: ["Eldritch Blast", "Minor Illusion", "Faerie Fire", "Sleep", "Misty Step", "Phantasmal Force", "Blink", "Hypnotic Pattern", "Greater Invisibility"] }
+    ]
+  },
+  {
+    id: "enchanter",
+    name: "Enchanter",
+    icon: "CHRM",
+    description: "Win with words and willpower—charm, command, and dominate the minds of others.",
+    aliases: ["charmer", "manipulator", "mesmer", "diplomat", "face", "mind control"],
+    branches: [
+      { className: "Wizard", subclasses: { 2014: "School of Enchantment", 2024: "School of Enchantment" }, title: "Enchanter", playstyle: "A subtle caster who dominates minds, charms foes, and rewrites memories.", abilities: ["INT", "CHA", "CON", "WIS", "DEX", "STR"], skills: ["Arcana", "Persuasion", "Deception", "Insight"], feats: ["War Caster", "Fey Touched", "Telepathic", "Resilient"], spells: ["Friends", "Mind Sliver", "Charm Person", "Tasha's Hideous Laughter", "Hold Person", "Suggestion", "Hypnotic Pattern", "Confusion", "Dominate Person"] },
+      { className: "Bard", subclasses: { 2014: "College of Eloquence", 2024: "College of Eloquence" }, title: "Silver Tongue", playstyle: "The ultimate face: unbeatable persuasion, flawless deception, and control magic.", abilities: ["CHA", "CON", "INT", "DEX", "WIS", "STR"], skills: ["Persuasion", "Deception", "Insight", "Performance"], feats: ["Inspiring Leader", "War Caster", "Skill Expert", "Fey Touched"], spells: ["Vicious Mockery", "Friends", "Charm Person", "Heroism", "Suggestion", "Enthrall", "Hypnotic Pattern", "Confusion", "Dominate Person"] },
+      { className: "Rogue", subclasses: { 2014: "Mastermind", 2024: "Mastermind" }, title: "Mastermind", playstyle: "A manipulative operative who controls conversations and pulls every string.", abilities: ["CHA", "DEX", "INT", "WIS", "CON", "STR"], skills: ["Deception", "Persuasion", "Insight", "Investigation", "Sleight of Hand"], feats: ["Skill Expert", "Alert", "Fey Touched", "Inspiring Leader"], masteries: ["Rapier", "Shortbow"], equipment: ["Leather Armor", "Rapier", "Shortbow", "Dagger", "Explorer's Pack"] }
+    ]
+  },
+  {
+    id: "storm-caller",
+    name: "Storm Caller",
+    icon: "STRM",
+    description: "Summon thunder, lightning, wind, and rain to devastate the battlefield.",
+    aliases: ["storm", "thunder", "lightning", "tempest", "weather", "gale"],
+    branches: [
+      { className: "Sorcerer", subclasses: { 2014: "Storm Sorcery", 2024: "Storm Sorcery" }, title: "Storm Sorcerer", playstyle: "A mobile blaster who rides the wind and calls down thunder and lightning.", abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Arcana", "Acrobatics", "Persuasion", "Nature"], feats: ["Elemental Adept", "War Caster", "Spell Sniper", "Resilient"], spells: ["Shocking Grasp", "Booming Blade", "Thunderwave", "Gust of Wind", "Shatter", "Call Lightning", "Sleet Storm", "Lightning Bolt", "Ice Storm", "Chain Lightning"] },
+      { className: "Cleric", subclasses: { 2014: "Tempest Domain", 2024: "Tempest Domain" }, title: "Tempest Priest", playstyle: "A divine stormbringer who maximizes lightning and thunder and knocks foes prone.", abilities: ["WIS", "CON", "STR", "DEX", "CHA", "INT"], skills: ["Nature", "Religion", "Insight", "Athletics"], feats: ["War Caster", "Elemental Adept", "Resilient", "Sentinel"], spells: ["Guidance", "Thunderclap", "Fog Cloud", "Thunderwave", "Gust of Wind", "Shatter", "Call Lightning", "Sleet Storm", "Ice Storm"] },
+      { className: "Barbarian", subclasses: { 2014: "Path of the Storm Herald", 2024: "Path of the Storm Herald" }, title: "Storm Herald", playstyle: "A raging warrior wreathed in a primal aura of storm, desert, or tundra.", abilities: ["STR", "CON", "DEX", "WIS", "CHA", "INT"], skills: ["Athletics", "Nature", "Survival", "Perception"], feats: ["Tough", "Great Weapon Master", "Elemental Adept", "Sentinel"], masteries: ["Greataxe", "Javelin"], equipment: ["Greataxe", "Javelin", "Javelin", "Explorer's Pack"] },
+      { className: "Druid", subclasses: { 2014: "Circle of the Land", 2024: "Circle of the Land" }, title: "Storm Druid", playstyle: "A primal caster who commands weather, lightning, and the raw power of the sky.", abilities: ["WIS", "CON", "DEX", "INT", "CHA", "STR"], skills: ["Nature", "Perception", "Survival", "Arcana"], feats: ["War Caster", "Elemental Adept", "Resilient", "Mobile"], spells: ["Thunderclap", "Produce Flame", "Fog Cloud", "Gust of Wind", "Call Lightning", "Sleet Storm", "Ice Storm", "Control Water"] }
+    ]
+  },
+  {
+    id: "tide-caller",
+    name: "Tide Caller",
+    icon: "TIDE",
+    description: "Command the ocean's depths—cold, currents, mist, and the crushing weight of the sea.",
+    aliases: ["sea", "ocean", "water", "tide", "sailor", "aquatic", "mariner"],
+    branches: [
+      { className: "Warlock", subclasses: { 2014: "The Fathomless", 2024: "The Fathomless" }, title: "Fathomless Caller", playstyle: "An occult caster bound to the deep, wielding cold, tentacles, and crushing tides.", abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Nature", "Arcana", "Athletics", "Perception"], feats: ["War Caster", "Elemental Adept", "Resilient", "Spell Sniper"], spells: ["Eldritch Blast", "Ray of Frost", "Armor of Agathys", "Create or Destroy Water", "Misty Step", "Gust of Wind", "Sleet Storm", "Cone of Cold", "Evard's Black Tentacles"] },
+      { className: "Druid", subclasses: { 2014: "Circle of the Land", 2024: "Circle of the Land" }, title: "Coast Warden", playstyle: "A primal caster of the shoreline commanding water, mist, and sea life.", abilities: ["WIS", "CON", "DEX", "INT", "CHA", "STR"], skills: ["Nature", "Perception", "Survival", "Athletics"], feats: ["War Caster", "Resilient", "Mobile", "Elemental Adept"], spells: ["Shape Water", "Produce Flame", "Fog Cloud", "Create or Destroy Water", "Water Walk", "Tidal Wave", "Control Water", "Watery Sphere"] },
+      { className: "Paladin", subclasses: { 2014: "Oath of the Open Sea", 2024: "Oath of the Open Sea" }, title: "Sea Reaver", playstyle: "A free-spirited armored warrior who fights with the fury and freedom of the sea.", abilities: ["STR", "CHA", "CON", "WIS", "DEX", "INT"], skills: ["Athletics", "Perception", "Intimidation", "Survival"], feats: ["Sentinel", "Great Weapon Master", "Tough", "War Caster"], fightingStyle: "Dueling", masteries: ["Rapier", "Javelin"], spells: ["Command", "Compelled Duel", "Create or Destroy Water", "Misty Step", "Water Walk", "Freedom of Movement", "Wind Wall"] }
+    ]
+  },
+  {
+    id: "star-seer",
+    name: "Star Seer",
+    icon: "STAR",
+    description: "Draw power from the night sky—constellations, moonlight, and cosmic prophecy.",
+    aliases: ["stars", "cosmic", "astral", "celestial", "moon", "oracle", "seer"],
+    branches: [
+      { className: "Druid", subclasses: { 2014: "Circle of Stars", 2024: "Circle of Stars" }, title: "Starry Sage", playstyle: "A primal seer who channels constellations to heal, guide, and strike from afar.", abilities: ["WIS", "CON", "INT", "DEX", "CHA", "STR"], skills: ["Nature", "Insight", "Perception", "Arcana"], feats: ["War Caster", "Resilient", "Fey Touched", "Mobile"], spells: ["Guidance", "Produce Flame", "Faerie Fire", "Moonbeam", "Call Lightning", "Sleet Storm", "Sunbeam"] },
+      { className: "Cleric", subclasses: { 2014: "Twilight Domain", 2024: "Twilight Domain" }, title: "Twilight Sentinel", playstyle: "A guardian of the night sky granting darkvision, temporary hit points, and calm.", abilities: ["WIS", "CON", "STR", "DEX", "CHA", "INT"], skills: ["Religion", "Insight", "Perception", "Survival"], feats: ["War Caster", "Resilient", "Inspiring Leader", "Tough"], spells: ["Guidance", "Light", "Bless", "Faerie Fire", "Moonbeam", "Aid", "Spirit Guardians", "Aura of Vitality", "Circle of Power"] },
+      { className: "Warlock", subclasses: { 2014: "The Celestial", 2024: "The Celestial" }, title: "Celestial Star-Caller", playstyle: "An occult healer channeling radiant starlight to mend allies and burn foes.", abilities: ["CHA", "CON", "WIS", "DEX", "INT", "STR"], skills: ["Religion", "Arcana", "Insight", "Persuasion"], feats: ["War Caster", "Fey Touched", "Inspiring Leader", "Resilient"], spells: ["Eldritch Blast", "Sacred Flame", "Guiding Bolt", "Cure Wounds", "Lesser Restoration", "Daylight", "Guardian of Faith", "Flame Strike"] },
+      { className: "Sorcerer", subclasses: { 2014: "Lunar Sorcery", 2024: "Lunar Sorcery" }, title: "Moonlit Sorcerer", playstyle: "A charismatic caster shifting between lunar phases for varied magical power.", abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Arcana", "Insight", "Nature", "Persuasion"], feats: ["War Caster", "Metamagic Adept", "Resilient", "Fey Touched"], spells: ["Light", "Ray of Frost", "Faerie Fire", "Moonbeam", "Sleet Storm", "Fireball", "Cone of Cold", "Sunbeam"] }
+    ]
+  },
+  {
+    id: "chronomancer",
+    name: "Reality Mage",
+    icon: "TIME",
+    description: "Warp time, gravity, and fate itself—slow enemies, seize destiny, and rewrite the odds.",
+    aliases: ["time", "chronomancer", "gravity", "fate", "order", "warp", "reality"],
+    branches: [
+      { className: "Wizard", subclasses: { 2014: "Chronurgy Magic", 2024: "Chronurgy Magic" }, title: "Chronurgist", playstyle: "A scholar of time who slows enemies, seizes fate, and bends probability.", abilities: ["INT", "CON", "DEX", "WIS", "CHA", "STR"], skills: ["Arcana", "History", "Investigation", "Insight"], feats: ["War Caster", "Resilient", "Alert", "Fey Touched"], spells: ["Mage Hand", "Message", "Magic Missile", "Shield", "Misty Step", "Blink", "Haste", "Slow", "Counterspell", "Bigby's Hand"] },
+      { className: "Wizard", subclasses: { 2014: "Graviturgy Magic", 2024: "Graviturgy Magic" }, title: "Graviturgist", playstyle: "A manipulator of gravity who crushes, flings, and immobilizes foes.", abilities: ["INT", "CON", "DEX", "WIS", "CHA", "STR"], skills: ["Arcana", "Investigation", "History", "Perception"], feats: ["War Caster", "Resilient", "Spell Sniper", "Alert"], spells: ["Mage Hand", "Ray of Frost", "Magic Missile", "Shield", "Levitate", "Misty Step", "Fly", "Slow", "Wall of Force", "Bigby's Hand"] },
+      { className: "Sorcerer", subclasses: { 2014: "Clockwork Soul", 2024: "Clockwork Soul" }, title: "Clockwork Adept", playstyle: "A caster of cosmic order who tames chaos, wards allies, and restores fate.", abilities: ["CHA", "CON", "INT", "WIS", "DEX", "STR"], skills: ["Arcana", "Insight", "History", "Persuasion"], feats: ["War Caster", "Metamagic Adept", "Resilient", "Fey Touched"], spells: ["Guidance", "Mage Hand", "Shield", "Protection from Evil and Good", "Aid", "Lesser Restoration", "Counterspell", "Dispel Magic", "Freedom of Movement"] }
+    ]
+  },
+  {
+    id: "gunslinger",
+    name: "Gunslinger",
+    icon: "GUN",
+    description: "Master firearms and precision ranged combat with calm nerves and a fast trigger.",
+    aliases: ["gun", "firearm", "gunslinger", "musketeer", "sharpshooter", "cowboy"],
+    branches: [
+      { className: "Fighter", subclasses: { 2014: "Gunslinger", 2024: "Gunslinger" }, title: "Deadeye Gunslinger", playstyle: "A ranged specialist who wields firearms with lethal, calculated precision.", abilities: ["DEX", "CON", "WIS", "STR", "INT", "CHA"], skills: ["Perception", "Investigation", "Sleight of Hand", "Athletics"], feats: ["Sharpshooter", "Alert", "Piercer", "Skill Expert"], fightingStyle: "Archery", masteries: ["Light Crossbow", "Rapier", "Dagger"], equipment: ["Studded Leather Armor", "Light Crossbow", "Rapier", "Dagger", "Explorer's Pack"] },
+      { className: "Artificer", subclasses: { 2014: "Artillerist", 2024: "Artillerist" }, title: "Arcane Gunner", playstyle: "An inventor who pairs spellwork with a deployable cannon and eldritch shots.", abilities: ["INT", "DEX", "CON", "WIS", "CHA", "STR"], skills: ["Arcana", "Investigation", "Perception", "Sleight of Hand"], feats: ["Sharpshooter", "Spell Sniper", "War Caster", "Skill Expert"], spells: ["Fire Bolt", "Ray of Frost", "Thunderwave", "Shield", "Scorching Ray", "Shatter", "Fireball", "Wall of Fire"], equipment: ["Studded Leather Armor", "Light Crossbow", "Dagger", "Thieves' Tools", "Explorer's Pack"] },
+      { className: "Rogue", subclasses: { 2014: "Scout", 2024: "Scout" }, title: "Outrider", playstyle: "A mobile skirmisher who scouts ahead and picks off enemies from range.", abilities: ["DEX", "WIS", "CON", "INT", "STR", "CHA"], skills: ["Stealth", "Survival", "Perception", "Nature", "Acrobatics"], feats: ["Sharpshooter", "Alert", "Mobile", "Skulker"], masteries: ["Shortbow", "Dagger"], equipment: ["Leather Armor", "Shortbow", "Rapier", "Dagger", "Thieves' Tools", "Explorer's Pack"] }
+    ]
+  },
+  {
+    id: "bulwark",
+    name: "Bulwark",
+    icon: "WALL",
+    description: "Become an immovable wall—soak damage, lock down enemies, and shield your allies.",
+    aliases: ["tank", "defender", "guardian", "bulwark", "protector", "shield"],
+    branches: [
+      { className: "Fighter", subclasses: { 2014: "Cavalier", 2024: "Cavalier" }, title: "Steadfast Cavalier", playstyle: "An immovable protector who guards allies and punishes foes for ignoring them.", abilities: ["STR", "CON", "WIS", "DEX", "CHA", "INT"], skills: ["Athletics", "Animal Handling", "Perception", "Insight"], feats: ["Sentinel", "Heavy Armor Master", "Tough", "Alert"], fightingStyle: "Protection", masteries: ["Longsword", "Javelin"], equipment: ["Chain Mail", "Longsword", "Shield", "Javelin", "Explorer's Pack"] },
+      { className: "Barbarian", subclasses: { 2014: "Path of the Ancestral Guardian", 2024: "Path of the Ancestral Guardian" }, title: "Ancestral Guardian", playstyle: "A spirit-warded defender whose ancestors shield allies from harm.", abilities: ["STR", "CON", "WIS", "DEX", "CHA", "INT"], skills: ["Athletics", "Intimidation", "Perception", "Survival"], feats: ["Sentinel", "Tough", "Great Weapon Master", "Alert"], masteries: ["Greatsword", "Handaxe"], equipment: ["Greatsword", "Handaxe", "Handaxe", "Explorer's Pack"] },
+      { className: "Paladin", subclasses: { 2014: "Oath of Redemption", 2024: "Oath of Redemption" }, title: "Redeemer", playstyle: "A defensive paladin who shields the party and ends fights without needless bloodshed.", abilities: ["STR", "CHA", "CON", "WIS", "DEX", "INT"], skills: ["Persuasion", "Insight", "Athletics", "Religion"], feats: ["Sentinel", "War Caster", "Inspiring Leader", "Heavy Armor Master"], fightingStyle: "Protection", masteries: ["Longsword", "Javelin"], spells: ["Bless", "Sanctuary", "Shield of Faith", "Warding Bond", "Aid", "Aura of Vitality", "Counterspell", "Wall of Force"] }
+    ]
+  },
+  {
+    id: "feral",
+    name: "Feral Shapeshifter",
+    icon: "FANG",
+    description: "Embrace the beast within—claws, fangs, and monstrous transformations in the heat of battle.",
+    aliases: ["werewolf", "lycan", "feral", "beast", "shapeshifter", "monstrous"],
+    branches: [
+      { className: "Barbarian", subclasses: { 2014: "Path of the Beast", 2024: "Path of the Beast" }, title: "Beast Barbarian", playstyle: "A savage warrior who grows natural weapons—claws, tail, and bite—mid-rage.", abilities: ["STR", "CON", "DEX", "WIS", "CHA", "INT"], skills: ["Athletics", "Intimidation", "Survival", "Perception"], feats: ["Tough", "Great Weapon Master", "Crusher", "Alert"], masteries: ["Greataxe", "Handaxe"], equipment: ["Hide Armor", "Greataxe", "Handaxe", "Explorer's Pack"] },
+      { className: "Blood Hunter", subclasses: { 2014: "Order of the Lycan", 2024: "Order of the Lycan" }, title: "Lycan Blood Hunter", playstyle: "A cursed hunter who unleashes a controlled bestial transformation in battle.", abilities: ["STR", "CON", "DEX", "WIS", "INT", "CHA"], skills: ["Survival", "Perception", "Intimidation", "Athletics"], feats: ["Tough", "Great Weapon Master", "Alert", "Resilient"], fightingStyle: "Great Weapon Fighting", equipment: ["Studded Leather Armor", "Greatsword", "Dagger", "Explorer's Pack"] },
+      { className: "Druid", subclasses: { 2014: "Circle of the Moon", 2024: "Circle of the Moon" }, title: "Werebeast Druid", playstyle: "A shapeshifter who becomes powerful beasts to brawl on the front line.", abilities: ["WIS", "CON", "STR", "DEX", "INT", "CHA"], skills: ["Nature", "Perception", "Animal Handling", "Survival"], feats: ["Tough", "War Caster", "Resilient", "Mobile"], spells: ["Guidance", "Shillelagh", "Faerie Fire", "Cure Wounds", "Moonbeam", "Pass without Trace", "Conjure Animals", "Polymorph"] }
+    ]
+  },
+  {
+    id: "plague-warden",
+    name: "Plague Warden",
+    icon: "ROT",
+    description: "Weaponize decay, poison, spores, and swarms to sicken and wither your enemies.",
+    aliases: ["plague", "decay", "spore", "rot", "fungus", "disease", "swarm"],
+    branches: [
+      { className: "Druid", subclasses: { 2014: "Circle of Spores", 2024: "Circle of Spores" }, title: "Spore Druid", playstyle: "A grim druid who weaponizes fungal decay, necrotic spores, and toughened flesh.", abilities: ["WIS", "CON", "INT", "DEX", "CHA", "STR"], skills: ["Nature", "Medicine", "Survival", "Perception"], feats: ["War Caster", "Tough", "Resilient", "Mobile"], spells: ["Chill Touch", "Poison Spray", "Entangle", "Ray of Sickness", "Blindness/Deafness", "Gentle Repose", "Animate Dead", "Blight", "Contagion"] },
+      { className: "Cleric", subclasses: { 2014: "Grave Domain", 2024: "Grave Domain" }, title: "Grave Warden", playstyle: "A solemn priest who guards the line between life and death and denies foes their healing.", abilities: ["WIS", "CON", "STR", "DEX", "CHA", "INT"], skills: ["Religion", "Medicine", "Insight", "Persuasion"], feats: ["War Caster", "Resilient", "Tough", "Healer"], spells: ["Spare the Dying", "Toll the Dead", "Bane", "False Life", "Gentle Repose", "Ray of Enfeeblement", "Revivify", "Vampiric Touch", "Blight"] },
+      { className: "Ranger", subclasses: { 2014: "Swarmkeeper", 2024: "Swarmkeeper" }, title: "Swarm Warden", playstyle: "A ranger accompanied by a cloud of stinging, biting creatures that harry enemies.", abilities: ["DEX", "WIS", "CON", "INT", "STR", "CHA"], skills: ["Nature", "Survival", "Perception", "Animal Handling"], feats: ["Sharpshooter", "Alert", "Mobile", "Resilient"], fightingStyle: "Archery", masteries: ["Longbow", "Shortsword"], spells: ["Hunter's Mark", "Faerie Fire", "Goodberry", "Web", "Pass without Trace", "Gaseous Form", "Insect Plague"] }
+    ]
+  },
+  {
+    id: "master-thief",
+    name: "Master Thief",
+    icon: "THF",
+    description: "Slip in unseen, grab the prize, and vanish—heists, cons, and quick hands.",
+    aliases: ["thief", "burglar", "heist", "con artist", "spy", "detective"],
+    branches: [
+      { className: "Rogue", subclasses: { 2014: "Thief", 2024: "Thief" }, title: "Master Thief", playstyle: "The classic burglar: fast hands, fast feet, and a knack for using anything.", abilities: ["DEX", "CON", "INT", "WIS", "CHA", "STR"], skills: ["Stealth", "Sleight of Hand", "Acrobatics", "Perception", "Investigation"], feats: ["Alert", "Skulker", "Skill Expert", "Mobile"], masteries: ["Shortbow", "Dagger"], equipment: ["Leather Armor", "Shortsword", "Shortbow", "Dagger", "Thieves' Tools", "Explorer's Pack"] },
+      { className: "Bard", subclasses: { 2014: "College of Whispers", 2024: "College of Whispers" }, title: "Shadow Whisper", playstyle: "A sinister infiltrator who mimics the dead and terrifies enemies with their own secrets.", abilities: ["CHA", "DEX", "CON", "WIS", "INT", "STR"], skills: ["Deception", "Stealth", "Persuasion", "Insight", "Sleight of Hand"], feats: ["Skulker", "Alert", "Fey Touched", "Skill Expert"], spells: ["Vicious Mockery", "Minor Illusion", "Disguise Self", "Charm Person", "Detect Thoughts", "Invisibility", "Fear", "Hypnotic Pattern"] },
+      { className: "Cleric", subclasses: { 2014: "Trickery Domain", 2024: "Trickery Domain" }, title: "Trickster Priest", playstyle: "A divine con artist who blesses allies while deceiving and duplicating himself.", abilities: ["WIS", "DEX", "CON", "CHA", "INT", "STR"], skills: ["Deception", "Stealth", "Religion", "Insight"], feats: ["Alert", "Skulker", "War Caster", "Fey Touched"], spells: ["Guidance", "Minor Illusion", "Charm Person", "Disguise Self", "Mirror Image", "Pass without Trace", "Blink", "Dispel Magic"] },
+      { className: "Rogue", subclasses: { 2014: "Inquisitive", 2024: "Inquisitive" }, title: "Sharp-Eyed Detective", playstyle: "A perceptive investigator who spots lies, finds weaknesses, and strikes true.", abilities: ["DEX", "INT", "WIS", "CON", "CHA", "STR"], skills: ["Investigation", "Insight", "Perception", "Stealth", "Sleight of Hand"], feats: ["Alert", "Skill Expert", "Skulker", "Mobile"], masteries: ["Rapier", "Shortbow"] }
+    ]
+  },
+  {
+    id: "infernal",
+    name: "Infernal Pact",
+    icon: "HELL",
+    description: "Bargain with hell for fire, fear, and cruel power—burn foes and grow stronger as they fall.",
+    aliases: ["fiend", "demon", "devil", "hellfire", "infernal", "warlock", "fire"],
+    branches: [
+      { className: "Warlock", subclasses: { 2014: "The Fiend", 2024: "The Fiend" }, title: "Fiend-Pact Warlock", playstyle: "An occult blaster who channels hellfire and grows tougher as enemies fall.", abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Deception", "Intimidation", "Arcana", "Persuasion"], feats: ["Elemental Adept", "War Caster", "Spell Sniper", "Resilient"], spells: ["Eldritch Blast", "Fire Bolt", "Hellish Rebuke", "Command", "Scorching Ray", "Fireball", "Stinking Cloud", "Fire Shield", "Wall of Fire"] },
+      { className: "Sorcerer", subclasses: { 2014: "Draconic Bloodline", 2024: "Draconic Bloodline" }, title: "Hellfire Sorcerer", playstyle: "A fiery sorcerer whose infernal blood makes flame magic hit harder and hurt less.", abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"], skills: ["Arcana", "Intimidation", "Deception", "Persuasion"], feats: ["Elemental Adept", "War Caster", "Metamagic Adept", "Resilient"], spells: ["Fire Bolt", "Chromatic Orb", "Burning Hands", "Scorching Ray", "Fireball", "Fire Shield", "Wall of Fire", "Immolation"] },
+      { className: "Paladin", subclasses: { 2014: "Oathbreaker", 2024: "Oathbreaker" }, title: "Hell Knight", playstyle: "A fallen armored warrior who commands fear and infernal power on the field.", abilities: ["STR", "CHA", "CON", "WIS", "DEX", "INT"], skills: ["Intimidation", "Athletics", "Religion", "Deception"], feats: ["Great Weapon Master", "Sentinel", "Heavy Armor Master", "War Caster"], fightingStyle: "Great Weapon Fighting", masteries: ["Greatsword", "Javelin"], spells: ["Command", "Hellish Rebuke", "Wrathful Smite", "Darkness", "Crown of Madness", "Bestow Curse", "Fear", "Blight"] }
+    ]
   }
 ];

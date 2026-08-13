@@ -3883,7 +3883,22 @@ function themeBackgroundRecommendation(themeId, className, rulesEdition = editio
     "battle-medic": { 2014: "Acolyte", 2024: "Acolyte" },
     inventor: { 2014: "Guild Artisan", 2024: "Artisan" },
     "dragon-rider": { 2014: "Outlander", 2024: "Guide" },
-    swashbuckler: { 2014: "Sailor", 2024: "Sailor" }
+    swashbuckler: { 2014: "Sailor", 2024: "Sailor" },
+    berserker: { 2014: "Outlander", 2024: "Guide" },
+    warlord: { 2014: "Soldier", 2024: "Soldier" },
+    samurai: { 2014: "Soldier", 2024: "Soldier" },
+    illusionist: { 2014: "Charlatan", 2024: "Charlatan" },
+    enchanter: { 2014: "Noble", 2024: "Noble" },
+    "storm-caller": { 2014: "Hermit", 2024: "Sage" },
+    "tide-caller": { 2014: "Sailor", 2024: "Sailor" },
+    "star-seer": { 2014: "Hermit", 2024: "Sage" },
+    chronomancer: { 2014: "Sage", 2024: "Sage" },
+    gunslinger: { 2014: "Soldier", 2024: "Soldier" },
+    bulwark: { 2014: "Soldier", 2024: "Guard" },
+    feral: { 2014: "Outlander", 2024: "Guide" },
+    "plague-warden": { 2014: "Hermit", 2024: "Hermit" },
+    "master-thief": { 2014: "Criminal", 2024: "Criminal" },
+    infernal: { 2014: "Haunted One", 2024: "Acolyte" }
   };
   const thematic = recommendations[themeId]?.[rulesEdition];
   const classDefault = QUICK_BUILD_PROFILES[className]?.backgrounds?.[rulesEdition];
