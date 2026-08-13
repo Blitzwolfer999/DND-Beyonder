@@ -227,6 +227,16 @@ const PREMADE_HEROES = [
   { key: "ashtrail", name: "Rowan Ashtrail", className: "Ranger", species: "Human", background: "Outlander", role: "Wilderness striker", pitch: "A tracker with ranged combat, survival skills, and practical magic.", level: 1 }
 ];
 const CONDITIONS = ["Blinded", "Charmed", "Deafened", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Exhaustion"];
+const CONDITION_BADGES = {
+  Blinded: { a: "BLI", c: "#5b6bb5" }, Charmed: { a: "CHM", c: "#c85fb0" }, Deafened: { a: "DEA", c: "#6b7280" },
+  Frightened: { a: "FRI", c: "#b58b3a" }, Grappled: { a: "GRP", c: "#8a6d3b" }, Incapacitated: { a: "INC", c: "#8a8a8a" },
+  Invisible: { a: "INV", c: "#6fa8c7" }, Paralyzed: { a: "PAR", c: "#a23b6f" }, Petrified: { a: "PET", c: "#7d7a6f" },
+  Poisoned: { a: "PSN", c: "#4e9a4e" }, Prone: { a: "PRN", c: "#9a7b4e" }, Restrained: { a: "RST", c: "#b5603a" },
+  Stunned: { a: "STN", c: "#c7a13a" }, Unconscious: { a: "UNC", c: "#6b3a8a" }, Exhaustion: { a: "EXH", c: "#8a4a3a" }
+};
+function conditionBadge(name) {
+  return CONDITION_BADGES[name] || { a: String(name || "").slice(0, 3).toUpperCase() || "•", c: "#b5603a" };
+}
 const STORAGE_KEY = "arcanaForge.characters.v1";
 const PROFILE_KEY = "arcanaForge.profile.v1";
 const ROLL_KEY = "arcanaForge.rolls.v1";
@@ -6517,6 +6527,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       <span class="map-token-face">${portrait ? `<img src="${escapeHtml(portrait)}" alt="">` : escapeHtml(label.charAt(0).toUpperCase())}</span>
       ${data.display.tokenNames ? `<span class="map-token-name">${escapeHtml(label)}</span>` : ""}
       ${data.display.tokenHealth ? `<span class="map-token-health" title="${hp}/${maxHp} HP"><i style="width:${healthPercent}%"></i></span>` : ""}
+      ${Array.isArray(combatant?.conditions) && combatant.conditions.length ? `<span class="map-token-conditions">${combatant.conditions.slice(0, 4).map(name => { const b = conditionBadge(name); return `<i class="cond" style="--cc:${b.c}" title="${escapeHtml(name)}">${escapeHtml(b.a)}</i>`; }).join("")}${combatant.conditions.length > 4 ? `<i class="cond more" title="${escapeHtml(combatant.conditions.slice(4).join(", "))}">+${combatant.conditions.length - 4}</i>` : ""}</span>` : ""}
     </button>`;
   }).join("");
   const fogCells = data.fog.enabled ? data.fog.cells.map(cell => {

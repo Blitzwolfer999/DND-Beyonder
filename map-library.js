@@ -190,14 +190,25 @@
       const y = Math.floor(random() * rows);
       if (Math.abs(x - 15) > 8 || Math.abs(y - 10) > 5) painter.paint(x, y, "forest");
     }
+    painter.ellipse(10, 13, 2, 2, "deep-water"); // forest pond
+    painter.paint(10, 11, "dirt");
+    painter.paint(12, 14, "dirt");
+    painter.rect(13, 9, 4, 3, "grass");           // widened camp clearing
     const overlay = createPainter(columns, rows);
     overlay.paint(15, 10, "campfire");
     overlay.paint(11, 8, "shrub");
     overlay.paint(19, 12, "shrub");
+    overlay.paint(12, 6, "shrub");
+    overlay.paint(20, 15, "shrub");
     overlay.paint(9, 13, "ancient-tree");
     overlay.paint(21, 7, "ancient-tree");
+    overlay.paint(7, 6, "ancient-tree");
+    overlay.paint(23, 15, "ancient-tree");
     overlay.paint(14, 13, "mushrooms");
+    overlay.paint(6, 11, "mushrooms");
+    overlay.paint(18, 6, "mushrooms");
     overlay.paint(17, 8, "boulder");
+    overlay.paint(13, 12, "boulder");
     return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
@@ -293,22 +304,40 @@
     const painter = createPainter(columns, rows);
     const random = seededRandom(seed);
     painter.fill("snow");
-    painter.rect(4, 4, 9, 6, "cracked-stone");
-    painter.frame(3, 3, 11, 8, "brick-wall");
-    painter.rect(18, 10, 8, 6, "mossy-stone");
-    painter.frame(17, 9, 10, 8, "brick-wall");
-    painter.rect(12, 8, 7, 3, "ice");
-    painter.ellipse(23, 4, 4, 2, "ice");
-    for (let index = 0; index < 22; index += 1) {
-      painter.paint(Math.floor(random() * columns), Math.floor(random() * rows), random() > 0.5 ? "ice" : "snow");
+    painter.rect(3, 3, 8, 6, "cracked-stone");    // NW roofless hall
+    painter.frame(2, 2, 10, 8, "brick-wall");
+    painter.rect(19, 11, 8, 6, "mossy-stone");    // SE shrine
+    painter.frame(18, 10, 10, 8, "brick-wall");
+    painter.rect(13, 6, 6, 6, "cracked-stone");   // central collapsed keep
+    painter.frame(12, 5, 8, 8, "brick-wall");
+    for (let x = 9; x < 21; x += 1) painter.paint(x, Math.round(9 + Math.sin(x / 3)), "dirt"); // linking path
+    painter.ellipse(24, 4, 4, 2, "ice");          // frozen ponds
+    painter.ellipse(6, 15, 3, 2, "ice");
+    painter.rect(14, 8, 4, 2, "ice");
+    painter.rect(8, 14, 3, 1, "brick-wall");       // broken wall fragments
+    painter.rect(22, 6, 1, 3, "brick-wall");
+    painter.rect(4, 12, 2, 1, "brick-wall");
+    for (let index = 0; index < 16; index += 1) {
+      painter.paint(Math.floor(random() * columns), Math.floor(random() * rows), random() > 0.6 ? "ice" : "snow");
     }
     const overlay = createPainter(columns, rows);
-    overlay.paint(5, 5, "gravestone");
-    overlay.paint(8, 7, "gravestone");
-    overlay.paint(6, 6, "boulder");
-    overlay.paint(20, 11, "brazier");
-    overlay.paint(24, 14, "brazier");
-    overlay.paint(22, 12, "bones");
+    overlay.paint(4, 4, "gravestone");            // NW graveyard
+    overlay.paint(6, 4, "gravestone");
+    overlay.paint(4, 6, "gravestone");
+    overlay.paint(8, 7, "bones");
+    overlay.paint(15, 8, "campfire");             // central camp
+    overlay.paint(13, 6, "rubble");
+    overlay.paint(18, 11, "rubble");
+    overlay.paint(14, 11, "stone-pillar");
+    overlay.paint(17, 6, "stone-pillar");
+    overlay.paint(21, 12, "brazier");             // SE shrine
+    overlay.paint(25, 15, "brazier");
+    overlay.paint(23, 13, "banner");
+    overlay.paint(22, 15, "bones");
+    overlay.paint(6, 15, "crystals");             // frozen open ground
+    overlay.paint(24, 4, "crystals");
+    overlay.paint(10, 12, "boulder");
+    overlay.paint(20, 5, "boulder");
     return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
