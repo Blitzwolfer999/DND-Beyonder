@@ -7203,6 +7203,90 @@ function rarityChip(rarity) {
   if (!rarity) return "";
   return `<span class="rarity-chip rarity-${rarity.toLowerCase().replace(/\s+/g, "-")}">${escapeHtml(rarity)}</span>`;
 }
+let browserSearch = "";
+let browserCategory = "All";
+let browserRarity = "All";
+let browserAttuneOnly = false;
+const ITEM_BROWSER_CATEGORIES = ["All", "Weapon", "Armor", "Potion", "Scroll", "Ring", "Rod", "Staff", "Wand", "Wondrous Item", "Gear"];
+const ITEM_BROWSER_RARITIES = ["All", "Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact", "Mundane"];
+function itemBroadCategory(item) {
+  const type = String(item.type || "").toLowerCase();
+  if (type.includes("weapon")) return "Weapon";
+  if (type.includes("armor") || type.includes("shield")) return "Armor";
+  if (type.startsWith("potion")) return "Potion";
+  if (type.startsWith("scroll")) return "Scroll";
+  if (type.startsWith("ring")) return "Ring";
+  if (type.startsWith("rod")) return "Rod";
+  if (type.startsWith("staff")) return "Staff";
+  if (type.startsWith("wand")) return "Wand";
+  if (type.includes("wondrous")) return "Wondrous Item";
+  return "Gear";
+}
+function itemEffectText(item) {
+  if (!item.rarity) return item.details || "";
+  const parts = String(item.details || "").split(" · ");
+  return parts.slice(item.attunement ? 2 : 1).join(" · ") || item.details || "";
+}
+function itemAttunementText(item) {
+  if (!item.attunement) return "";
+  return `Requires attunement${typeof item.attunement === "string" ? ` ${item.attunement}` : ""}`;
+}
+function renderItemBrowser() {
+  const grid = $("#browser-results");
+  if (!grid) return;
+  const catRow = $("#browser-category");
+  const rarRow = $("#browser-rarity");
+  const count = $("#browser-count");
+  if (catRow) catRow.innerHTML = ITEM_BROWSER_CATEGORIES.map(cat =>
+    `<button type="button" class="${browserCategory === cat ? "active" : ""}" data-browser-category="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`).join("");
+  if (rarRow) rarRow.innerHTML = ITEM_BROWSER_RARITIES.map(rarity =>
+    `<button type="button" class="rarity-filter ${rarity === "All" || rarity === "Mundane" ? "" : `rarity-${rarity.toLowerCase().replace(/\s+/g, "-")}`} ${browserRarity === rarity ? "active" : ""}" data-browser-rarity="${escapeHtml(rarity)}">${escapeHtml(rarity)}</button>`).join("");
+  const query = browserSearch.trim().toLowerCase();
+  const matches = EQUIPMENT_CATALOG.map((item, index) => ({ item, index })).filter(({ item }) => {
+    if (browserCategory !== "All" && itemBroadCategory(item) !== browserCategory) return false;
+    if (browserRarity === "Mundane") { if (item.rarity) return false; }
+    else if (browserRarity !== "All" && item.rarity !== browserRarity) return false;
+    if (browserAttuneOnly && !item.attunement) return false;
+    if (query && !`${item.name} ${item.type} ${item.details} ${item.rarity || ""}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
+  if (count) count.textContent = `${matches.length} item${matches.length === 1 ? "" : "s"}`;
+  grid.innerHTML = matches.length ? matches.map(({ item, index }) => {
+    const rarity = item.rarity || "";
+    const slug = rarity ? rarity.toLowerCase().replace(/\s+/g, "-") : "mundane";
+    const attune = itemAttunementText(item);
+    const footParts = [];
+    if (Number(item.weight)) footParts.push(`${item.weight} lb.`);
+    if (item.cost && item.cost !== "—") footParts.push(item.cost);
+    return `<article class="item-card" data-rarity="${slug}">
+      <div class="item-card-head"><strong>${escapeHtml(item.name)}</strong>${rarityChip(rarity)}</div>
+      <div class="item-card-meta">${escapeHtml(item.type || "Item")}${attune ? ` · <em>${escapeHtml(attune)}</em>` : ""}</div>
+      <p class="item-card-effect">${escapeHtml(itemEffectText(item))}</p>
+      <div class="item-card-foot"><span>${escapeHtml(footParts.join(" · ") || "—")}</span><button type="button" class="button primary small" data-item-add="${index}">Add</button></div>
+    </article>`;
+  }).join("") : `<p class="browser-empty">No items match these filters. Try clearing filters or use “Add a custom item.”</p>`;
+}
+function addBrowserItem(index) {
+  const character = characters.find(item => item.id === inventoryCharacterId);
+  if (!character) return;
+  const source = EQUIPMENT_CATALOG[Number(index)];
+  if (!source) return;
+  const entry = {
+    id: crypto.randomUUID(),
+    name: source.name,
+    type: source.type,
+    quantity: 1,
+    weight: Math.max(0, Number(source.weight || 0)),
+    cost: source.cost,
+    notes: source.details,
+    carried: true,
+    equipped: false,
+    attuned: false
+  };
+  character.inventory = [...(character.inventory || []), entry];
+  saveInventoryCharacter(character);
+  toast(`${source.name} added to inventory`);
+}
 function renderItemTemplates(query = "") {
   const normalized = query.trim().toLowerCase();
   const matches = EQUIPMENT_CATALOG
@@ -7238,7 +7322,9 @@ function openInventory(characterId) {
   $("#item-search").value = "";
   $("#inventory-form").reset();
   $("#item-carried").checked = true;
-  renderItemTemplates();
+  browserSearch = "";
+  if ($("#browser-attune")) $("#browser-attune").checked = browserAttuneOnly;
+  renderItemBrowser();
   $("#inventory-modal").classList.remove("hidden");
 }
 
@@ -8779,6 +8865,23 @@ function initEvents() {
       openInventory(inventoryOpen.dataset.inventoryOpen);
       return;
     }
+    const browserCategoryBtn = event.target.closest("[data-browser-category]");
+    if (browserCategoryBtn) {
+      browserCategory = browserCategoryBtn.dataset.browserCategory;
+      renderItemBrowser();
+      return;
+    }
+    const browserRarityBtn = event.target.closest("[data-browser-rarity]");
+    if (browserRarityBtn) {
+      browserRarity = browserRarityBtn.dataset.browserRarity;
+      renderItemBrowser();
+      return;
+    }
+    const itemAdd = event.target.closest("[data-item-add]");
+    if (itemAdd) {
+      addBrowserItem(itemAdd.dataset.itemAdd);
+      return;
+    }
     const itemAction = event.target.closest("[data-item-action]");
     if (itemAction) {
       const character = characters.find(item => item.id === itemAction.dataset.character);
@@ -9370,8 +9473,8 @@ function initEvents() {
   $("#confirm-ok")?.addEventListener("click", () => { const cb = pendingConfirm; closeConfirm(); if (cb) cb(); });
   $("#confirm-cancel")?.addEventListener("click", closeConfirm);
   $("#confirm-modal")?.addEventListener("click", event => { if (event.target.id === "confirm-modal") closeConfirm(); });
-  $("#item-search").addEventListener("input", event => renderItemTemplates(event.target.value));
-  $("#item-template").addEventListener("change", event => applyItemTemplate(event.target.value));
+  $("#item-search").addEventListener("input", event => { browserSearch = event.target.value; renderItemBrowser(); });
+  $("#browser-attune")?.addEventListener("change", event => { browserAttuneOnly = event.target.checked; renderItemBrowser(); });
   $("#save-currency").addEventListener("click", () => {
     const character = characters.find(item => item.id === inventoryCharacterId);
     if (!character) return;
@@ -9406,7 +9509,8 @@ function initEvents() {
     $("#inventory-form").reset();
     $("#item-carried").checked = true;
     $("#item-search").value = "";
-    renderItemTemplates();
+    browserSearch = "";
+    renderItemBrowser();
     toast(`${name} added to inventory`);
   });
   $("#dungeon-workshop")?.addEventListener("submit", event => {

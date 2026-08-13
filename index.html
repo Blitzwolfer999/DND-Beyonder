@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=magic-items-5">
+  <link rel="stylesheet" href="styles.css?v=item-browser-6">
 </head>
 <body>
   <div class="app-shell">
@@ -585,24 +585,37 @@
         <label>PP<input id="currency-pp" type="number" min="0" value="0"></label>
         <button type="button" class="button ghost small" id="save-currency">Save coins</button>
       </div>
-      <form id="inventory-form">
-        <label>Search SRD equipment<input id="item-search" type="search" placeholder="Search weapons, armor, gear..."></label>
-        <label>Item<select id="item-template" size="7"></select></label>
-        <div class="field-grid compact">
-          <label>Name<input id="item-name" required></label>
-          <label>Type<input id="item-type" placeholder="Adventuring Gear"></label>
-          <label>Quantity<input id="item-quantity" type="number" min="1" value="1"></label>
-          <label>Weight each<input id="item-weight" type="number" min="0" step="0.01" value="0"></label>
-          <label>Cost<input id="item-cost" placeholder="e.g. 10 GP"></label>
+      <div class="item-browser">
+        <div class="item-browser-search">
+          <input id="item-search" type="search" placeholder="Search items — flame tongue, ring, healing, +1 armor...">
+          <span class="item-browser-count" id="browser-count"></span>
         </div>
-        <label>Notes<textarea id="item-notes" rows="3" placeholder="Properties, charges, contents, or a personal summary"></textarea></label>
-        <div class="inventory-flags">
-          <label><input id="item-carried" type="checkbox" checked> Carried</label>
-          <label><input id="item-equipped" type="checkbox"> Equipped</label>
-          <label><input id="item-attuned" type="checkbox"> Attuned</label>
+        <div class="item-browser-filters">
+          <div class="filter-row" id="browser-category" aria-label="Filter by category"></div>
+          <div class="filter-row" id="browser-rarity" aria-label="Filter by rarity"></div>
+          <label class="attune-toggle"><input type="checkbox" id="browser-attune"> Requires attunement only</label>
         </div>
-        <button class="button primary" type="submit">Add item</button>
-      </form>
+        <div class="item-browser-grid" id="browser-results"></div>
+      </div>
+      <details class="custom-item-drawer">
+        <summary>Add a custom item</summary>
+        <form id="inventory-form">
+          <div class="field-grid compact">
+            <label>Name<input id="item-name" required></label>
+            <label>Type<input id="item-type" placeholder="Adventuring Gear"></label>
+            <label>Quantity<input id="item-quantity" type="number" min="1" value="1"></label>
+            <label>Weight each<input id="item-weight" type="number" min="0" step="0.01" value="0"></label>
+            <label>Cost<input id="item-cost" placeholder="e.g. 10 GP"></label>
+          </div>
+          <label>Notes<textarea id="item-notes" rows="3" placeholder="Properties, charges, contents, or a personal summary"></textarea></label>
+          <div class="inventory-flags">
+            <label><input id="item-carried" type="checkbox" checked> Carried</label>
+            <label><input id="item-equipped" type="checkbox"> Equipped</label>
+            <label><input id="item-attuned" type="checkbox"> Attuned</label>
+          </div>
+          <button class="button primary" type="submit">Add custom item</button>
+        </form>
+      </details>
     </section>
   </div>
 
@@ -671,6 +684,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=magic-items-5"></script>
+  <script src="app.js?v=item-browser-6"></script>
 </body>
 </html>
