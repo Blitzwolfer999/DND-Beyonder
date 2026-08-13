@@ -863,6 +863,13 @@ textarea { resize: vertical; }
 .item-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .item-name strong, .item-name small { display: block; }
 .item-name small { color: var(--muted); }
+.rarity-chip { display: inline-block; margin: 2px 0; padding: 1px 7px; border-radius: 999px; color: #fff; font: 800 9px/1.6 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .4px; }
+.rarity-common { background: #6b7280; }
+.rarity-uncommon { background: #1a9d4b; }
+.rarity-rare { background: #2f6fdb; }
+.rarity-very-rare { background: #9b4dca; }
+.rarity-legendary { background: #e0952a; }
+.rarity-artifact { background: #b0392e; }
 .inventory-modal { width: min(760px, 100%); max-height: calc(100vh - 36px); overflow: auto; }
 .currency-editor { margin: 18px 0; display: grid; grid-template-columns: repeat(5, 1fr) auto; gap: 8px; align-items: end; }
 .inventory-flags { display: flex; flex-wrap: wrap; gap: 18px; }

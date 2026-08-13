@@ -7180,7 +7180,7 @@ function renderInventorySection(character, extraClass = "") {
           <button type="button" class="${item.equipped ? "active" : ""}" data-item-action="equip" data-character="${character.id}" data-item-id="${item.id}" title="Equipped">E</button>
           <button type="button" class="${item.attuned ? "active" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" title="Attuned">A</button>
         </div></td>
-        <td class="item-name"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.type || "Item")}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</small></td>
+        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}<small>${escapeHtml(item.type || "Item")}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</small></td>
         <td>${Number(item.quantity || 1)}</td>
         <td>${Number((Number(item.weight || 0) * Number(item.quantity || 1)).toFixed(2))} lb.</td>
         <td>${escapeHtml(item.cost || "—")}</td>
@@ -7194,13 +7194,22 @@ function renderInventorySection(character, extraClass = "") {
   </section>`;
 }
 
+function itemRarity(item) {
+  const source = String(item.rarity || item.notes || item.details || "").trim();
+  const order = ["Very Rare", "Legendary", "Artifact", "Uncommon", "Common", "Rare"];
+  return order.find(rarity => source.toLowerCase().startsWith(rarity.toLowerCase())) || "";
+}
+function rarityChip(rarity) {
+  if (!rarity) return "";
+  return `<span class="rarity-chip rarity-${rarity.toLowerCase().replace(/\s+/g, "-")}">${escapeHtml(rarity)}</span>`;
+}
 function renderItemTemplates(query = "") {
   const normalized = query.trim().toLowerCase();
   const matches = EQUIPMENT_CATALOG
     .map((item, index) => ({ item, index }))
-    .filter(({ item }) => !normalized || `${item.name} ${item.type} ${item.details}`.toLowerCase().includes(normalized));
+    .filter(({ item }) => !normalized || `${item.name} ${item.type} ${item.details} ${item.rarity || ""}`.toLowerCase().includes(normalized));
   $("#item-template").innerHTML = matches.map(({ item, index }) =>
-    `<option value="${index}">${escapeHtml(item.name)} · ${escapeHtml(item.type)} · ${escapeHtml(item.cost)}</option>`
+    `<option value="${index}">${escapeHtml(item.name)} · ${escapeHtml(item.type)} · ${escapeHtml(item.rarity || item.cost)}</option>`
   ).join("");
   if (matches.length) {
     $("#item-template").value = String(matches[0].index);
