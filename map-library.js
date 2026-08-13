@@ -8,6 +8,9 @@
     { id: "town-square", name: "Town Square", category: "Town", size: "32 x 22", previewTile: "cobblestone", description: "A broad market square with roads, green edges, rooftops, and a fountain plaza." },
     { id: "cavern-pools", name: "Cavern Pools", category: "Dungeon", size: "30 x 20", previewTile: "cave-floor", description: "An irregular cavern divided by dark water, narrow ledges, and unstable stone." },
     { id: "snow-ruins", name: "Snowbound Ruins", category: "Wilderness", size: "30 x 20", previewTile: "snow", description: "Frozen ruins with broken walls, slick ice, and an exposed central approach." },
+    { id: "dungeon-guardroom", name: "Dungeon Guardroom", category: "Dungeon", size: "24 x 16", previewTile: "flagstone", description: "A fortified guard post stocked with crates, barrels, tables, braziers, and a locked cell." },
+    { id: "crypt-vault", name: "Crypt & Bone Vault", category: "Dungeon", size: "28 x 18", previewTile: "crypt-floor", description: "A shadowed burial vault of gravestones, scattered bones, cobwebs, and a glowing summoning circle." },
+    { id: "throne-hall", name: "Throne Hall", category: "Town", size: "28 x 20", previewTile: "marble", description: "A grand marble hall with a checkered aisle, hanging banners, flanking statues, and a raised throne." },
   ];
 
   const MAP_ASSET_LIBRARY = [
@@ -102,7 +105,16 @@
       const y = 3 + Math.floor(random() * 14);
       if (random() > 0.45) painter.paint(x, y, random() > 0.5 ? "cracked-stone" : "mossy-stone");
     }
-    return { columns, rows, tiles: painter.list() };
+    const overlay = createPainter(columns, rows);
+    overlay.paint(15, 6, "treasure-chest");
+    overlay.paint(13, 4, "brazier");
+    overlay.paint(17, 4, "brazier");
+    overlay.paint(3, 3, "barrel");
+    overlay.paint(4, 3, "crate");
+    overlay.paint(9, 9, "stone-pillar");
+    overlay.paint(20, 16, "bones");
+    overlay.paint(24, 3, "wooden-table");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
   function buildForest(seed) {
@@ -127,7 +139,15 @@
       const y = Math.floor(random() * rows);
       if (Math.abs(x - 15) > 8 || Math.abs(y - 10) > 5) painter.paint(x, y, "forest");
     }
-    return { columns, rows, tiles: painter.list() };
+    const overlay = createPainter(columns, rows);
+    overlay.paint(15, 10, "campfire");
+    overlay.paint(11, 8, "shrub");
+    overlay.paint(19, 12, "shrub");
+    overlay.paint(9, 13, "ancient-tree");
+    overlay.paint(21, 7, "ancient-tree");
+    overlay.paint(14, 13, "mushrooms");
+    overlay.paint(17, 8, "boulder");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
   function buildTavern() {
@@ -143,7 +163,17 @@
     painter.rect(18, 8, 4, 6, "dark-wood");
     painter.rect(11, 0, 2, 2, "wood-planks");
     painter.paint(20, 3, "lava");
-    return { columns, rows, tiles: painter.list() };
+    const overlay = createPainter(columns, rows);
+    overlay.paint(3, 3, "barrel");
+    overlay.paint(4, 3, "barrel");
+    overlay.paint(19, 9, "barrel");
+    overlay.paint(9, 6, "wooden-table");
+    overlay.paint(12, 7, "round-table");
+    overlay.paint(10, 8, "wooden-table");
+    overlay.paint(1, 1, "wall-torch");
+    overlay.paint(22, 1, "wall-torch");
+    overlay.paint(19, 4, "brazier");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
   function buildTown() {
@@ -160,7 +190,16 @@
     painter.rect(22, 15, 8, 5, "roof-tile");
     painter.ellipse(16, 11, 2, 2, "marble");
     painter.paint(16, 11, "water");
-    return { columns, rows, tiles: painter.list() };
+    const overlay = createPainter(columns, rows);
+    overlay.paint(16, 11, "fountain");
+    overlay.paint(4, 3, "banner");
+    overlay.paint(27, 3, "banner");
+    overlay.paint(15, 6, "statue");
+    overlay.paint(6, 10, "shrub");
+    overlay.paint(25, 12, "shrub");
+    overlay.paint(18, 15, "crate");
+    overlay.paint(19, 15, "barrel");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
   function buildCavern(seed) {
@@ -180,7 +219,15 @@
       if (random() > 0.55) painter.paint(x, y, "cracked-stone");
     }
     painter.rect(13, 9, 4, 2, "stone-floor");
-    return { columns, rows, tiles: painter.list() };
+    const overlay = createPainter(columns, rows);
+    overlay.paint(10, 6, "crystals");
+    overlay.paint(24, 12, "crystals");
+    overlay.paint(6, 7, "mushrooms");
+    overlay.paint(23, 14, "mushrooms");
+    overlay.paint(14, 10, "boulder");
+    overlay.paint(16, 10, "boulder");
+    overlay.paint(19, 11, "bones");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
   function buildSnow(seed) {
@@ -198,7 +245,111 @@
     for (let index = 0; index < 22; index += 1) {
       painter.paint(Math.floor(random() * columns), Math.floor(random() * rows), random() > 0.5 ? "ice" : "snow");
     }
-    return { columns, rows, tiles: painter.list() };
+    const overlay = createPainter(columns, rows);
+    overlay.paint(5, 5, "gravestone");
+    overlay.paint(8, 7, "gravestone");
+    overlay.paint(6, 6, "boulder");
+    overlay.paint(20, 11, "brazier");
+    overlay.paint(24, 14, "brazier");
+    overlay.paint(22, 12, "bones");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildGuardroom() {
+    const columns = 24;
+    const rows = 16;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    painter.fill("dungeon-wall");
+    painter.rect(1, 1, 22, 14, "flagstone");
+    painter.frame(0, 0, columns, rows, "brick-wall");
+    painter.rect(1, 1, 5, 4, "stone-floor");
+    painter.rect(18, 1, 5, 4, "crypt-floor");
+    painter.rect(18, 11, 5, 4, "cracked-stone");
+    painter.rect(9, 6, 6, 5, "rug");
+    overlay.paint(11, 0, "wooden-door");
+    overlay.paint(2, 2, "barrel");
+    overlay.paint(3, 2, "barrel");
+    overlay.paint(2, 3, "crate");
+    overlay.paint(4, 3, "crate");
+    overlay.paint(10, 7, "wooden-table");
+    overlay.paint(13, 8, "round-table");
+    overlay.paint(1, 8, "wall-torch");
+    overlay.paint(22, 8, "wall-torch");
+    overlay.paint(6, 12, "brazier");
+    overlay.paint(17, 12, "brazier");
+    overlay.paint(20, 2, "bones");
+    overlay.paint(11, 1, "banner");
+    overlay.paint(5, 6, "stone-pillar");
+    overlay.paint(18, 9, "stone-pillar");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildCrypt(seed) {
+    const columns = 28;
+    const rows = 18;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("dungeon-wall");
+    painter.rect(1, 1, 26, 16, "crypt-floor");
+    painter.frame(0, 0, columns, rows, "brick-wall");
+    painter.rect(11, 6, 6, 6, "flagstone");
+    painter.rect(2, 2, 6, 4, "cracked-stone");
+    painter.rect(20, 12, 6, 4, "mossy-stone");
+    painter.rect(1, 1, 3, 3, "webbed-floor");
+    painter.rect(24, 14, 3, 3, "webbed-floor");
+    for (let index = 0; index < 16; index += 1) {
+      const x = 1 + Math.floor(random() * 26);
+      const y = 1 + Math.floor(random() * 16);
+      if (random() > 0.6) painter.paint(x, y, "cracked-stone");
+    }
+    overlay.paint(14, 9, "summoning-circle");
+    overlay.paint(3, 3, "gravestone");
+    overlay.paint(5, 3, "gravestone");
+    overlay.paint(3, 5, "gravestone");
+    overlay.paint(23, 13, "gravestone");
+    overlay.paint(25, 13, "gravestone");
+    overlay.paint(10, 4, "bones");
+    overlay.paint(18, 14, "bones");
+    overlay.paint(8, 14, "bones");
+    overlay.paint(21, 3, "bones");
+    overlay.paint(12, 7, "brazier");
+    overlay.paint(16, 7, "brazier");
+    overlay.paint(1, 9, "wall-torch");
+    overlay.paint(26, 9, "wall-torch");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildThrone() {
+    const columns = 28;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    painter.fill("brick-wall");
+    painter.rect(1, 1, 26, 18, "marble");
+    painter.frame(0, 0, columns, rows, "brick-wall");
+    painter.rect(12, 4, 4, 15, "checker-tile");
+    painter.rect(9, 1, 10, 3, "flagstone");
+    painter.rect(11, 1, 6, 2, "rug");
+    overlay.paint(14, 2, "altar");
+    overlay.paint(11, 2, "statue");
+    overlay.paint(16, 2, "statue");
+    overlay.paint(2, 2, "banner");
+    overlay.paint(25, 2, "banner");
+    overlay.paint(2, 9, "banner");
+    overlay.paint(25, 9, "banner");
+    overlay.paint(2, 16, "banner");
+    overlay.paint(25, 16, "banner");
+    overlay.paint(10, 7, "brazier");
+    overlay.paint(17, 7, "brazier");
+    overlay.paint(10, 13, "brazier");
+    overlay.paint(17, 13, "brazier");
+    overlay.paint(6, 5, "stone-pillar");
+    overlay.paint(21, 5, "stone-pillar");
+    overlay.paint(6, 14, "stone-pillar");
+    overlay.paint(21, 14, "stone-pillar");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
   function buildMapScene(sceneId, seed = "dnd-beyonder") {
@@ -210,6 +361,9 @@
     else if (sceneId === "tavern-floor") scene = buildTavern();
     else if (sceneId === "town-square") scene = buildTown();
     else if (sceneId === "cavern-pools") scene = buildCavern(seed);
+    else if (sceneId === "dungeon-guardroom") scene = buildGuardroom();
+    else if (sceneId === "crypt-vault") scene = buildCrypt(seed);
+    else if (sceneId === "throne-hall") scene = buildThrone();
     else scene = buildSnow(seed);
     return { ...scene, id: template.id, name: template.name, category: template.category, description: template.description };
   }
