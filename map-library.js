@@ -84,36 +84,87 @@
     return { paint, fill, rect, frame, ellipse, list };
   }
 
-  function buildDungeon(seed) {
+  function buildDungeon() {
     const columns = 30;
     const rows = 20;
     const painter = createPainter(columns, rows);
-    const random = seededRandom(seed);
-    painter.fill("dungeon-wall");
-    painter.rect(2, 3, 9, 7, "flagstone");
-    painter.rect(19, 2, 9, 8, "mossy-stone");
-    painter.rect(3, 13, 10, 5, "crypt-floor");
-    painter.rect(19, 13, 8, 5, "cracked-stone");
-    painter.rect(10, 6, 10, 3, "stone-floor");
-    painter.rect(8, 8, 3, 6, "stone-floor");
-    painter.rect(12, 11, 8, 3, "stone-floor");
-    painter.rect(22, 9, 3, 5, "stone-floor");
-    painter.frame(13, 4, 5, 5, "mossy-stone");
-    painter.rect(14, 5, 3, 3, "shadow");
-    for (let index = 0; index < 18; index += 1) {
-      const x = 3 + Math.floor(random() * 24);
-      const y = 3 + Math.floor(random() * 14);
-      if (random() > 0.45) painter.paint(x, y, random() > 0.5 ? "cracked-stone" : "mossy-stone");
-    }
     const overlay = createPainter(columns, rows);
-    overlay.paint(15, 6, "treasure-chest");
-    overlay.paint(13, 4, "brazier");
-    overlay.paint(17, 4, "brazier");
-    overlay.paint(3, 3, "barrel");
-    overlay.paint(4, 3, "crate");
-    overlay.paint(9, 9, "stone-pillar");
-    overlay.paint(20, 16, "bones");
-    overlay.paint(24, 3, "wooden-table");
+    painter.fill("dungeon-wall");
+
+    // Chambers
+    painter.rect(8, 1, 14, 6, "flagstone");     // boss chamber (north)
+    painter.rect(12, 9, 6, 5, "stone-floor");   // central crossroads
+    painter.rect(11, 15, 8, 4, "flagstone");    // entrance hall (south)
+    painter.rect(1, 8, 7, 7, "crypt-floor");    // west barracks
+    painter.rect(22, 8, 7, 7, "mossy-stone");   // east treasure vault
+    painter.rect(1, 1, 5, 5, "cracked-stone");  // secret vault (NW)
+    painter.frame(12, 2, 6, 4, "cracked-stone");// raised ritual dais
+
+    // Corridors (2-wide so tokens can pass)
+    painter.rect(14, 6, 2, 4, "stone-floor");   // crossroads -> boss
+    painter.rect(13, 13, 2, 3, "stone-floor");  // entrance -> crossroads
+    painter.rect(7, 10, 6, 2, "stone-floor");   // crossroads -> barracks
+    painter.rect(17, 10, 6, 2, "stone-floor");  // crossroads -> vault (trapped)
+    painter.rect(3, 5, 2, 3, "stone-floor");    // barracks -> secret vault
+
+    // Boss chamber: throne + summoning ritual, cover pillars, torchlight
+    overlay.paint(14, 2, "altar");
+    overlay.paint(14, 4, "summoning-circle");
+    overlay.paint(11, 2, "brazier");
+    overlay.paint(18, 2, "brazier");
+    overlay.paint(9, 2, "stone-pillar");
+    overlay.paint(20, 2, "stone-pillar");
+    overlay.paint(9, 5, "stone-pillar");
+    overlay.paint(20, 5, "stone-pillar");
+    overlay.paint(8, 3, "wall-torch");
+    overlay.paint(21, 3, "wall-torch");
+    overlay.paint(12, 5, "bones");
+    overlay.paint(17, 5, "bones");
+    overlay.paint(14, 7, "wooden-door");
+
+    // Crossroads cover
+    overlay.paint(12, 9, "stone-pillar");
+    overlay.paint(17, 9, "stone-pillar");
+    overlay.paint(12, 13, "stone-pillar");
+    overlay.paint(17, 13, "stone-pillar");
+
+    // Entrance hall: the way in
+    overlay.paint(13, 18, "stone-stairs");
+    overlay.paint(16, 18, "stone-stairs");
+    overlay.paint(11, 15, "wall-torch");
+    overlay.paint(18, 15, "wall-torch");
+    overlay.paint(13, 14, "wooden-door");
+
+    // West barracks: bunks, mess table, arms
+    overlay.paint(2, 9, "bed");
+    overlay.paint(2, 11, "bed");
+    overlay.paint(2, 13, "bed");
+    overlay.paint(5, 10, "wooden-table");
+    overlay.paint(6, 13, "barrel");
+    overlay.paint(1, 8, "crate");
+    overlay.paint(4, 8, "banner");
+    overlay.paint(6, 9, "bones");
+    overlay.paint(7, 11, "wooden-door");
+
+    // Secret vault (behind the barracks)
+    overlay.paint(3, 3, "treasure-chest");
+    overlay.paint(2, 2, "crystals");
+    overlay.paint(4, 4, "bones");
+    overlay.paint(3, 6, "wooden-door");
+
+    // East treasure vault, reached past a trapped corridor
+    overlay.paint(18, 10, "spike-trap");
+    overlay.paint(20, 11, "spike-trap");
+    overlay.paint(21, 10, "wooden-door");
+    overlay.paint(25, 10, "treasure-chest");
+    overlay.paint(27, 12, "treasure-chest");
+    overlay.paint(22, 13, "barrel");
+    overlay.paint(23, 13, "barrel");
+    overlay.paint(28, 8, "crate");
+    overlay.paint(25, 13, "brazier");
+    overlay.paint(22, 9, "wall-torch");
+    overlay.paint(26, 9, "rubble");
+
     return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
@@ -221,11 +272,17 @@
     painter.rect(13, 9, 4, 2, "stone-floor");
     const overlay = createPainter(columns, rows);
     overlay.paint(10, 6, "crystals");
-    overlay.paint(24, 12, "crystals");
-    overlay.paint(6, 7, "mushrooms");
-    overlay.paint(23, 14, "mushrooms");
+    overlay.paint(26, 11, "crystals");
+    overlay.paint(5, 6, "mushrooms");
+    overlay.paint(25, 15, "mushrooms");
     overlay.paint(14, 10, "boulder");
     overlay.paint(16, 10, "boulder");
+    overlay.paint(8, 7, "wooden-bridge");
+    overlay.paint(9, 7, "wooden-bridge");
+    overlay.paint(6, 9, "campfire");
+    overlay.paint(14, 9, "treasure-chest");
+    overlay.paint(26, 13, "treasure-chest");
+    overlay.paint(23, 11, "bones");
     overlay.paint(19, 11, "bones");
     return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
