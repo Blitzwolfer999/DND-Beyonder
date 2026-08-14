@@ -7902,7 +7902,7 @@ function renderSheet() {
       return `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${value}"><span class="${proficient ? "proficient" : ""}">${skill} <small>(${ability})${expertise ? " · Expertise" : ""}</small></span><strong>${signed(value)}</strong></button>`;
     }).join("")}</div></section>
     ${renderAttacksPanel(c, sectionClass("overview"))}
-    <section class="sheet-panel ${sectionClass("overview")}">
+    <section class="sheet-panel sheet-wide ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <div class="combat-stat-grid">
         <div class="combat-stat"><small>Speed</small><strong>${walkSpeed} ft</strong></div>

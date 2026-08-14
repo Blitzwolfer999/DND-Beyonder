@@ -652,15 +652,15 @@ textarea { resize: vertical; }
 .sheet-core button { padding: 12px 4px; border: 1px solid #6d725f; color: white; background: transparent; cursor: pointer; }
 .sheet-core small, .sheet-core strong { display: block; }
 .sheet-core strong { font: 600 24px Cinzel, serif; }
-.sheet-body { display: grid; grid-template-columns: 180px 1fr 1fr; gap: 18px; padding: 22px; background: #ede7dc; }
+.sheet-body { display: grid; grid-template-columns: 210px 1fr 1fr; gap: 18px; padding: 22px; background: #ede7dc; align-items: start; }
 .sheet-panel { padding: 18px; border: 1px solid var(--line); background: var(--panel); }
 .sheet-panel h2 { font-size: 15px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-.sheet-abilities { display: grid; gap: 8px; }
+.sheet-abilities { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sheet-ability { padding: 10px; border: 1px solid var(--line); background: #f6f1e8; text-align: center; cursor: pointer; }
 .sheet-ability small, .sheet-ability strong, .sheet-ability span { display: block; }
 .sheet-ability strong { font: 600 24px Cinzel, serif; color: var(--gold-dark); }
 .sheet-ability span { font-size: 11px; }
-.skill-list { display: grid; gap: 4px; }
+.skill-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
 .skill-roll { padding: 7px 4px; display: flex; justify-content: space-between; border: 0; border-bottom: 1px dotted var(--line); background: transparent; cursor: pointer; text-align: left; }
 .attack-list { display: grid; gap: 8px; }
 .attack-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #f7f2e9; }
@@ -1932,7 +1932,7 @@ input:focus, select:focus, textarea:focus {
   background: var(--panel);
 }
 .subsection-title { margin-top: 20px !important; }
-.saving-throw-list { display: grid; gap: 5px; }
+.saving-throw-list { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .saving-throw-list button {
   padding: 7px 8px;
   display: flex;
@@ -2215,7 +2215,7 @@ textarea:focus-visible {
 }
 
 /* Saving throws - proficiency dots and clean rows */
-.saving-throw-list { display: grid; gap: 5px; }
+.saving-throw-list { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .saving-throw-list button {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px;
