@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Map Studio 3.0 visual fixture</title>
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    body { margin: 0; padding: 20px; background: #0d1118; }
+    main { max-width: 1480px; margin: auto; }
+    .battle-map-board { --cols: 24; --rows: 16; --cell: 44px; --grid-color: #fff; --grid-opacity: .28; --grid-thickness: 1px; background: #3a493c; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="campaign-map-workspace map-vtt-workspace dock-scene">
+    <nav class="map-tool-rail" aria-label="Map editor tools">
+      <button><span>H</span><small>Pan</small></button>
+      <button><span>T</span><small>Move</small></button>
+      <button class="active"><span>D</span><small>Draw</small></button>
+      <button><span>E</span><small>Erase</small></button>
+      <button><span>F</span><small>Fog</small></button>
+      <button><span>V</span><small>Reveal</small></button>
+      <button><span>X</span><small>Ping</small></button>
+      <button><span>R</span><small>Ruler</small></button>
+    </nav>
+    <aside class="map-side-dock">
+      <div class="map-dock-tabs"><button>Tokens</button><button>Assets</button><button class="active">Scenes</button><button>Layers</button></div>
+      <div class="map-dock-body">
+        <div class="map-scene-library">
+          <div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">21/21</span></div>
+          <div class="map-library-filter"><label><span>Find a scene</span><input type="search" placeholder="Crypt, ship, forest, wizard..."></label></div>
+          <div class="map-library-categories"><button class="active">All</button><button>Dungeon</button><button>Wilderness</button><button>Town</button><button>Horror</button><button>Arcane</button></div>
+          <p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, and atmosphere.</p>
+          <article class="map-scene-card">
+            <div class="map-scene-preview ambience-storm"><span style="background:#153f62"></span><span style="background:#79502d"></span><span style="background:#53351f"></span><span style="background:#2f6f94"></span><i></i></div>
+            <div class="map-scene-copy"><small>Coastal &middot; 30 x 16</small><strong>Stormbound Ship</strong><p>A broad sailing ship deck with raised ends, rigging, cargo, and dangerous open water.</p><em>Rain storm</em></div>
+            <button>Use scene</button>
+          </article>
+          <article class="map-scene-card">
+            <div class="map-scene-preview ambience-arcane"><span style="background:#343b48"></span><span style="background:#454a50"></span><span style="background:#21232b"></span><span style="background:#a69b83"></span><i></i></div>
+            <div class="map-scene-copy"><small>Arcane &middot; 28 x 18</small><strong>Wizard Laboratory</strong><p>A rune-lit laboratory packed with bookcases, crystals, experiments, and unstable portals.</p><em>Arcane glow</em></div>
+            <button>Use scene</button>
+          </article>
+          <article class="map-scene-card">
+            <div class="map-scene-preview ambience-moonlight"><span style="background:#777047"></span><span style="background:#565058"></span><span style="background:#5a4327"></span><span style="background:#684c42"></span><i></i></div>
+            <div class="map-scene-copy"><small>Horror &middot; 30 x 20</small><strong>Graveyard Chapel</strong><p>A moonlit cemetery surrounding a ruined chapel, mausoleum, and freshly opened graves.</p><em>Moonlight</em></div>
+            <button>Use scene</button>
+          </article>
+        </div>
+      </div>
+    </aside>
+    <div class="map-canvas-column">
+      <div class="map-viewport-bar"><div><strong>Stormbound Ship</strong><small>Coastal encounter &middot; Rain storm</small></div><div class="map-zoom-controls"><button>Grid on</button><button>-</button><span>78%</span><button>+</button><button>Fit</button></div></div>
+      <div class="battle-map-shell tool-paint">
+        <div class="battle-map-board">
+          <div class="battle-map-tiles">
+            <div class="map-cell-tile" style="--x:0;--y:0;width:calc(var(--cell) * 24);height:calc(var(--cell) * 16);background:#153f62;background-image:linear-gradient(135deg,#ffffff18 12%,transparent 13%);background-size:24px 24px"></div>
+            <div class="map-cell-tile" style="--x:5;--y:3;width:calc(var(--cell) * 14);height:calc(var(--cell) * 10);background:#79502d;background-image:repeating-linear-gradient(90deg,#0005 0 2px,transparent 2px 14px)"></div>
+          </div>
+          <div class="battle-map-grid"></div>
+          <div class="battle-map-overlays"><div class="map-cell-prop" style="--x:12;--y:8;background:radial-gradient(circle,#b78750 0 18%,#4f3019 19% 26%,transparent 27%)"></div></div>
+          <div class="battle-map-ambience ambience-storm" style="--ambience-strength:.5"><i></i><i></i></div>
+          <button class="map-token selected" style="--x:9;--y:8;--size:1;--token:#8f2f2f"><span class="map-token-face">A</span><span class="map-token-name">Astrid Vale</span><span class="map-token-health"><i style="width:82%"></i></span></button>
+          <button class="map-token enemy-token" style="--x:15;--y:6;--size:2;--token:#315f89"><span class="map-token-face">S</span><span class="map-token-name">Sea Spawn</span></button>
+        </div>
+      </div>
+      <div class="map-shortcut-hint"><span><kbd>Space</kbd> pan</span><span><kbd>Wheel + Ctrl</kbd> zoom</span><span><kbd>T</kbd> tokens</span><span><kbd>F</kbd> fog</span><span><kbd>R</kbd> ruler</span><span><kbd>X</kbd> ping</span></div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

@@ -306,10 +306,13 @@ let selectedMapSidebar = "tokens";
 let selectedMapBrushSize = 1;
 let selectedMapTileCategory = "All";
 let mapTileSearch = "";
+let selectedMapSceneCategory = "All";
+let mapSceneSearch = "";
 let selectedMapTokenCategory = "All";
 let mapTokenSearch = "";
 let mapTokenResultLimit = 60;
 let mapTokenSearchTimer = null;
+let mapLibrarySearchTimer = null;
 let selectedMapRulerStart = null;
 let mapSpacePan = false;
 let mapPointerState = null;
@@ -369,12 +372,10 @@ const BUILT_IN_MAP_TILES = [
   { id: "sandstone", name: "Sandstone", category: "Dungeon", style: "background:#caa869;background-image:linear-gradient(90deg,rgba(122,92,50,.34) 2px,transparent 2px),linear-gradient(rgba(122,92,50,.34) 2px,transparent 2px),linear-gradient(160deg,rgba(255,255,255,.1),transparent 40%);background-size:50% 34%,50% 34%,100% 100%;" },
   { id: "obsidian", name: "Obsidian", category: "Dungeon", style: "background:#21232b;background-image:linear-gradient(135deg,transparent 40%,rgba(122,142,172,.28) 42%,transparent 47%),linear-gradient(35deg,transparent 58%,rgba(90,112,152,.2) 60%,transparent 65%);" },
   { id: "fungal-floor", name: "Fungal Floor", category: "Dungeon", style: "background:#3c4238;background-image:radial-gradient(circle at 32% 40%,rgba(120,220,150,.5) 0 6%,transparent 7%),radial-gradient(circle at 70% 66%,rgba(90,190,210,.45) 0 5%,transparent 6%),radial-gradient(circle at 55% 24%,rgba(160,120,210,.4) 0 4%,transparent 5%);background-size:40px 40px,32px 32px,26px 26px;" },
-  { id: "checker-tile", name: "Checker Tile", category: "Town", style: "background:#d8d3c6;background-image:conic-gradient(#3a3a42 0 25%,transparent 0 50%,#3a3a42 0 75%,transparent 0);background-size:50% 50%;" },
   { id: "gravel-road", name: "Gravel Road", category: "Town", style: "background:#6f6a60;background-image:radial-gradient(circle,rgba(0,0,0,.17) 0 11%,transparent 12%),radial-gradient(circle,rgba(255,255,255,.1) 0 6%,transparent 7%);background-size:16px 16px,11px 13px;" },
   { id: "swamp", name: "Swamp", category: "Wilderness", style: "background:#4a5a3a;background-image:radial-gradient(circle at 30% 42%,rgba(24,38,20,.55) 0 15%,transparent 16%),radial-gradient(circle at 72% 68%,rgba(126,150,86,.3) 0 11%,transparent 12%),radial-gradient(circle at 55% 30%,rgba(150,170,110,.25) 0 6%,transparent 7%);background-size:32px 32px,26px 26px,18px 18px;" },
   { id: "mud", name: "Mud", category: "Wilderness", style: "background:#5a4327;background-image:radial-gradient(ellipse at 40% 52%,rgba(28,18,9,.45) 0 22%,transparent 23%),radial-gradient(ellipse at 76% 30%,rgba(124,96,56,.32) 0 16%,transparent 17%);background-size:36px 27px,30px 24px;" },
   { id: "blood-floor", name: "Blood-Stained", category: "Hazard", style: "background:#5a2226;background-image:radial-gradient(ellipse at 40% 46%,rgba(18,4,7,.5) 0 22%,transparent 23%),radial-gradient(circle at 72% 68%,rgba(122,30,36,.55) 0 11%,transparent 12%),radial-gradient(circle at 30% 74%,rgba(90,20,26,.5) 0 8%,transparent 9%);background-size:40px 34px,22px 22px,18px 18px;" },
-  { id: "webbed-floor", name: "Webbed Floor", category: "Hazard", style: "background:#5a564e;background-image:radial-gradient(circle at 50% 50%,transparent 0 20%,rgba(230,228,220,.28) 21% 22%,transparent 23% 40%,rgba(230,228,220,.28) 41% 42%,transparent 43%),conic-gradient(from 0deg at 50% 50%,rgba(230,228,220,.22) 0 1%,transparent 1% 24%,rgba(230,228,220,.22) 25% 26%,transparent 26% 49%,rgba(230,228,220,.22) 50% 51%,transparent 51% 74%,rgba(230,228,220,.22) 75% 76%,transparent 76%);" },
   { id: "wooden-door", name: "Wooden Door", category: "Props", kind: "prop", style: "background-color:transparent;background-image:linear-gradient(90deg,transparent 13%,#3a2212 14% 20%,#8a5b31 21% 79%,#3a2212 80% 86%,transparent 87%),radial-gradient(circle at 68% 50%,#e2b95e 0 5%,transparent 6%);" },
   { id: "stone-stairs", name: "Stone Stairs", category: "Props", kind: "prop", style: "background-color:transparent;background-image:repeating-linear-gradient(0deg,#4c4a48 0 4px,#8b8781 4px 8px);box-shadow:inset 0 0 0 5px transparent;" },
   { id: "treasure-chest", name: "Treasure Chest", category: "Props", kind: "prop", style: "background-color:transparent;background-image:linear-gradient(transparent 25%,#3b2414 26% 31%,#9c6631 32% 70%,#4b2a14 71% 77%,transparent 78%),linear-gradient(90deg,transparent 40%,#e3b657 41% 59%,transparent 60%);background-size:100% 100%;" },
@@ -404,7 +405,59 @@ const BUILT_IN_MAP_TILES = [
   { id: "crystals", name: "Crystals", category: "Props", kind: "prop", style: "background-color:transparent;background-image:linear-gradient(200deg,transparent 40%,#8fd6ea 42% 50%,#4aa6c8 51% 58%,transparent 60%),linear-gradient(150deg,transparent 46%,#a6e0f0 47% 55%,transparent 57%);filter:drop-shadow(0 0 4px #7bd0e8);" },
   { id: "bones", name: "Bones & Skull", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(circle at 45% 50%,#e6e1d4 0 15%,transparent 16%),radial-gradient(circle at 40% 46%,#332e28 0 4%,transparent 5%),radial-gradient(circle at 51% 46%,#332e28 0 4%,transparent 5%),radial-gradient(circle at 68% 64%,#cfc9bb 0 8%,transparent 9%),radial-gradient(circle at 30% 66%,#cfc9bb 0 6%,transparent 7%);" },
   { id: "bed", name: "Bed", category: "Props", kind: "prop", style: "background-color:transparent;background-image:linear-gradient(#eae4d6,#eae4d6),linear-gradient(#a84a44,#8f3d38),linear-gradient(#6f4a28,#6f4a28);background-size:44% 18%,44% 42%,52% 76%;background-position:center 24%,center 72%,center 50%;background-repeat:no-repeat;" },
-  { id: "round-table", name: "Round Table", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 50%,#9b693b 0 40%,#5a3a1e 41% 46%,transparent 47%);" }
+  { id: "round-table", name: "Round Table", category: "Props", kind: "prop", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 50%,#9b693b 0 40%,#5a3a1e 41% 46%,transparent 47%);" },
+  { id: "slate-floor", name: "Slate Floor", category: "Dungeon", tags: "dark castle tower", style: "background:#454a50;background-image:linear-gradient(90deg,rgba(13,17,20,.38) 2px,transparent 2px),linear-gradient(rgba(13,17,20,.38) 2px,transparent 2px),linear-gradient(135deg,rgba(255,255,255,.09),transparent 48%);background-size:50% 50%,50% 50%,100% 100%;" },
+  { id: "temple-tile", name: "Temple Mosaic", category: "Dungeon", tags: "shrine holy ruin", style: "background:#a69b83;background-image:radial-gradient(circle,transparent 0 25%,rgba(93,75,55,.32) 26% 30%,transparent 31% 46%,rgba(93,75,55,.22) 47% 50%,transparent 51%),linear-gradient(45deg,rgba(255,255,255,.08) 25%,transparent 25%);" },
+  { id: "rune-stone", name: "Rune Stone", category: "Arcane", tags: "magic sigil portal", style: "background:#343b48;background-image:radial-gradient(circle,transparent 0 29%,rgba(76,196,230,.55) 30% 32%,transparent 33% 45%,rgba(76,196,230,.24) 46% 48%,transparent 49%),conic-gradient(from 45deg,transparent 0 23%,rgba(103,215,239,.28) 24% 26%,transparent 27% 73%,rgba(103,215,239,.28) 74% 76%,transparent 77%);" },
+  { id: "sewer-stone", name: "Sewer Stone", category: "Dungeon", tags: "undercity damp tunnel", style: "background:#4d5248;background-image:linear-gradient(90deg,rgba(21,28,24,.42) 2px,transparent 2px),linear-gradient(rgba(21,28,24,.42) 2px,transparent 2px),radial-gradient(circle at 22% 68%,rgba(78,116,73,.35),transparent 28%);background-size:50% 100%,100% 50%,100% 100%;" },
+  { id: "wet-cobble", name: "Wet Cobblestone", category: "Town", tags: "rain sewer street", style: "background:#4f5b60;background-image:radial-gradient(ellipse at 30% 35%,rgba(185,218,226,.17) 0 20%,transparent 21%),radial-gradient(ellipse at 74% 67%,rgba(8,17,22,.28) 0 22%,transparent 23%);background-size:25px 20px;" },
+  { id: "wooden-deck", name: "Wooden Deck", category: "Coastal", tags: "ship dock pier", style: "background:#79502d;background-image:repeating-linear-gradient(90deg,rgba(39,20,8,.42) 0 2px,transparent 2px 14px),linear-gradient(rgba(235,194,128,.12),rgba(28,13,6,.22));" },
+  { id: "dead-grass", name: "Dead Grass", category: "Wilderness", tags: "autumn graveyard dry", style: "background:#777047;background-image:linear-gradient(110deg,rgba(220,197,112,.18) 0 8%,transparent 9%),linear-gradient(35deg,rgba(48,42,24,.2) 0 7%,transparent 8%);background-size:15px 18px;" },
+  { id: "jungle", name: "Jungle Floor", category: "Wilderness", tags: "tropical vines dense", style: "background:#274d31;background-image:radial-gradient(ellipse at 25% 38%,#4b7e48 0 14%,transparent 15%),radial-gradient(ellipse at 73% 68%,#315f3c 0 18%,transparent 19%),linear-gradient(45deg,transparent 46%,rgba(151,190,91,.18) 47% 51%,transparent 52%);background-size:29px 25px,35px 31px,22px 22px;" },
+  { id: "autumn-leaves", name: "Autumn Leaves", category: "Wilderness", tags: "forest fall orange", style: "background:#5b5838;background-image:radial-gradient(ellipse at 26% 34%,#a4542b 0 10%,transparent 11%),radial-gradient(ellipse at 70% 65%,#c17a2f 0 9%,transparent 10%),radial-gradient(ellipse at 48% 72%,#7f3d27 0 8%,transparent 9%);background-size:28px 24px,24px 29px,20px 22px;" },
+  { id: "desert-rock", name: "Desert Rock", category: "Wilderness", tags: "badlands canyon arid", style: "background:#9d7147;background-image:radial-gradient(ellipse at 30% 38%,rgba(68,38,20,.25) 0 26%,transparent 27%),linear-gradient(150deg,rgba(237,188,124,.18),transparent 44%);background-size:38px 31px,100% 100%;" },
+  { id: "ash-ground", name: "Ash Ground", category: "Hazard", tags: "volcano burned fire", style: "background:#47413f;background-image:radial-gradient(circle at 30% 40%,rgba(18,17,17,.34) 0 11%,transparent 12%),radial-gradient(circle at 72% 66%,rgba(196,111,54,.18) 0 7%,transparent 8%);background-size:22px 22px,29px 27px;" },
+  { id: "volcanic-rock", name: "Volcanic Rock", category: "Hazard", tags: "lava basalt fire", style: "background:#29272a;background-image:linear-gradient(135deg,transparent 43%,rgba(210,71,38,.34) 44% 46%,transparent 47%),linear-gradient(35deg,transparent 62%,rgba(114,39,31,.3) 63% 66%,transparent 67%);" },
+  { id: "shallow-water", name: "Shallow Water", category: "Coastal", tags: "river oasis shore", style: "background:#4d9aab;background-image:repeating-radial-gradient(ellipse at 50% 20%,transparent 0 8px,rgba(218,248,246,.25) 9px 10px,transparent 11px 18px);" },
+  { id: "bog-water", name: "Bog Water", category: "Hazard", tags: "swamp sewer marsh", style: "background:#435b45;background-image:radial-gradient(circle at 28% 36%,rgba(154,175,99,.3) 0 8%,transparent 9%),radial-gradient(circle at 72% 68%,rgba(16,31,22,.34) 0 13%,transparent 14%);background-size:27px 25px,37px 32px;" },
+  { id: "farmland", name: "Furrowed Field", category: "Wilderness", tags: "farm crops village", style: "background:#725332;background-image:repeating-linear-gradient(90deg,rgba(37,25,12,.38) 0 3px,transparent 3px 11px),linear-gradient(90deg,transparent 45%,rgba(120,143,63,.28) 46% 54%,transparent 55%);background-size:auto,22px 100%;" },
+  { id: "wildflowers", name: "Wildflowers", category: "Wilderness", tags: "meadow colorful grass", style: "background:#54804b;background-image:radial-gradient(circle,#e5c65c 0 5%,transparent 6%),radial-gradient(circle,#d77f9d 0 4%,transparent 5%),radial-gradient(circle,#b6d9ef 0 4%,transparent 5%);background-size:24px 27px,31px 29px,27px 35px;background-position:2px 4px,12px 14px,6px 20px;" },
+  { id: "iron-door", name: "Iron Door", category: "Props", kind: "prop", tags: "gate metal prison", style: "background-color:transparent;background-image:linear-gradient(90deg,transparent 15%,#252a2e 16% 22%,#626970 23% 77%,#252a2e 78% 84%,transparent 85%),radial-gradient(circle at 67% 50%,#d2a94d 0 5%,transparent 6%);" },
+  { id: "trapdoor", name: "Trapdoor", category: "Props", kind: "prop", tags: "hatch cellar secret", style: "background-color:transparent;background-image:linear-gradient(90deg,transparent 16%,#412817 17% 21%,#8a5b35 22% 78%,#412817 79% 83%,transparent 84%),linear-gradient(transparent 17%,#412817 18% 22%,transparent 23% 77%,#412817 78% 82%,transparent 83%);" },
+  { id: "ladder", name: "Ladder", category: "Props", kind: "prop", tags: "climb sewer loft", style: "background-color:transparent;background-image:repeating-linear-gradient(0deg,transparent 0 8px,#b17b45 9px 12px),linear-gradient(90deg,transparent 25%,#68431f 26% 32%,transparent 33% 67%,#68431f 68% 74%,transparent 75%);" },
+  { id: "well", name: "Stone Well", category: "Props", kind: "prop", tags: "village water town", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 50%,#1d4b63 0 23%,#718087 24% 32%,#3f4648 33% 42%,transparent 43%);" },
+  { id: "market-stall", name: "Market Stall", category: "Props", kind: "prop", tags: "shop town awning", style: "background-color:transparent;background-image:repeating-linear-gradient(90deg,#b7443f 0 14%,#e3d4aa 14% 28%);background-size:72% 48%;background-position:center;background-repeat:no-repeat;filter:drop-shadow(0 3px 3px #0007);" },
+  { id: "cart", name: "Wooden Cart", category: "Props", kind: "prop", tags: "wagon road cargo", style: "background-color:transparent;background-image:radial-gradient(circle at 28% 76%,#2c1b0d 0 11%,#8b653d 12% 18%,transparent 19%),radial-gradient(circle at 72% 76%,#2c1b0d 0 11%,#8b653d 12% 18%,transparent 19%),linear-gradient(#9a6738,#5a351d);background-size:100% 100%,100% 100%,58% 42%;background-position:center,center,center 45%;background-repeat:no-repeat;" },
+  { id: "hay-bales", name: "Hay Bales", category: "Props", kind: "prop", tags: "farm barn straw", style: "background-color:transparent;background-image:radial-gradient(circle at 34% 54%,#d7aa48 0 21%,#8d672c 22% 27%,transparent 28%),radial-gradient(circle at 65% 55%,#c99b3c 0 20%,#805b25 21% 26%,transparent 27%);" },
+  { id: "fence", name: "Wood Fence", category: "Props", kind: "prop", tags: "farm boundary barricade", style: "background-color:transparent;background-image:linear-gradient(transparent 38%,#75502d 39% 46%,transparent 47% 59%,#75502d 60% 67%,transparent 68%),repeating-linear-gradient(90deg,transparent 0 15%,#9b7042 16% 23%,transparent 24% 38%);" },
+  { id: "log", name: "Fallen Log", category: "Props", kind: "prop", tags: "forest cover tree", style: "background-color:transparent;background-image:linear-gradient(transparent 39%,#4e301b 40% 45%,#805332 46% 58%,#4e301b 59% 64%,transparent 65%),radial-gradient(circle at 18% 52%,#a17449 0 14%,#4e301b 15% 20%,transparent 21%);" },
+  { id: "pine-tree", name: "Pine Tree", category: "Props", kind: "prop", tags: "forest snow evergreen", style: "background-color:transparent;background-image:conic-gradient(from 150deg at 50% 25%,transparent 0 14%,#244b35 15% 46%,transparent 47%),conic-gradient(from 150deg at 50% 48%,transparent 0 14%,#315f3e 15% 46%,transparent 47%),linear-gradient(90deg,transparent 46%,#5a3c22 47% 53%,transparent 54%);filter:drop-shadow(0 3px 3px #0006);" },
+  { id: "palm-tree", name: "Palm Tree", category: "Props", kind: "prop", tags: "desert tropical oasis", style: "background-color:transparent;background-image:conic-gradient(from 15deg at 50% 28%,#3c7b43 0 8%,transparent 9% 17%,#4b8b4e 18% 27%,transparent 28% 41%,#3c7b43 42% 51%,transparent 52% 67%,#4b8b4e 68% 77%,transparent 78%),linear-gradient(84deg,transparent 47%,#80552f 48% 54%,transparent 55%);" },
+  { id: "dead-tree", name: "Dead Tree", category: "Props", kind: "prop", tags: "swamp graveyard horror", style: "background-color:transparent;background-image:linear-gradient(70deg,transparent 44%,#4a3727 45% 50%,transparent 51%),linear-gradient(110deg,transparent 46%,#4a3727 47% 52%,transparent 53%),linear-gradient(90deg,transparent 46%,#5e422d 47% 54%,transparent 55%);filter:drop-shadow(0 3px 2px #0007);" },
+  { id: "sarcophagus", name: "Sarcophagus", category: "Props", kind: "prop", tags: "crypt tomb undead", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 25%,#9b9588 0 20%,transparent 21%),linear-gradient(#8a8479,#514d47);background-size:100% 100%,38% 72%;background-position:center,center 60%;background-repeat:no-repeat;" },
+  { id: "throne", name: "Throne", category: "Props", kind: "prop", tags: "royal palace chair", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 24%,#d8ad54 0 8%,transparent 9%),linear-gradient(#8d2e36,#5b2027),linear-gradient(#d8ad54,#8d692f);background-size:100% 100%,36% 64%,48% 72%;background-position:center,center 42%,center 50%;background-repeat:no-repeat;" },
+  { id: "cauldron", name: "Cauldron", category: "Props", kind: "prop", tags: "witch alchemy potion", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 48%,#6bd29c 0 22%,#26332e 23% 31%,#151918 32% 42%,transparent 43%);filter:drop-shadow(0 0 5px rgba(80,210,145,.55));" },
+  { id: "tent", name: "Canvas Tent", category: "Props", kind: "prop", tags: "camp bandit travel", style: "background-color:transparent;background-image:conic-gradient(from 315deg at 50% 72%,transparent 0 25%,#9c7446 26% 49%,#c49a64 50% 73%,transparent 74%);filter:drop-shadow(0 4px 3px #0007);" },
+  { id: "statue-broken", name: "Broken Statue", category: "Props", kind: "prop", tags: "ruin temple rubble", style: "background-color:transparent;background-image:radial-gradient(ellipse at 36% 61%,#99958b 0 14%,transparent 15%),radial-gradient(ellipse at 57% 49%,#bbb6aa 0 18%,transparent 19%),radial-gradient(circle at 70% 68%,#77736b 0 11%,transparent 12%);" },
+  { id: "book-pile", name: "Book Pile", category: "Props", kind: "prop", tags: "library wizard study", style: "background-color:transparent;background-image:linear-gradient(transparent 30%,#9f393f 31% 42%,transparent 43%),linear-gradient(transparent 45%,#315d87 46% 58%,transparent 59%),linear-gradient(transparent 61%,#b18a3c 62% 74%,transparent 75%);background-size:58% 100%,68% 100%,54% 100%;background-position:center;background-repeat:no-repeat;" },
+  { id: "armor-rack", name: "Armor Rack", category: "Props", kind: "prop", tags: "guard barracks equipment", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 27%,#979da1 0 11%,transparent 12%),linear-gradient(115deg,transparent 38%,#6d7479 39% 58%,transparent 59%),linear-gradient(65deg,transparent 38%,#6d7479 39% 58%,transparent 59%);" },
+  { id: "weapon-rack", name: "Weapon Rack", category: "Props", kind: "prop", tags: "swords guard barracks", style: "background-color:transparent;background-image:repeating-linear-gradient(105deg,transparent 0 18%,#b8bdc1 19% 23%,#5f4124 24% 27%,transparent 28% 42%),linear-gradient(transparent 28%,#6f4927 29% 35%,transparent 36% 67%,#6f4927 68% 74%,transparent 75%);" },
+  { id: "rope-coil", name: "Rope Coil", category: "Props", kind: "prop", tags: "ship dock camp", style: "background-color:transparent;background-image:repeating-radial-gradient(circle at 50% 50%,transparent 0 8%,#b68b53 9% 13%,transparent 14% 21%,#8f693d 22% 26%,transparent 27% 34%);" },
+  { id: "anvil", name: "Forge Anvil", category: "Props", kind: "prop", tags: "smith forge metal", style: "background-color:transparent;background-image:linear-gradient(transparent 27%,#8b9398 28% 42%,#42494e 43% 54%,transparent 55%),linear-gradient(90deg,transparent 39%,#555c61 40% 60%,transparent 61%);filter:drop-shadow(0 3px 3px #0008);" },
+  { id: "mast", name: "Ship Mast", category: "Props", kind: "prop", tags: "ship sail nautical", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 50%,#b78750 0 16%,#4f3019 17% 24%,transparent 25%),linear-gradient(90deg,transparent 47%,#6f4727 48% 52%,transparent 53%);" },
+  { id: "anchor", name: "Anchor", category: "Props", kind: "prop", tags: "ship ocean nautical", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 24%,transparent 0 8%,#7e878d 9% 13%,transparent 14%),linear-gradient(90deg,transparent 47%,#7e878d 48% 53%,transparent 54%),radial-gradient(ellipse at 50% 65%,transparent 0 24%,#7e878d 25% 29%,transparent 30%);" },
+  { id: "ship-wheel", name: "Ship Wheel", category: "Props", kind: "prop", tags: "helm ship pirate", style: "background-color:transparent;background-image:repeating-conic-gradient(from 0deg at 50% 50%,#8b5d33 0 3deg,transparent 4deg 42deg),radial-gradient(circle,transparent 0 25%,#9b6a3a 26% 32%,transparent 33%);" }
+];
+const MAP_AMBIENCE_OPTIONS = [
+  { id: "clear", name: "Clear daylight" },
+  { id: "sunset", name: "Golden sunset" },
+  { id: "moonlight", name: "Moonlight" },
+  { id: "torchlight", name: "Torchlight" },
+  { id: "mist", name: "Drifting mist" },
+  { id: "storm", name: "Rain storm" },
+  { id: "snowfall", name: "Snowfall" },
+  { id: "embers", name: "Heat and embers" },
+  { id: "arcane", name: "Arcane glow" }
 ];
 
 function readJson(key, fallback) {
@@ -640,7 +693,11 @@ function normalizeMapData(data = {}) {
       gridOpacity: Math.min(.8, Math.max(.08, Number(data.display?.gridOpacity ?? .32))),
       gridThickness: Math.min(3, Math.max(1, Number(data.display?.gridThickness || 1))),
       tokenNames: data.display?.tokenNames !== false,
-      tokenHealth: data.display?.tokenHealth !== false
+      tokenHealth: data.display?.tokenHealth !== false,
+      terrain: data.display?.terrain !== false,
+      props: data.display?.props !== false,
+      ambience: MAP_AMBIENCE_OPTIONS.some(option => option.id === data.display?.ambience) ? data.display.ambience : "clear",
+      ambienceStrength: Math.min(.9, Math.max(.1, Number(data.display?.ambienceStrength ?? .48)))
     },
     background: String(data.background || ""),
     backgroundFit: data.backgroundFit || "cover",
@@ -1002,6 +1059,7 @@ async function applyCampaignMapScene(mapId, sceneId) {
   data.tiles = scene.tiles;
   data.overlays = scene.overlays || [];
   data.scene = { id: scene.id, name: scene.name, description: scene.description };
+  data.display.ambience = MAP_AMBIENCE_OPTIONS.some(option => option.id === scene.ambience) ? scene.ambience : data.display.ambience;
   data.fog.cells = data.fog.cells.filter(cell => {
     const [x, y] = String(cell).split(",").map(Number);
     return x >= 0 && y >= 0 && x < data.columns && y < data.rows;
@@ -1126,6 +1184,7 @@ async function createCampaignMap(campaignId, values) {
     background: campaignMapImageDraft || String(values.background || "").trim(),
     tiles: scene?.tiles || [],
     overlays: scene?.overlays || [],
+    display: scene?.ambience ? { ambience: scene.ambience } : undefined,
     scene: scene ? { id: scene.id, name: scene.name, description: scene.description } : null,
     session: { state: "draft", updatedAt: new Date().toISOString() }
   });
@@ -1405,12 +1464,27 @@ async function updateCampaignMapSettings(mapId, values) {
       gridColor: values.gridColor || map.data?.display?.gridColor,
       gridOpacity: values.gridOpacity ?? map.data?.display?.gridOpacity,
       tokenNames: values.tokenNames === "on",
-      tokenHealth: values.tokenHealth === "on"
+      tokenHealth: values.tokenHealth === "on",
+      terrain: values.terrain === "on",
+      props: values.props === "on",
+      ambience: values.ambience || map.data?.display?.ambience,
+      ambienceStrength: values.ambienceStrength ?? map.data?.display?.ambienceStrength
     },
     background: campaignMapImageDraft || String(values.background || "").trim() || map.data?.background || ""
   });
   campaignMapImageDraft = "";
   await saveCampaignMap(map, "Map settings saved", { preserveTokens: true });
+}
+async function updateCampaignMapDisplay(mapId, setting, value) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can change map layers"); return; }
+  const data = normalizeMapData(map.data);
+  if (setting === "grid") data.gridEnabled = Boolean(value);
+  else if (["terrain", "props", "tokenNames", "tokenHealth"].includes(setting)) data.display[setting] = Boolean(value);
+  else if (setting === "ambience" && MAP_AMBIENCE_OPTIONS.some(option => option.id === value)) data.display.ambience = value;
+  else return;
+  map.data = data;
+  await saveCampaignMap(map, "Map display updated", { preserveTokens: true });
 }
 async function deleteCampaignMap(mapId) {
   const map = campaignMapById(mapId);
@@ -6670,7 +6744,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     return `<section class="campaign-panel campaign-map-panel campaign-map-room">
       <div class="campaign-map-hero">
         <div>
-          <span class="eyebrow">MAP STUDIO 2.1</span>
+          <span class="eyebrow">MAP STUDIO 3.0</span>
           <h3>Encounter maps</h3>
           <p>${isDm ? "Create a grid map, upload art, and place party tokens." : "The DM has not shared a battle map yet."}</p>
         </div>
@@ -6691,6 +6765,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   if (!allTiles.some(tile => tile.id === selectedMapTile)) selectedMapTile = allTiles[0]?.id || "stone-floor";
   const tileCategories = ["All", ...new Set(allTiles.map(tile => tile.category || "Other"))];
   if (!tileCategories.includes(selectedMapTileCategory)) selectedMapTileCategory = "All";
+  const sceneCategories = ["All", ...new Set(sceneTemplates.map(scene => scene.category || "Other"))];
+  if (!sceneCategories.includes(selectedMapSceneCategory)) selectedMapSceneCategory = "All";
   const tileStyles = new Map(allTiles.map(tile => [tile.id, mapTileStyle(activeMap, tile.id)]));
   const boardBaseStyle = data.dungeon?.wallTile ? tileStyles.get(data.dungeon.wallTile) || mapTileStyle(activeMap, data.dungeon.wallTile) : "";
   const sessionLabel = sessionState === "live" ? "Live" : sessionState === "paused" ? "Paused" : sessionState === "ended" ? "Ended" : "Draft";
@@ -6715,14 +6791,20 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     <button type="button" class="${selectedMapTool === "ruler" ? "active" : ""}" data-map-tool="ruler" title="Measure distance (R)"><span>R</span><small>Ruler</small></button>
     ${isDm ? `<button type="button" data-map-undo="${escapeHtml(activeMap.id)}" title="Undo last tile, fog, or scene edit" ${mapEditHistory.get(activeMap.id)?.length ? "" : "disabled"}><span>U</span><small>Undo</small></button>` : ""}
   </nav>` : "";
-  const visiblePaletteTiles = allTiles.filter(tile => selectedMapTileCategory === "All" || tile.category === selectedMapTileCategory);
+  const normalizedTileSearch = mapTileSearch.trim().toLowerCase();
+  const visiblePaletteTiles = allTiles.filter(tile => {
+    if (selectedMapTileCategory !== "All" && tile.category !== selectedMapTileCategory) return false;
+    const searchable = `${tile.name} ${tile.category} ${tile.tags || ""} ${tile.kind || "terrain"}`.toLowerCase();
+    return !normalizedTileSearch || searchable.includes(normalizedTileSearch);
+  });
   const tilePalette = isDm ? `<div class="map-library-filter"><label><span>Find terrain or props</span><input type="search" value="${escapeHtml(mapTileSearch)}" placeholder="Search tiles, doors, trees..." data-map-tile-search></label></div>
   <div class="map-library-categories" aria-label="Tile categories">${tileCategories.map(category => `<button type="button" class="${selectedMapTileCategory === category ? "active" : ""}" data-map-tile-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div>
+  <div class="map-library-result-line"><span>${visiblePaletteTiles.length} assets</span><small>${visiblePaletteTiles.filter(tile => tile.kind === "prop").length} props &middot; ${visiblePaletteTiles.filter(tile => tile.kind !== "prop").length} terrain</small></div>
   <div class="map-tile-palette">
-    ${visiblePaletteTiles.map(tile => `<button type="button" class="map-tile-swatch ${selectedMapTile === tile.id ? "active" : ""}" data-map-tile="${escapeHtml(tile.id)}" data-library-search="${escapeHtml(`${tile.name} ${tile.category}`.toLowerCase())}" title="${escapeHtml(tile.name)}" ${mapTileSearch && !`${tile.name} ${tile.category}`.toLowerCase().includes(mapTileSearch.toLowerCase()) ? "hidden" : ""}>
+    ${visiblePaletteTiles.map(tile => `<button type="button" class="map-tile-swatch ${selectedMapTile === tile.id ? "active" : ""}" data-map-tile="${escapeHtml(tile.id)}" title="${escapeHtml(tile.name)}">
       <span style="${mapTileStyle(activeMap, tile.id)}"></span>
       <small>${escapeHtml(tile.name)}</small><em>${escapeHtml(tile.kind === "prop" ? "Prop overlay" : tile.category)}</em>
-    </button>`).join("")}
+    </button>`).join("") || `<p class="map-dock-note">No assets match that search.</p>`}
   </div>
   <details class="map-custom-tile">
     <summary>Upload custom tile stamp</summary>
@@ -6836,22 +6918,40 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     ${tokenMore}
     ${tokenNotice}
   </section>` : `<div class="map-player-tool-summary"><strong>Player map tools</strong><p>Move your own character token, pan and zoom the map, measure distance, and ping locations for the party. Monster and NPC controls remain with the DM.</p></div>`;
-  const sceneGallery = sceneTemplates.map(scene => `<article class="map-scene-card">
-    <div class="map-scene-preview" style="${mapTileStyle(activeMap, scene.previewTile)}"></div>
-    <div><small>${escapeHtml(scene.category)} &middot; ${escapeHtml(scene.size)}</small><strong>${escapeHtml(scene.name)}</strong><p>${escapeHtml(scene.description)}</p></div>
-    <button type="button" data-map-scene="${escapeHtml(scene.id)}" data-map-id="${escapeHtml(activeMap.id)}">Apply</button>
-  </article>`).join("");
+  const normalizedSceneSearch = mapSceneSearch.trim().toLowerCase();
+  const visibleScenes = sceneTemplates.filter(scene => {
+    if (selectedMapSceneCategory !== "All" && scene.category !== selectedMapSceneCategory) return false;
+    const searchable = `${scene.name} ${scene.category} ${scene.tags || ""} ${scene.description}`.toLowerCase();
+    return !normalizedSceneSearch || searchable.includes(normalizedSceneSearch);
+  });
+  const sceneGallery = visibleScenes.map(scene => {
+    const previewTiles = Array.isArray(scene.previewTiles) && scene.previewTiles.length ? scene.previewTiles : [scene.previewTile || "stone-floor"];
+    const preview = Array.from({ length: 4 }, (_, index) => previewTiles[index % previewTiles.length]);
+    const ambienceName = MAP_AMBIENCE_OPTIONS.find(option => option.id === scene.ambience)?.name || "Clear daylight";
+    return `<article class="map-scene-card">
+      <div class="map-scene-preview ambience-${escapeHtml(scene.ambience || "clear")}">${preview.map(tileId => `<span style="${mapTileStyle(activeMap, tileId)}"></span>`).join("")}<i></i></div>
+      <div class="map-scene-copy"><small>${escapeHtml(scene.category)} &middot; ${escapeHtml(scene.size)}</small><strong>${escapeHtml(scene.name)}</strong><p>${escapeHtml(scene.description)}</p><em>${escapeHtml(ambienceName)}</em></div>
+      <button type="button" data-map-scene="${escapeHtml(scene.id)}" data-map-id="${escapeHtml(activeMap.id)}">Use scene</button>
+    </article>`;
+  }).join("");
   const assetPackCards = assetPacks.map(pack => `<article class="map-asset-card">
     <div><small>${escapeHtml(pack.type)} &middot; ${escapeHtml(pack.license)}</small><strong>${escapeHtml(pack.name)}</strong><span>by ${escapeHtml(pack.author)}</span><p>${escapeHtml(pack.description)}</p></div>
     <a href="${escapeHtml(pack.sourceUrl)}" target="_blank" rel="noreferrer">Open source pack</a>
   </article>`).join("");
   const dockTabs = `<div class="map-dock-tabs" role="tablist" aria-label="Map panels">
     <button type="button" class="${selectedMapSidebar === "tokens" ? "active" : ""}" data-map-sidebar="tokens">Tokens</button>
-    ${isDm ? `<button type="button" class="${selectedMapSidebar === "tiles" ? "active" : ""}" data-map-sidebar="tiles">Tiles</button><button type="button" class="${selectedMapSidebar === "scene" ? "active" : ""}" data-map-sidebar="scene">Scenes</button>` : ""}
+    ${isDm ? `<button type="button" class="${selectedMapSidebar === "tiles" ? "active" : ""}" data-map-sidebar="tiles">Assets</button><button type="button" class="${selectedMapSidebar === "scene" ? "active" : ""}" data-map-sidebar="scene">Scenes</button><button type="button" class="${selectedMapSidebar === "layers" ? "active" : ""}" data-map-sidebar="layers">Layers</button>` : ""}
   </div>`;
   let dockContent = `${tokenBrowser}<div class="map-token-list-heading"><strong>Tokens on this map</strong><span>${data.tokens.length}</span></div><div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens or choose a quick token above." : "No tokens have been placed yet."}</p>`}</div>`;
-  if (isDm && selectedMapSidebar === "tiles") dockContent = `<div class="map-dock-heading"><div><small>Brush</small><strong>Paint the terrain</strong></div><label>Size<select data-map-brush-size><option value="1" ${selectedMapBrushSize === 1 ? "selected" : ""}>1 x 1</option><option value="2" ${selectedMapBrushSize === 2 ? "selected" : ""}>2 x 2</option><option value="3" ${selectedMapBrushSize === 3 ? "selected" : ""}>3 x 3</option></select></label></div>${tilePalette}`;
-  if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene library</small><strong>Start with a playable layout</strong></div></div><p class="map-dock-note">Applying a scene replaces painted terrain and board dimensions. Tokens are kept and clamped onto the new board.</p>${sceneGallery}<div class="map-asset-library-head"><div><small>Verified free sources</small><strong>Fantasy map and tileset library</strong></div><button type="button" data-map-open-settings="${escapeHtml(activeMap.id)}">Import map</button></div><p class="map-dock-note">These source packs are listed as CC0 or public domain. Download from the author page, then import the finished map above or upload individual images as custom terrain and props.</p><div class="map-asset-card-list">${assetPackCards}</div></div>`;
+  if (isDm && selectedMapSidebar === "tiles") dockContent = `<div class="map-dock-heading"><div><small>Asset browser</small><strong>Paint terrain and props</strong></div><label>Brush<select data-map-brush-size><option value="1" ${selectedMapBrushSize === 1 ? "selected" : ""}>1 x 1</option><option value="2" ${selectedMapBrushSize === 2 ? "selected" : ""}>2 x 2</option><option value="3" ${selectedMapBrushSize === 3 ? "selected" : ""}>3 x 3</option></select></label></div>${tilePalette}`;
+  if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">${visibleScenes.length}/${sceneTemplates.length}</span></div><div class="map-library-filter"><label><span>Find a scene</span><input type="search" value="${escapeHtml(mapSceneSearch)}" placeholder="Crypt, ship, forest, wizard..." data-map-scene-search></label></div><div class="map-library-categories" aria-label="Scene categories">${sceneCategories.map(category => `<button type="button" class="${selectedMapSceneCategory === category ? "active" : ""}" data-map-scene-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div><p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, and atmosphere. Existing tokens are kept and clamped to the new board.</p>${sceneGallery || `<p class="map-dock-note">No scenes match that search.</p>`}<div class="map-asset-library-head"><div><small>Verified free sources</small><strong>More fantasy map artwork</strong></div><button type="button" data-map-open-settings="${escapeHtml(activeMap.id)}">Import map</button></div><p class="map-dock-note">These source packs are listed as CC0 or public domain. Download from the author page, then import a finished map or individual art assets.</p><div class="map-asset-card-list">${assetPackCards}</div></div>`;
+  if (isDm && selectedMapSidebar === "layers") dockContent = `<div class="map-layer-panel"><div class="map-dock-heading"><div><small>Scene controls</small><strong>Layers and atmosphere</strong></div></div><div class="map-layer-stack">
+    <button type="button" data-map-display="terrain" data-map-id="${escapeHtml(activeMap.id)}" aria-pressed="${data.display.terrain}"><span class="map-layer-icon terrain"></span><span><strong>Terrain</strong><small>${data.tiles.length} painted squares</small></span><em>${data.display.terrain ? "Visible" : "Hidden"}</em></button>
+    <button type="button" data-map-display="props" data-map-id="${escapeHtml(activeMap.id)}" aria-pressed="${data.display.props}"><span class="map-layer-icon props"></span><span><strong>Props</strong><small>${data.overlays.length} placed assets</small></span><em>${data.display.props ? "Visible" : "Hidden"}</em></button>
+    <button type="button" data-map-display="grid" data-map-id="${escapeHtml(activeMap.id)}" aria-pressed="${data.gridEnabled}"><span class="map-layer-icon grid"></span><span><strong>Tactical grid</strong><small>${data.columns} by ${data.rows} squares</small></span><em>${data.gridEnabled ? "Visible" : "Hidden"}</em></button>
+    <button type="button" data-map-display="tokenNames" data-map-id="${escapeHtml(activeMap.id)}" aria-pressed="${data.display.tokenNames}"><span class="map-layer-icon labels"></span><span><strong>Token labels</strong><small>${data.tokens.length} map tokens</small></span><em>${data.display.tokenNames ? "Visible" : "Hidden"}</em></button>
+    <div class="map-layer-static"><span class="map-layer-icon fog"></span><span><strong>Fog of war</strong><small>${data.fog.cells.length} covered squares</small></span><em>${data.fog.enabled ? "Active" : "Clear"}</em></div>
+  </div><div class="map-ambience-panel"><small>Atmosphere</small><strong>Set the scene</strong><div class="map-ambience-grid">${MAP_AMBIENCE_OPTIONS.map(option => `<button type="button" class="ambience-${escapeHtml(option.id)} ${data.display.ambience === option.id ? "active" : ""}" data-map-ambience="${escapeHtml(option.id)}" data-map-id="${escapeHtml(activeMap.id)}"><i></i><span>${escapeHtml(option.name)}</span></button>`).join("")}</div></div><p class="map-dock-note">Atmosphere is shared with players and saved with this map. Fine-tune its strength in Map settings.</p></div>`;
   const settingsForm = isDm ? `<details class="map-settings">
     <summary>Map settings</summary>
     <form data-campaign-map-settings="${escapeHtml(activeMap.id)}">
@@ -6865,6 +6965,10 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       <div class="map-display-settings">
         <label>Grid color<input name="gridColor" type="color" value="${escapeHtml(data.display.gridColor)}"></label>
         <label>Grid strength<input name="gridOpacity" type="range" min="0.08" max="0.8" step="0.04" value="${data.display.gridOpacity}"></label>
+        <label>Atmosphere<select name="ambience">${MAP_AMBIENCE_OPTIONS.map(option => `<option value="${escapeHtml(option.id)}" ${data.display.ambience === option.id ? "selected" : ""}>${escapeHtml(option.name)}</option>`).join("")}</select></label>
+        <label>Atmosphere strength<input name="ambienceStrength" type="range" min="0.1" max="0.9" step="0.05" value="${data.display.ambienceStrength}"></label>
+        <label class="map-grid-toggle"><input name="terrain" type="checkbox" ${data.display.terrain ? "checked" : ""}><span><strong>Terrain layer</strong><small>Show painted floor tiles.</small></span></label>
+        <label class="map-grid-toggle"><input name="props" type="checkbox" ${data.display.props ? "checked" : ""}><span><strong>Prop layer</strong><small>Show furniture and scenery.</small></span></label>
         <label class="map-grid-toggle"><input name="tokenNames" type="checkbox" ${data.display.tokenNames ? "checked" : ""}><span><strong>Token names</strong><small>Show labels below tokens.</small></span></label>
         <label class="map-grid-toggle"><input name="tokenHealth" type="checkbox" ${data.display.tokenHealth ? "checked" : ""}><span><strong>Health bars</strong><small>Show current encounter HP.</small></span></label>
       </div>
@@ -6904,7 +7008,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   return `<section class="campaign-panel campaign-map-panel campaign-map-room">
     <div class="campaign-map-hero">
       <div>
-        <span class="eyebrow">MAP STUDIO 2.1</span>
+        <span class="eyebrow">MAP STUDIO 3.0</span>
         <h3>${escapeHtml(activeMap.name)}</h3>
         <p>${isDm ? "Run the table from a dark tactical workspace: start the session, control fog, place tokens, ping, measure, and track play." : "The live table appears here when the DM starts the session. You can move tokens connected to your own character."}</p>
       </div>
@@ -6924,7 +7028,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     ${creatureForm}
     ${fogControls}
     ${runSheet ? `<details class="map-run-drawer"><summary>Encounter and dungeon run sheet</summary>${runSheet}</details>` : ""}
-    ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace map-vtt-workspace">
+    ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace map-vtt-workspace dock-${escapeHtml(selectedMapSidebar)}">
       ${toolRail}
       <aside class="map-side-dock">${dockTabs}<div class="map-dock-body">${dockContent}</div></aside>
       <div class="map-canvas-column">
@@ -6941,9 +7045,10 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <div class="battle-map-shell tool-${escapeHtml(selectedMapTool)}" data-map-shell="${escapeHtml(activeMap.id)}">
         <div class="battle-map-board ${data.gridEnabled ? "" : "gridless"}" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${effectiveCellSize}px;--grid-color:${escapeHtml(data.display.gridColor)};--grid-opacity:${data.display.gridOpacity};--grid-thickness:${data.display.gridThickness}px;${boardBaseStyle}">
           ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : data.tiles.length ? "" : `<div class="battle-map-empty">No map art uploaded</div>`}
-          <div class="battle-map-tiles">${paintedTiles}</div>
+          <div class="battle-map-tiles" ${data.display.terrain ? "" : "hidden"}>${paintedTiles}</div>
           ${data.gridEnabled ? `<div class="battle-map-grid" aria-hidden="true"></div>` : ""}
-          <div class="battle-map-overlays" aria-hidden="true">${paintedProps}</div>
+          <div class="battle-map-overlays" aria-hidden="true" ${data.display.props ? "" : "hidden"}>${paintedProps}</div>
+          <div class="battle-map-ambience ambience-${escapeHtml(data.display.ambience)}" style="--ambience-strength:${data.display.ambienceStrength}" aria-hidden="true"><i></i><i></i></div>
           <div class="battle-map-fog ${isDm ? "dm-fog" : ""}" aria-hidden="true">${fogCells}</div>
           ${tokenButtons}
           <div class="battle-map-pings" aria-hidden="true">${pings}</div>
@@ -9562,6 +9667,16 @@ function initEvents() {
       }
       return;
     }
+    const mapDisplay = event.target.closest("[data-map-display]");
+    if (mapDisplay) {
+      updateCampaignMapDisplay(mapDisplay.dataset.mapId, mapDisplay.dataset.mapDisplay, mapDisplay.getAttribute("aria-pressed") !== "true");
+      return;
+    }
+    const mapAmbience = event.target.closest("[data-map-ambience]");
+    if (mapAmbience) {
+      updateCampaignMapDisplay(mapAmbience.dataset.mapId, "ambience", mapAmbience.dataset.mapAmbience);
+      return;
+    }
     const mapSidebar = event.target.closest("[data-map-sidebar]");
     if (mapSidebar) {
       selectedMapSidebar = mapSidebar.dataset.mapSidebar || "tokens";
@@ -9589,6 +9704,12 @@ function initEvents() {
     const tileCategory = event.target.closest("[data-map-tile-category]");
     if (tileCategory) {
       selectedMapTileCategory = tileCategory.dataset.mapTileCategory || "All";
+      renderCampaigns();
+      return;
+    }
+    const sceneCategory = event.target.closest("[data-map-scene-category]");
+    if (sceneCategory) {
+      selectedMapSceneCategory = sceneCategory.dataset.mapSceneCategory || "All";
       renderCampaigns();
       return;
     }
@@ -9623,7 +9744,7 @@ function initEvents() {
       if (selectedMapTool !== "ruler") selectedMapRulerStart = null;
       if (selectedMapTool === "token") selectedMapSidebar = "tokens";
       if (selectedMapTool === "paint" || selectedMapTool === "erase") selectedMapSidebar = "tiles";
-      if (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase") selectedMapSidebar = "scene";
+      if (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase") selectedMapSidebar = "layers";
       renderCampaigns();
       return;
     }
@@ -10055,9 +10176,11 @@ function initEvents() {
   $("#campaign-detail")?.addEventListener("input", event => {
     const tileSearch = event.target.closest("[data-map-tile-search]");
     const tokenSearch = event.target.closest("[data-map-token-search]");
-    if (!tileSearch && !tokenSearch) return;
+    const sceneSearch = event.target.closest("[data-map-scene-search]");
+    if (!tileSearch && !tokenSearch && !sceneSearch) return;
     const search = String(event.target.value || "").trim().toLowerCase();
     if (tileSearch) mapTileSearch = search;
+    if (sceneSearch) mapSceneSearch = search;
     if (tokenSearch) {
       mapTokenSearch = search;
       clearTimeout(mapTokenSearchTimer);
@@ -10074,9 +10197,18 @@ function initEvents() {
       }, 180);
       return;
     }
-    event.target.closest(".map-dock-body")?.querySelectorAll(".map-tile-swatch[data-library-search]").forEach(card => {
-      card.hidden = Boolean(search && !String(card.dataset.librarySearch || "").includes(search));
-    });
+    clearTimeout(mapLibrarySearchTimer);
+    const selector = tileSearch ? "[data-map-tile-search]" : "[data-map-scene-search]";
+    mapLibrarySearchTimer = setTimeout(() => {
+      renderCampaigns();
+      requestAnimationFrame(() => {
+        const nextSearch = document.querySelector(selector);
+        if (nextSearch) {
+          nextSearch.focus();
+          nextSearch.setSelectionRange(nextSearch.value.length, nextSearch.value.length);
+        }
+      });
+    }, 140);
   });
   $("#campaign-detail")?.addEventListener("change", event => {
     const brushSize = event.target.closest("[data-map-brush-size]");
@@ -10250,7 +10382,7 @@ function initEvents() {
       selectedMapTool = nextTool;
       if (nextTool === "token") selectedMapSidebar = "tokens";
       if (nextTool === "paint" || nextTool === "erase") selectedMapSidebar = "tiles";
-      if (nextTool === "fog-paint" || nextTool === "fog-erase") selectedMapSidebar = "scene";
+      if (nextTool === "fog-paint" || nextTool === "fog-erase") selectedMapSidebar = "layers";
       selectedMapRulerStart = null;
       renderCampaigns();
       event.preventDefault();

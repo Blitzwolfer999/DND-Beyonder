@@ -2,15 +2,27 @@
   "use strict";
 
   const MAP_SCENE_TEMPLATES = [
-    { id: "dungeon-crossroads", name: "Dungeon Crossroads", category: "Dungeon", size: "30 x 20", previewTile: "mossy-stone", description: "A branching flagstone dungeon with chambers, choke points, and a shadowed vault." },
-    { id: "forest-clearing", name: "Forest Clearing", category: "Wilderness", size: "30 x 20", previewTile: "forest", description: "A woodland encounter space with a winding trail, cover, and a shallow stream." },
-    { id: "tavern-floor", name: "Tavern Floor", category: "Town", size: "24 x 16", previewTile: "wood-planks", description: "A warm timber tavern with a central rug, stone hearth, and back-room access." },
-    { id: "town-square", name: "Town Square", category: "Town", size: "32 x 22", previewTile: "cobblestone", description: "A broad market square with roads, green edges, rooftops, and a fountain plaza." },
-    { id: "cavern-pools", name: "Cavern Pools", category: "Dungeon", size: "30 x 20", previewTile: "cave-floor", description: "An irregular cavern divided by dark water, narrow ledges, and unstable stone." },
-    { id: "snow-ruins", name: "Snowbound Ruins", category: "Wilderness", size: "30 x 20", previewTile: "snow", description: "Frozen ruins with broken walls, slick ice, and an exposed central approach." },
-    { id: "dungeon-guardroom", name: "Dungeon Guardroom", category: "Dungeon", size: "24 x 16", previewTile: "flagstone", description: "A fortified guard post stocked with crates, barrels, tables, braziers, and a locked cell." },
-    { id: "crypt-vault", name: "Crypt & Bone Vault", category: "Dungeon", size: "28 x 18", previewTile: "crypt-floor", description: "A shadowed burial vault of gravestones, scattered bones, cobwebs, and a glowing summoning circle." },
-    { id: "throne-hall", name: "Throne Hall", category: "Town", size: "28 x 20", previewTile: "marble", description: "A grand marble hall with a checkered aisle, hanging banners, flanking statues, and a raised throne." },
+    { id: "dungeon-crossroads", name: "Dungeon Crossroads", category: "Dungeon", size: "30 x 20", previewTiles: ["dungeon-wall", "flagstone", "mossy-stone", "shadow"], ambience: "torchlight", tags: "vault corridors traps ritual", description: "A branching flagstone dungeon with chambers, choke points, and a shadowed vault." },
+    { id: "forest-clearing", name: "Forest Clearing", category: "Wilderness", size: "30 x 20", previewTiles: ["forest", "grass", "dirt", "water"], ambience: "clear", tags: "woods stream camp ambush", description: "A woodland encounter space with a winding trail, cover, and a shallow stream." },
+    { id: "tavern-floor", name: "Tavern Floor", category: "Town", size: "24 x 16", previewTiles: ["wood-planks", "rug", "dark-wood", "brick-wall"], ambience: "torchlight", tags: "inn bar brawl interior", description: "A warm timber tavern with a central rug, stone hearth, and back-room access." },
+    { id: "town-square", name: "Town Square", category: "Town", size: "32 x 22", previewTiles: ["cobblestone", "flagstone", "grass", "roof-tile"], ambience: "clear", tags: "market city fountain street", description: "A broad market square with roads, green edges, rooftops, and a fountain plaza." },
+    { id: "cavern-pools", name: "Cavern Pools", category: "Dungeon", size: "30 x 20", previewTiles: ["cave-floor", "deep-water", "chasm", "cracked-stone"], ambience: "mist", tags: "underdark cave water bridge", description: "An irregular cavern divided by dark water, narrow ledges, and unstable stone." },
+    { id: "snow-ruins", name: "Snowbound Ruins", category: "Wilderness", size: "30 x 20", previewTiles: ["snow", "ice", "cracked-stone", "brick-wall"], ambience: "snowfall", tags: "winter frozen shrine keep", description: "Frozen ruins with broken walls, slick ice, and an exposed central approach." },
+    { id: "dungeon-guardroom", name: "Dungeon Guardroom", category: "Dungeon", size: "24 x 16", previewTiles: ["flagstone", "brick-wall", "crypt-floor", "rug"], ambience: "torchlight", tags: "fort guard cell barracks", description: "A fortified guard post stocked with crates, barrels, tables, braziers, and a locked cell." },
+    { id: "crypt-vault", name: "Crypt & Bone Vault", category: "Horror", size: "28 x 18", previewTiles: ["crypt-floor", "webbed-floor", "cracked-stone", "shadow"], ambience: "moonlight", tags: "undead tomb grave necromancy", description: "A shadowed burial vault of gravestones, scattered bones, cobwebs, and a glowing summoning circle." },
+    { id: "throne-hall", name: "Throne Hall", category: "Town", size: "28 x 20", previewTiles: ["marble", "checker-tile", "rug", "flagstone"], ambience: "clear", tags: "palace court royal interior", description: "A grand marble hall with a checkered aisle, hanging banners, flanking statues, and a raised throne." },
+    { id: "ruined-temple", name: "Ruined Temple", category: "Dungeon", size: "30 x 20", previewTiles: ["temple-tile", "cracked-stone", "mossy-stone", "dungeon-wall"], ambience: "moonlight", tags: "altar shrine ruins cult", description: "A roofless sanctuary with broken columns, a ritual dais, and rubble-choked side chapels." },
+    { id: "sewer-junction", name: "Sewer Junction", category: "Dungeon", size: "28 x 18", previewTiles: ["sewer-stone", "wet-cobble", "bog-water", "brick-wall"], ambience: "mist", tags: "city tunnels water grate", description: "A wet undercity junction of raised walkways, barred channels, ladders, and maintenance rooms." },
+    { id: "bandit-camp", name: "Bandit Camp", category: "Wilderness", size: "30 x 20", previewTiles: ["grass", "dead-grass", "dirt", "forest"], ambience: "sunset", tags: "outlaws tents camp road", description: "A defended woodland camp with tents, wagons, a cookfire, and several lines of approach." },
+    { id: "swamp-causeway", name: "Swamp Causeway", category: "Wilderness", size: "30 x 20", previewTiles: ["swamp", "bog-water", "mud", "shallow-water"], ambience: "mist", tags: "marsh bog bridge ruins", description: "A flooded marsh crossed by a broken causeway, tangled growth, and a half-sunken shrine." },
+    { id: "desert-oasis", name: "Desert Oasis", category: "Wilderness", size: "30 x 20", previewTiles: ["sand", "desert-rock", "shallow-water", "sandstone"], ambience: "sunset", tags: "desert camp palms ruin", description: "A palm-ringed oasis between sandstone ruins, dunes, and a caravan campsite." },
+    { id: "volcanic-forge", name: "Volcanic Forge", category: "Hazard", size: "30 x 20", previewTiles: ["volcanic-rock", "lava", "obsidian", "ash-ground"], ambience: "embers", tags: "fire forge lava boss", description: "An ancient forge spanning lava channels with obsidian platforms and a blazing central anvil." },
+    { id: "wizard-laboratory", name: "Wizard Laboratory", category: "Arcane", size: "28 x 18", previewTiles: ["rune-stone", "slate-floor", "obsidian", "temple-tile"], ambience: "arcane", tags: "magic tower books experiment", description: "A rune-lit laboratory packed with bookcases, crystals, experiments, and unstable portals." },
+    { id: "ship-deck", name: "Stormbound Ship", category: "Coastal", size: "30 x 16", previewTiles: ["deep-water", "wooden-deck", "dark-wood", "water"], ambience: "storm", tags: "ship ocean pirate deck", description: "A broad sailing ship deck with raised ends, rigging, cargo, and dangerous open water." },
+    { id: "castle-gate", name: "Castle Gate", category: "Town", size: "32 x 20", previewTiles: ["stone-floor", "cobblestone", "dungeon-wall", "grass"], ambience: "clear", tags: "siege walls courtyard city", description: "A fortified gatehouse and courtyard with battlements, a portcullis, and flanking guard posts." },
+    { id: "graveyard-chapel", name: "Graveyard Chapel", category: "Horror", size: "30 x 20", previewTiles: ["dead-grass", "crypt-floor", "mud", "brick-wall"], ambience: "moonlight", tags: "cemetery undead chapel tomb", description: "A moonlit cemetery surrounding a ruined chapel, mausoleum, and freshly opened graves." },
+    { id: "mushroom-grotto", name: "Mushroom Grotto", category: "Arcane", size: "30 x 20", previewTiles: ["fungal-floor", "cave-floor", "shallow-water", "chasm"], ambience: "arcane", tags: "fey underdark cave crystals", description: "A luminous grotto of giant fungi, crystal shelves, pools, and narrow stone crossings." },
+    { id: "farmstead-raid", name: "Farmstead Raid", category: "Wilderness", size: "32 x 20", previewTiles: ["farmland", "grass", "dirt", "roof-tile"], ambience: "sunset", tags: "farm village road barn", description: "A rural homestead with fenced fields, a barn, cottage, well, and defensible wagon lane." }
   ];
 
   const MAP_ASSET_LIBRARY = [
@@ -26,7 +38,8 @@
   const SCENE_TILE_IDS = [
     "stone-floor", "flagstone", "cracked-stone", "mossy-stone", "crypt-floor", "webbed-floor", "dungeon-wall", "brick-wall", "cave-floor", "chasm",
     "wood-planks", "dark-wood", "cobblestone", "marble", "checker-tile", "roof-tile", "rug", "grass", "forest", "dirt", "sand", "snow", "ice",
-    "water", "deep-water", "lava", "acid", "shadow",
+    "water", "deep-water", "shallow-water", "bog-water", "lava", "acid", "shadow", "wet-cobble", "sewer-stone", "temple-tile", "rune-stone",
+    "slate-floor", "wooden-deck", "dead-grass", "desert-rock", "ash-ground", "volcanic-rock", "farmland", "fungal-floor", "mud", "obsidian", "sandstone", "swamp",
   ];
 
   function hashSeed(value) {
@@ -82,6 +95,14 @@
     };
     const list = () => [...cells.values()].sort((a, b) => a.y - b.y || a.x - b.x);
     return { paint, fill, rect, frame, ellipse, list };
+  }
+
+  function scatterProps(painter, random, tileIds, count, columns, rows, margin = 1) {
+    for (let index = 0; index < count; index += 1) {
+      const x = margin + Math.floor(random() * Math.max(1, columns - margin * 2));
+      const y = margin + Math.floor(random() * Math.max(1, rows - margin * 2));
+      painter.paint(x, y, tileIds[index % tileIds.length]);
+    }
   }
 
   function buildDungeon() {
@@ -438,6 +459,277 @@
     return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
+  function buildRuinedTemple(seed) {
+    const columns = 30;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("dead-grass");
+    painter.rect(3, 2, 24, 16, "temple-tile");
+    painter.frame(2, 1, 26, 18, "dungeon-wall");
+    painter.rect(12, 2, 6, 5, "rune-stone");
+    painter.rect(13, 7, 4, 11, "cracked-stone");
+    painter.rect(3, 3, 6, 6, "mossy-stone");
+    painter.rect(21, 3, 6, 6, "mossy-stone");
+    painter.rect(3, 12, 6, 6, "cracked-stone");
+    painter.rect(21, 12, 6, 6, "cracked-stone");
+    overlay.paint(14, 3, "altar");
+    overlay.paint(14, 5, "summoning-circle");
+    overlay.paint(13, 17, "stone-stairs");
+    overlay.paint(16, 17, "stone-stairs");
+    [[6, 5], [23, 5], [6, 14], [23, 14], [11, 8], [18, 8], [11, 13], [18, 13]].forEach(([x, y]) => overlay.paint(x, y, "stone-pillar"));
+    scatterProps(overlay, random, ["rubble", "statue-broken", "bones"], 18, columns, rows, 2);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildSewer(seed) {
+    const columns = 28;
+    const rows = 18;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("brick-wall");
+    painter.rect(1, 1, 26, 16, "sewer-stone");
+    painter.rect(0, 7, 28, 4, "bog-water");
+    painter.rect(12, 0, 4, 18, "bog-water");
+    painter.rect(0, 6, 28, 1, "wet-cobble");
+    painter.rect(0, 11, 28, 1, "wet-cobble");
+    painter.rect(11, 0, 1, 18, "wet-cobble");
+    painter.rect(16, 0, 1, 18, "wet-cobble");
+    painter.rect(11, 8, 6, 2, "wooden-deck");
+    painter.rect(2, 2, 7, 4, "flagstone");
+    painter.rect(19, 12, 7, 4, "flagstone");
+    overlay.paint(13, 8, "wooden-bridge");
+    overlay.paint(14, 9, "wooden-bridge");
+    overlay.paint(3, 3, "ladder");
+    overlay.paint(24, 14, "ladder");
+    overlay.paint(11, 4, "portcullis");
+    overlay.paint(16, 13, "portcullis");
+    scatterProps(overlay, random, ["barrel", "crate", "rubble", "mushrooms"], 18, columns, rows, 1);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildBanditCamp(seed) {
+    const columns = 30;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("forest");
+    painter.ellipse(15, 10, 11, 8, "dead-grass");
+    painter.rect(0, 9, 30, 3, "dirt");
+    painter.ellipse(15, 10, 5, 4, "grass");
+    overlay.paint(15, 10, "campfire");
+    [[8, 5], [14, 4], [21, 6], [8, 14], [20, 14]].forEach(([x, y]) => overlay.paint(x, y, "tent"));
+    overlay.paint(4, 9, "cart");
+    overlay.paint(24, 10, "cart");
+    overlay.paint(12, 12, "wooden-table");
+    overlay.paint(17, 8, "weapon-rack");
+    overlay.paint(17, 12, "armor-rack");
+    scatterProps(overlay, random, ["crate", "barrel", "log", "shrub"], 22, columns, rows, 2);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildSwamp(seed) {
+    const columns = 30;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("swamp");
+    painter.ellipse(7, 7, 6, 5, "bog-water");
+    painter.ellipse(23, 13, 7, 6, "bog-water");
+    painter.ellipse(16, 4, 5, 3, "shallow-water");
+    for (let x = 0; x < columns; x += 1) {
+      const y = Math.round(10 + Math.sin(x / 4) * 2);
+      painter.paint(x, y, "mud");
+      painter.paint(x, y + 1, "mud");
+    }
+    painter.rect(12, 8, 7, 5, "mossy-stone");
+    overlay.paint(14, 9, "altar");
+    overlay.paint(17, 11, "statue-broken");
+    [[6, 8], [7, 8], [21, 12], [22, 12]].forEach(([x, y]) => overlay.paint(x, y, "wooden-bridge"));
+    scatterProps(overlay, random, ["dead-tree", "mushrooms", "shrub", "log"], 28, columns, rows, 1);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildDesert(seed) {
+    const columns = 30;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("sand");
+    painter.ellipse(15, 10, 5, 3, "shallow-water");
+    painter.ellipse(15, 10, 8, 5, "desert-rock");
+    painter.ellipse(15, 10, 5, 3, "shallow-water");
+    painter.rect(2, 3, 7, 6, "sandstone");
+    painter.frame(1, 2, 9, 8, "cracked-stone");
+    painter.rect(22, 12, 6, 5, "sandstone");
+    painter.frame(21, 11, 8, 7, "cracked-stone");
+    overlay.paint(4, 5, "altar");
+    overlay.paint(25, 14, "treasure-chest");
+    [[11, 7], [18, 7], [11, 13], [18, 13]].forEach(([x, y]) => overlay.paint(x, y, "palm-tree"));
+    overlay.paint(6, 14, "tent");
+    overlay.paint(9, 15, "tent");
+    overlay.paint(8, 12, "campfire");
+    scatterProps(overlay, random, ["boulder", "rubble", "crate"], 15, columns, rows, 1);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildVolcanicForge(seed) {
+    const columns = 30;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("volcanic-rock");
+    painter.rect(0, 4, 30, 3, "lava");
+    painter.rect(0, 14, 30, 3, "lava");
+    painter.rect(4, 7, 22, 7, "obsidian");
+    painter.rect(12, 2, 6, 16, "ash-ground");
+    painter.rect(11, 8, 8, 5, "rune-stone");
+    painter.rect(13, 4, 4, 3, "wooden-deck");
+    painter.rect(13, 14, 4, 3, "wooden-deck");
+    overlay.paint(15, 10, "anvil");
+    overlay.paint(15, 8, "summoning-circle");
+    [[5, 8], [24, 8], [5, 12], [24, 12]].forEach(([x, y]) => overlay.paint(x, y, "brazier"));
+    scatterProps(overlay, random, ["crystals", "rubble", "weapon-rack"], 18, columns, rows, 2);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildWizardLab(seed) {
+    const columns = 28;
+    const rows = 18;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("dungeon-wall");
+    painter.rect(1, 1, 26, 16, "slate-floor");
+    painter.frame(0, 0, columns, rows, "obsidian");
+    painter.rect(10, 4, 8, 10, "rune-stone");
+    painter.rect(12, 6, 4, 6, "temple-tile");
+    overlay.paint(14, 9, "arcane-rune");
+    overlay.paint(14, 5, "cauldron");
+    [[3, 3], [3, 8], [3, 13], [24, 3], [24, 8], [24, 13]].forEach(([x, y]) => overlay.paint(x, y, "bookshelf"));
+    [[9, 4], [18, 4], [9, 13], [18, 13]].forEach(([x, y]) => overlay.paint(x, y, "crystals"));
+    overlay.paint(8, 8, "wooden-table");
+    overlay.paint(19, 9, "wooden-table");
+    scatterProps(overlay, random, ["book-pile", "arcane-rune", "brazier"], 13, columns, rows, 2);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildShip(seed) {
+    const columns = 30;
+    const rows = 16;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("deep-water");
+    painter.ellipse(15, 8, 12, 7, "wooden-deck");
+    painter.rect(5, 5, 20, 7, "wooden-deck");
+    painter.rect(7, 3, 6, 3, "dark-wood");
+    painter.rect(18, 10, 6, 3, "dark-wood");
+    overlay.paint(15, 8, "mast");
+    overlay.paint(9, 4, "stone-stairs");
+    overlay.paint(21, 11, "stone-stairs");
+    overlay.paint(5, 8, "anchor");
+    overlay.paint(24, 8, "ship-wheel");
+    for (let index = 0; index < 22; index += 1) {
+      overlay.paint(6 + Math.floor(random() * 18), 4 + Math.floor(random() * 8), ["rope-coil", "barrel", "crate"][index % 3]);
+    }
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildCastleGate() {
+    const columns = 32;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    painter.fill("grass");
+    painter.rect(0, 7, 32, 6, "cobblestone");
+    painter.rect(9, 0, 14, 20, "stone-floor");
+    painter.rect(0, 0, 9, 7, "dungeon-wall");
+    painter.rect(23, 0, 9, 7, "dungeon-wall");
+    painter.rect(0, 13, 9, 7, "dungeon-wall");
+    painter.rect(23, 13, 9, 7, "dungeon-wall");
+    painter.rect(9, 0, 14, 3, "dungeon-wall");
+    painter.rect(9, 17, 14, 3, "dungeon-wall");
+    painter.rect(13, 3, 6, 14, "wet-cobble");
+    overlay.paint(15, 3, "portcullis");
+    overlay.paint(15, 16, "portcullis");
+    [[10, 4], [21, 4], [10, 15], [21, 15]].forEach(([x, y]) => overlay.paint(x, y, "stone-pillar"));
+    [[5, 3], [26, 3], [5, 16], [26, 16]].forEach(([x, y]) => overlay.paint(x, y, "banner"));
+    overlay.paint(11, 9, "market-stall");
+    overlay.paint(20, 10, "cart");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildGraveyard(seed) {
+    const columns = 30;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("dead-grass");
+    painter.rect(0, 9, 30, 2, "mud");
+    painter.rect(10, 3, 10, 8, "crypt-floor");
+    painter.frame(9, 2, 12, 10, "brick-wall");
+    painter.rect(22, 13, 6, 5, "crypt-floor");
+    painter.frame(21, 12, 8, 7, "cracked-stone");
+    painter.rect(3, 14, 5, 4, "webbed-floor");
+    overlay.paint(15, 5, "altar");
+    overlay.paint(15, 9, "wooden-door");
+    overlay.paint(24, 15, "sarcophagus");
+    scatterProps(overlay, random, ["gravestone", "dead-tree", "bones"], 34, columns, rows, 1);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildGrotto(seed) {
+    const columns = 30;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("chasm");
+    painter.ellipse(15, 10, 13, 8, "fungal-floor");
+    painter.ellipse(7, 7, 4, 3, "shallow-water");
+    painter.ellipse(23, 13, 4, 3, "shallow-water");
+    painter.rect(8, 8, 15, 4, "cave-floor");
+    painter.ellipse(15, 10, 4, 3, "rune-stone");
+    overlay.paint(15, 10, "summoning-circle");
+    [[5, 5], [24, 5], [5, 15], [24, 15]].forEach(([x, y]) => overlay.paint(x, y, "crystals"));
+    scatterProps(overlay, random, ["mushrooms", "crystals", "boulder"], 30, columns, rows, 1);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildFarmstead(seed) {
+    const columns = 32;
+    const rows = 20;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("grass");
+    painter.rect(0, 9, 32, 3, "dirt");
+    painter.rect(2, 2, 11, 6, "farmland");
+    painter.rect(2, 13, 11, 5, "farmland");
+    painter.rect(20, 2, 9, 6, "roof-tile");
+    painter.rect(21, 3, 7, 4, "wood-planks");
+    painter.rect(20, 13, 9, 5, "dark-wood");
+    overlay.paint(24, 7, "wooden-door");
+    overlay.paint(24, 13, "wooden-door");
+    overlay.paint(16, 7, "well");
+    overlay.paint(16, 14, "cart");
+    overlay.paint(18, 14, "hay-bales");
+    for (let x = 1; x < 14; x += 2) {
+      overlay.paint(x, 1, "fence");
+      overlay.paint(x, 18, "fence");
+    }
+    scatterProps(overlay, random, ["shrub", "hay-bales", "crate"], 16, columns, rows, 1);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
   function buildMapScene(sceneId, seed = "dnd-beyonder") {
     const template = MAP_SCENE_TEMPLATES.find((entry) => entry.id === sceneId);
     if (!template) return null;
@@ -450,8 +742,20 @@
     else if (sceneId === "dungeon-guardroom") scene = buildGuardroom();
     else if (sceneId === "crypt-vault") scene = buildCrypt(seed);
     else if (sceneId === "throne-hall") scene = buildThrone();
+    else if (sceneId === "ruined-temple") scene = buildRuinedTemple(seed);
+    else if (sceneId === "sewer-junction") scene = buildSewer(seed);
+    else if (sceneId === "bandit-camp") scene = buildBanditCamp(seed);
+    else if (sceneId === "swamp-causeway") scene = buildSwamp(seed);
+    else if (sceneId === "desert-oasis") scene = buildDesert(seed);
+    else if (sceneId === "volcanic-forge") scene = buildVolcanicForge(seed);
+    else if (sceneId === "wizard-laboratory") scene = buildWizardLab(seed);
+    else if (sceneId === "ship-deck") scene = buildShip(seed);
+    else if (sceneId === "castle-gate") scene = buildCastleGate();
+    else if (sceneId === "graveyard-chapel") scene = buildGraveyard(seed);
+    else if (sceneId === "mushroom-grotto") scene = buildGrotto(seed);
+    else if (sceneId === "farmstead-raid") scene = buildFarmstead(seed);
     else scene = buildSnow(seed);
-    return { ...scene, id: template.id, name: template.name, category: template.category, description: template.description };
+    return { ...scene, id: template.id, name: template.name, category: template.category, description: template.description, ambience: template.ambience };
   }
 
   function paintMapDataCells(data, tool, tileId, originX, originY, brushSize = 1, assetKind = "terrain") {
