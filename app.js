@@ -6116,11 +6116,19 @@ const MAGIC_ITEM_EFFECTS = {
 };
 // Staff of Power also boosts weapon and spell attacks.
 MAGIC_ITEM_EFFECTS["Staff of Power"] = { ac: 2, save: 2, weaponAttack: 2, weaponDamage: 2, spellAttack: 2, spellDc: 2 };
+function itemRequiresAttunement(item) {
+  return /requires attunement/i.test(item.notes || item.details || "");
+}
+// An item's mechanical effect is live only when it is worn/wielded AND, if it
+// requires attunement, actually attuned.
+function itemIsActive(item) {
+  if (item.carried === false) return false;
+  return itemRequiresAttunement(item) ? Boolean(item.attuned) : Boolean(item.attuned || item.equipped);
+}
 function activeItemEffects(data) {
   const out = { ac: 0, acUnarmored: 0, save: 0, check: 0, weaponAttack: 0, weaponDamage: 0, spellAttack: 0, spellDc: 0, bonusDamage: [], setSTR: 0, setDEX: 0, setCON: 0, setINT: 0, setWIS: 0, setCHA: 0 };
   (data.inventory || []).forEach(item => {
-    if (item.carried === false) return;
-    if (!(item.attuned || item.equipped)) return;
+    if (!itemIsActive(item)) return;
     const effect = MAGIC_ITEM_EFFECTS[item.name];
     if (!effect) return;
     ["ac", "acUnarmored", "save", "check"].forEach(key => { if (effect[key]) out[key] += effect[key]; });
@@ -6142,6 +6150,39 @@ function effectiveAbilities(data) {
 
 const MARTIAL_WEAPON_CLASSES = new Set(["Barbarian", "Fighter", "Paladin", "Ranger"]);
 const FINESSE_MARTIAL_WEAPONS = new Set(["Rapier", "Shortsword", "Longsword", "Hand Crossbow", "Scimitar", "Whip"]);
+// Base weapon dice for named magic weapons (their catalog text has no dice).
+const MAGIC_WEAPON_PROFILES = {
+  "Flame Tongue": "1d8 slashing · versatile (1d10)",
+  "Frost Brand": "1d8 slashing · versatile (1d10)",
+  "Moon-Touched Sword": "1d8 slashing · versatile (1d10)",
+  "Sun Blade": "1d8 radiant · versatile (1d10)",
+  "Sword of Wounding": "1d8 slashing · versatile (1d10)",
+  "Sword of Life Stealing": "1d8 slashing · versatile (1d10)",
+  "Sword of Vengeance": "1d8 slashing · versatile (1d10)",
+  "Dragon Slayer": "1d8 slashing · versatile (1d10)",
+  "Giant Slayer": "1d8 slashing · versatile (1d10)",
+  "Vicious Weapon": "1d8 slashing · versatile (1d10)",
+  "Berserker Axe": "1d8 slashing · versatile (1d10)",
+  "Dancing Sword": "1d8 slashing · versatile (1d10)",
+  "Nine Lives Stealer": "1d8 slashing · versatile (1d10)",
+  "Holy Avenger": "1d8 slashing · versatile (1d10)",
+  "Defender": "1d8 slashing · versatile (1d10)",
+  "Luck Blade": "1d8 slashing · versatile (1d10)",
+  "Sword of Answering": "1d8 slashing · versatile (1d10)",
+  "Dagger of Venom": "1d4 piercing · finesse · thrown",
+  "Mace of Smiting": "1d6 bludgeoning",
+  "Mace of Disruption": "1d6 bludgeoning",
+  "Mace of Terror": "1d6 bludgeoning",
+  "Scimitar of Speed": "1d6 slashing · finesse",
+  "Dwarven Thrower": "1d8 bludgeoning · thrown · versatile (1d10)",
+  "Oathbow": "1d8 piercing · ranged",
+  "Vorpal Sword": "2d6 slashing · two-handed",
+  "Sword of Sharpness": "2d6 slashing · two-handed",
+  "Hammer of Thunderbolts": "2d6 bludgeoning · two-handed",
+  "Trident of Fish Command": "1d8 piercing · thrown · versatile (1d10)",
+  "Javelin of Lightning": "1d6 piercing · thrown",
+  "Moon Sickle, +1": "1d4 slashing"
+};
 function proficientWithWeapon(character, item) {
   const type = String(item.type || "").toLowerCase();
   const classes = classBreakdown(character).map(entry => entry.name);
@@ -6156,7 +6197,8 @@ function proficientWithWeapon(character, item) {
 }
 // Extract dice/type/properties from a weapon's stat text.
 function parseWeaponProfile(item) {
-  const text = `${item.details || ""} ${item.notes || ""}`;
+  let text = `${item.details || ""} ${item.notes || ""}`;
+  if (!/\d+\s*d\s*\d+/i.test(text) && MAGIC_WEAPON_PROFILES[item.name]) text += ` ${MAGIC_WEAPON_PROFILES[item.name]}`;
   const dice = text.match(/(\d+)\s*d\s*(\d+)/i);
   if (!dice) return null;
   const versatile = text.match(/versatile\s*\((\d+)d(\d+)\)/i);
@@ -6173,11 +6215,18 @@ function parseWeaponProfile(item) {
   };
 }
 function weaponAttacks(character) {
-  const fx = activeItemEffects(character);
   const abil = effectiveAbilities(character);
   const prof = proficiency(characterTotalLevel(character));
   const strMod = modifier(abil.STR);
   const dexMod = modifier(abil.DEX);
+  // Generic "+X weapon" enchantments apply to whatever weapon you wield.
+  let genericAtk = 0, genericDmg = 0;
+  (character.inventory || []).forEach(item => {
+    if (!/^Weapon, \+/.test(item.name) || !itemIsActive(item)) return;
+    const eff = MAGIC_ITEM_EFFECTS[item.name] || {};
+    genericAtk = Math.max(genericAtk, eff.weaponAttack || 0);
+    genericDmg = Math.max(genericDmg, eff.weaponDamage || 0);
+  });
   const attacks = [];
   equippedItems(character).forEach(item => {
     const profile = parseWeaponProfile(item);
@@ -6186,17 +6235,21 @@ function weaponAttacks(character) {
     if (profile.ranged) { ability = "DEX"; abilityMod = dexMod; }
     else if (profile.finesse && dexMod > strMod) { ability = "DEX"; abilityMod = dexMod; }
     const proficient = proficientWithWeapon(character, item);
+    const own = MAGIC_ITEM_EFFECTS[item.name] || {};
+    const magicLive = itemIsActive(item); // a magic weapon's bonus is on only when attuned (if it requires it)
+    const weaponAtk = Math.max(genericAtk, magicLive ? (own.weaponAttack || 0) : 0);
+    const weaponDmg = Math.max(genericDmg, magicLive ? (own.weaponDamage || 0) : 0);
     attacks.push({
       name: item.name,
-      note: [profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient"].filter(Boolean).join(" · "),
+      note: [profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient", (itemRequiresAttunement(item) && !item.attuned) ? "attune to activate" : ""].filter(Boolean).join(" · "),
       ability,
-      toHit: abilityMod + (proficient ? prof : 0) + fx.weaponAttack,
+      toHit: abilityMod + (proficient ? prof : 0) + weaponAtk,
       count: profile.count,
       sides: profile.sides,
-      dmgMod: abilityMod + fx.weaponDamage,
+      dmgMod: abilityMod + weaponDmg,
       versatile: profile.versatile,
       damageType: profile.damageType,
-      bonusDamage: fx.bonusDamage.slice()
+      bonusDamage: (magicLive && own.bonusDamage) ? [own.bonusDamage] : []
     });
   });
   const monkLevel = classLevel(character, "Monk");
@@ -7632,7 +7685,7 @@ function renderInventorySection(character, extraClass = "") {
         <td><div class="item-state">
           <button type="button" class="${item.carried === false ? "" : "active"}" data-item-action="carry" data-character="${character.id}" data-item-id="${item.id}" title="Carried">C</button>
           <button type="button" class="${item.equipped ? "active" : ""}" data-item-action="equip" data-character="${character.id}" data-item-id="${item.id}" title="Equipped">E</button>
-          <button type="button" class="${item.attuned ? "active" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" title="Attuned">A</button>
+          <button type="button" class="${item.attuned ? "active" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" title="${itemRequiresAttunement(item) ? "Attune" : "No attunement needed"}" ${itemRequiresAttunement(item) ? "" : "disabled"}>A</button>
         </div></td>
         <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}<small>${escapeHtml(item.type || "Item")}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</small></td>
         <td>${Number(item.quantity || 1)}</td>
@@ -9605,8 +9658,9 @@ function initEvents() {
       if (action === "carry") item.carried = item.carried === false;
       if (action === "equip") item.equipped = !item.equipped;
       if (action === "attune") {
+        if (!item.attuned && !itemRequiresAttunement(item)) { toast(`${item.name} does not require attunement`); return; }
         const attunedCount = character.inventory.filter(entry => entry.attuned).length;
-        if (!item.attuned && attunedCount >= 3) { toast("A character can normally attune to three items"); return; }
+        if (!item.attuned && attunedCount >= 3) { toast("A character can attune to only three items"); return; }
         item.attuned = !item.attuned;
       }
       if (action === "delete") character.inventory = character.inventory.filter(entry => entry.id !== item.id);
