@@ -322,6 +322,7 @@ let suppressMapClickUntil = 0;
 const mapViewportStates = new Map();
 const mapEditHistory = new Map();
 let campaignMapImageDraft = "";
+let campaignMapImageAspect = 0; // height/width of the last uploaded map image, for board calibration
 let campaignTileImageDraft = "";
 let campaignCreatureImageDraft = "";
 let campaignLiveTimer = null;
@@ -725,7 +726,7 @@ function normalizeMapData(data = {}) {
       ambienceStrength: Math.min(.9, Math.max(.1, Number(data.display?.ambienceStrength ?? .48)))
     },
     background: String(data.background || ""),
-    backgroundFit: data.backgroundFit || "cover",
+    backgroundFit: data.backgroundFit || "fill",
     scale: data.scale && typeof data.scale === "object" ? {
       feetPerSquare: Math.min(100, Math.max(1, Number(data.scale.feetPerSquare || 5))),
       offsetX: Number(data.scale.offsetX || 0),
@@ -1292,9 +1293,15 @@ async function createCampaignMap(campaignId, values) {
   const scene = typeof window.buildMapScene === "function" && values.sceneTemplate && values.sceneTemplate !== "blank"
     ? window.buildMapScene(values.sceneTemplate, `${name}-${Date.now()}`)
     : null;
+  // For an uploaded map image (no scene), size the grid to the image's aspect
+  // ratio so it tiles the whole map with square cells and nothing is cropped.
+  const uploadedColumns = scene?.columns || Number(values.columns) || 24;
+  const imageRows = campaignMapImageDraft && campaignMapImageAspect
+    ? Math.min(80, Math.max(4, Math.round(uploadedColumns * campaignMapImageAspect)))
+    : null;
   const data = normalizeMapData({
     columns: scene?.columns || values.columns,
-    rows: scene?.rows || values.rows,
+    rows: scene?.rows || imageRows || values.rows,
     gridSize: values.gridSize,
     gridEnabled: values.gridEnabled === "on",
     background: campaignMapImageDraft || String(values.background || "").trim(),
@@ -1577,10 +1584,16 @@ async function updateCampaignMapSettings(mapId, values) {
   const map = campaignMapById(mapId);
   if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit map settings"); return; }
   map.name = String(values.name || "").trim() || map.name || "Encounter Map";
+  // If a new image was just uploaded, match the grid to its aspect ratio.
+  const settingsColumns = Number(values.columns) || map.data?.columns || 24;
+  const settingsRows = campaignMapImageDraft && campaignMapImageAspect
+    ? Math.min(80, Math.max(4, Math.round(settingsColumns * campaignMapImageAspect)))
+    : values.rows;
   map.data = normalizeMapData({
     ...map.data,
     columns: values.columns,
-    rows: values.rows,
+    rows: settingsRows,
+    backgroundFit: values.backgroundFit || map.data?.backgroundFit || "fill",
     gridSize: values.gridSize,
     gridEnabled: values.gridEnabled === "on",
     display: {
@@ -7194,6 +7207,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label class="map-grid-toggle"><input name="tokenHealth" type="checkbox" ${data.display.tokenHealth ? "checked" : ""}><span><strong>Health bars</strong><small>Show current encounter HP.</small></span></label>
       </div>
       <label>Image URL<input name="background" value="${escapeHtml(data.background)}"></label>
+      <label>Map fit<select name="backgroundFit"><option value="fill" ${data.backgroundFit === "fill" ? "selected" : ""}>Stretch to grid (best for uploads)</option><option value="contain" ${data.backgroundFit === "contain" ? "selected" : ""}>Fit whole map (letterbox)</option><option value="cover" ${data.backgroundFit === "cover" ? "selected" : ""}>Fill &amp; crop edges</option></select></label>
       <label>Replace uploaded image<input type="file" accept="image/*" data-campaign-map-upload><small class="field-hint" data-map-upload-status>No new image selected</small></label>
       <div class="map-control-row">
         <button class="button primary small" type="submit">Save settings</button>
@@ -7272,7 +7286,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         </div>
         <div class="battle-map-shell tool-${escapeHtml(selectedMapTool)}" data-map-shell="${escapeHtml(activeMap.id)}">
         <div class="battle-map-board ${data.gridEnabled ? "" : "gridless"}" data-campaign-map-board="${escapeHtml(activeMap.id)}" style="--cols:${data.columns};--rows:${data.rows};--cell:${effectiveCellSize}px;--grid-color:${escapeHtml(data.display.gridColor)};--grid-opacity:${data.display.gridOpacity};--grid-thickness:${data.display.gridThickness}px;${boardBaseStyle}">
-          ${data.background ? `<img class="battle-map-bg" src="${escapeHtml(data.background)}" alt="">` : data.tiles.length ? "" : `<div class="battle-map-empty">No map art uploaded</div>`}
+          ${data.background ? `<img class="battle-map-bg" style="object-fit:${data.backgroundFit === "cover" ? "cover" : data.backgroundFit === "contain" ? "contain" : "fill"}" src="${escapeHtml(data.background)}" alt="">` : data.tiles.length ? "" : `<div class="battle-map-empty">No map art uploaded</div>`}
           <div class="battle-map-tiles" ${data.display.terrain ? "" : "hidden"}>${paintedTiles}</div>
           ${data.gridEnabled ? `<div class="battle-map-grid" aria-hidden="true"></div>` : ""}
           <div class="battle-map-overlays" aria-hidden="true" ${data.display.props ? "" : "hidden"}>${paintedProps}</div>
@@ -10527,7 +10541,13 @@ function initEvents() {
     reader.onload = () => {
       if (tileUpload) campaignTileImageDraft = String(reader.result || "");
       else if (creatureUpload) campaignCreatureImageDraft = String(reader.result || "");
-      else campaignMapImageDraft = String(reader.result || "");
+      else {
+        campaignMapImageDraft = String(reader.result || "");
+        campaignMapImageAspect = 0;
+        const probe = new Image();
+        probe.onload = () => { if (probe.naturalWidth) campaignMapImageAspect = probe.naturalHeight / probe.naturalWidth; };
+        probe.src = campaignMapImageDraft;
+      }
       if (status) status.textContent = `${file.name} ready`;
     };
     reader.readAsDataURL(file);
