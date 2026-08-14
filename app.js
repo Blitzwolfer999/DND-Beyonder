@@ -953,6 +953,18 @@ async function addCampaignVaultToken(mapId, characterId) {
   selectedMapSidebar = "tokens";
   await saveCampaignMap(map, `${character.name} placed on the map`);
 }
+// Reveal every hidden token so all players can see them (party, enemies, NPCs).
+async function revealAllMapTokens(mapId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can reveal tokens"); return; }
+  const data = normalizeMapData(map.data);
+  let changed = 0;
+  data.tokens.forEach(token => { if (token.hidden) { token.hidden = false; changed += 1; } });
+  if (!changed) { toast("All tokens are already visible to players"); return; }
+  map.data = data;
+  await saveCampaignMap(map, "All tokens revealed to players");
+  toast(`${changed} token${changed === 1 ? "" : "s"} now visible to players`);
+}
 function mapTokenSize(token) {
   return Math.min(4, Math.max(1, Math.round(Number(token?.size || 1))));
 }
@@ -7261,7 +7273,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </div>
     <div class="map-room-command-bar">
       <div class="campaign-map-tabs">${mapTabs}</div>
-      <div class="map-room-command-actions">${playerCanSeeMap ? `<button type="button" class="button primary small" data-map-table-mode="enter" aria-pressed="${mapTableMode}">Open table</button><button type="button" class="button ghost small" data-map-fullscreen aria-pressed="${Boolean(document.fullscreenElement)}" title="Fill the whole screen with the map">${document.fullscreenElement ? "Exit fullscreen" : "⛶ Fullscreen"}</button>` : ""}${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}</div>
+      <div class="map-room-command-actions">${playerCanSeeMap ? `<button type="button" class="button primary small" data-map-table-mode="enter" aria-pressed="${mapTableMode}">Open table</button><button type="button" class="button ghost small" data-map-fullscreen aria-pressed="${Boolean(document.fullscreenElement)}" title="Fill the whole screen with the map">${document.fullscreenElement ? "Exit fullscreen" : "⛶ Fullscreen"}</button>` : ""}${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button><button type="button" class="button ghost small" data-map-reveal-tokens="${escapeHtml(activeMap.id)}" title="Make every token visible to players">Show all to players</button>` : ""}</div>
     </div>
     ${sessionControls}
     ${createForm}
@@ -9972,6 +9984,11 @@ function initEvents() {
     const vaultTokenAdd = event.target.closest("[data-map-vault-token]");
     if (vaultTokenAdd) {
       addCampaignVaultToken(vaultTokenAdd.dataset.mapId, vaultTokenAdd.dataset.mapVaultToken);
+      return;
+    }
+    const revealTokens = event.target.closest("[data-map-reveal-tokens]");
+    if (revealTokens) {
+      revealAllMapTokens(revealTokens.dataset.mapRevealTokens);
       return;
     }
     const tokenCategory = event.target.closest("[data-map-token-category]");
