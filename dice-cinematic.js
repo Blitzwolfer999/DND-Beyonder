@@ -102,7 +102,14 @@
         if (typeof diceBox.clear === "function") diceBox.clear();
       }, 2600);
     }
-    return normalizeResults(results, groups);
+    const rect = element.getBoundingClientRect();
+    return {
+      rollsByGroup: normalizeResults(results, groups),
+      impactPoint: {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height * .58,
+      },
+    };
   }
 
   function clear() {

@@ -111,6 +111,30 @@
     return EFFECT_WORDS.find(([, pattern]) => pattern.test(text))?.[0] || currentProfile(result.characterId)?.effect || "arcane";
   }
 
+  function effectPoint(result) {
+    let point = result?.effectPoint;
+    if (!Number.isFinite(Number(point?.x)) || !Number.isFinite(Number(point?.y))) {
+      const candidates = [
+        document.querySelector("#roll-die:not([hidden])"),
+        document.querySelector("#roll-dice-breakdown:not(:empty)"),
+        document.querySelector("#dice-result strong"),
+      ];
+      const target = candidates.find(element => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      const rect = target?.getBoundingClientRect();
+      point = rect
+        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+        : { x: root.innerWidth / 2, y: root.innerHeight / 2 };
+    }
+    return {
+      x: Math.max(24, Math.min(root.innerWidth - 24, Number(point.x))),
+      y: Math.max(24, Math.min(root.innerHeight - 24, Number(point.y))),
+    };
+  }
+
   function playEffect(result) {
     if (settings.effects === "off" || root.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const layer = document.querySelector("#dice-effect-layer");
@@ -120,10 +144,16 @@
     if (effect === "none") return;
     const colors = EFFECT_COLORS[effect] || EFFECT_COLORS.arcane;
     const count = settings.effects === "reduced" ? 8 : effect === "crit" ? 34 : 20;
+    const point = effectPoint(result);
     layer.className = `dice-effect-layer active effect-${effect}`;
     layer.style.setProperty("--effect-primary", colors[0]);
     layer.style.setProperty("--effect-secondary", colors[1]);
     layer.replaceChildren();
+    const burst = document.createElement("div");
+    burst.className = "dice-effect-burst";
+    burst.style.left = `${point.x}px`;
+    burst.style.top = `${point.y}px`;
+    layer.append(burst);
     for (let index = 0; index < count; index += 1) {
       const particle = document.createElement("i");
       const angle = (Math.PI * 2 * index) / count + Math.random() * .45;
@@ -133,13 +163,13 @@
       particle.style.setProperty("--delay", `${Math.random() * 120}ms`);
       particle.style.setProperty("--spin", `${Math.round(Math.random() * 540 - 270)}deg`);
       particle.style.setProperty("--size", `${4 + Math.random() * 9}px`);
-      layer.append(particle);
+      burst.append(particle);
     }
     if (settings.customEffect?.image && (effect === "arcane" || settings.defaultEffect === "custom")) {
       const image = document.createElement("img");
       image.src = settings.customEffect.image;
       image.alt = "";
-      layer.append(image);
+      burst.append(image);
     }
     effectTimer = setTimeout(() => { layer.className = "dice-effect-layer"; layer.replaceChildren(); }, settings.effects === "reduced" ? 750 : 1400);
   }

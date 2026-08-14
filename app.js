@@ -8748,10 +8748,13 @@ async function acquireDiceResult(config) {
   if (config.notation) {
     const plan = window.parseDiceNotation(config.notation);
     let physicalGroups = null;
+    let impactPoint = null;
     if (settings.renderer === "cinematic" && !reduced && window.DndCinematicDice && window.notationCanUseCinematic(plan)) {
       try {
         setDiceRendererStatus("Cinematic dice are rolling...");
-        physicalGroups = await window.DndCinematicDice.roll(cinematicGroupsForPlan(plan), profile, { keepDice: settings.keepDice });
+        const cinematicRoll = await window.DndCinematicDice.roll(cinematicGroupsForPlan(plan), profile, { keepDice: settings.keepDice });
+        physicalGroups = cinematicRoll.rollsByGroup;
+        impactPoint = cinematicRoll.impactPoint;
         usedCinematic = true;
         setDiceRendererStatus(settings.keepDice ? "Cinematic dice remain on the table." : "Cinematic roll complete.");
       } catch (error) {
@@ -8760,31 +8763,34 @@ async function acquireDiceResult(config) {
     } else if (settings.renderer === "cinematic" && !window.notationCanUseCinematic(plan)) {
       setDiceRendererStatus("This reroll, explosion, coin, or Fate formula uses the synchronized Performance renderer.");
     }
-    return { result: window.evaluateDiceNotation(plan, { rollsByGroup: physicalGroups || [] }), usedCinematic };
+    return { result: window.evaluateDiceNotation(plan, { rollsByGroup: physicalGroups || [] }), usedCinematic, impactPoint };
   }
   const sides = Math.max(2, Number(config.sides || 20));
   const count = Math.max(1, Number(config.count || 1));
   const mode = config.mode || "normal";
   let physicalRolls = null;
+  let impactPoint = null;
   if (settings.renderer === "cinematic" && !reduced && window.DndCinematicDice) {
     try {
       setDiceRendererStatus("Cinematic dice are rolling...");
-      const groups = await window.DndCinematicDice.roll(cinematicGroupsForSimple(sides, count, mode), profile, { keepDice: settings.keepDice });
-      physicalRolls = groups[0];
+      const cinematicRoll = await window.DndCinematicDice.roll(cinematicGroupsForSimple(sides, count, mode), profile, { keepDice: settings.keepDice });
+      physicalRolls = cinematicRoll.rollsByGroup[0];
+      impactPoint = cinematicRoll.impactPoint;
       usedCinematic = true;
       setDiceRendererStatus(settings.keepDice ? "Cinematic dice remain on the table." : "Cinematic roll complete.");
     } catch (error) {
       setDiceRendererStatus(`Cinematic mode unavailable: ${error.message || error}. Performance mode completed the roll.`, true);
     }
   }
-  return { result: window.createDiceRoll({ sides, count, modifier: config.modifier, mode, rolls: physicalRolls || [] }), usedCinematic };
+  return { result: window.createDiceRoll({ sides, count, modifier: config.modifier, mode, rolls: physicalRolls || [] }), usedCinematic, impactPoint };
 }
 
-function finishDicePresentation(rollData, entry, usedCinematic) {
-  const settle = () => {
+function finishDicePresentation(rollData, entry, usedCinematic, initialImpactPoint = null) {
+  const settle = (settledImpactPoint = initialImpactPoint) => {
+    const presentedRoll = settledImpactPoint ? { ...rollData, effectPoint: settledImpactPoint } : rollData;
     showRollOverlay({ ...rollData, settled: true });
-    window.DndDiceExperience?.playEffect?.(rollData);
-    window.DndDiceExperience?.playSound?.(rollData);
+    window.DndDiceExperience?.playEffect?.(presentedRoll);
+    window.DndDiceExperience?.playSound?.(presentedRoll);
   };
   if (usedCinematic) {
     animateDiceResult({ ...rollData, label: entry.label, detail: entry.detail, immediate: true });
@@ -8809,7 +8815,7 @@ async function performDiceRoll(config) {
   const rollId = ++activeDiceRollId;
   setDicePending(label);
   try {
-    const { result, usedCinematic } = await acquireDiceResult(config);
+    const { result, usedCinematic, impactPoint } = await acquireDiceResult(config);
     const modeLabel = result.mode === "advantage" ? " (advantage)" : result.mode === "disadvantage" ? " (disadvantage)" : "";
     const detail = window.formatDiceRollDetail(result);
     const entry = { total: result.total, rawValue: result.rawValue, rolls: result.rolls, detail, label: label + modeLabel, time: Date.now() };
@@ -8828,7 +8834,7 @@ async function performDiceRoll(config) {
         visibility: options.visibility === "dm" ? "dm" : "public"
       });
     }
-    finishDicePresentation(rollData, entry, usedCinematic);
+    finishDicePresentation(rollData, entry, usedCinematic, impactPoint);
     return result.total;
   } catch (error) {
     setDiceRendererStatus(error.message || "The dice formula could not be rolled.", true);
@@ -8952,6 +8958,17 @@ function isD20CheckResult(result, dice) {
   return dice.length > 0 && dice.every(die => die.sides === 20) && (result.mode !== "normal" || dice.length === 1);
 }
 
+function settledDiceImpactPoint(stage, states, size) {
+  const keptStates = states.filter(state => state.visualDie.kept);
+  const impactStates = keptStates.length ? keptStates : states;
+  if (!impactStates.length) return null;
+  const rect = stage.getBoundingClientRect();
+  return {
+    x: impactStates.reduce((sum, state) => sum + rect.left + state.x + size / 2, 0) / impactStates.length,
+    y: impactStates.reduce((sum, state) => sum + rect.top + state.floor + size / 2, 0) / impactStates.length,
+  };
+}
+
 function rollPhysics(result, onSettle) {
   const stage = $("#dice-stage"), tray = $("#dice-stage-dice");
   if (!stage || !tray) { if (onSettle) onSettle(); return; }
@@ -9022,7 +9039,7 @@ function rollPhysics(result, onSettle) {
       const isCheck = isD20CheckResult(result, visualDice);
       if (isCheck && result.rawValue === 20) stage.classList.add("crit");
       else if (isCheck && result.rawValue === 1) stage.classList.add("fumble");
-      if (onSettle) onSettle();
+      if (onSettle) onSettle(settledDiceImpactPoint(stage, states, size));
       diceFadeTimer = setTimeout(() => {
         if (rollId !== activeDiceRollId) return;
         stage.hidden = true;

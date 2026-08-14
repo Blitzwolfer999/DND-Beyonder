@@ -2464,17 +2464,18 @@ body[data-dice="obsidian"] { --dice-edge: #9aa3ad; --dice-fill: rgba(154, 163, 1
 .dice-cinematic-stage canvas { width: 100% !important; height: 100% !important; pointer-events: none; }
 .dice-cinematic-stage[data-state="loading"]::after { content: "Preparing cinematic dice..."; position: absolute; top: 82px; left: 50%; transform: translateX(-50%); padding: 8px 13px; color: #fff; background: rgba(15,18,22,.78); border-radius: 999px; font-size: 12px; font-weight: 700; }
 
-.dice-effect-layer { position: fixed; inset: 0; z-index: 108; display: none; place-items: center; pointer-events: none; overflow: hidden; }
-.dice-effect-layer.active { display: grid; }
-.dice-effect-layer::before { content: ""; position: absolute; width: 150px; height: 150px; border: 4px solid var(--effect-primary); border-radius: 50%; box-shadow: 0 0 32px var(--effect-primary), inset 0 0 24px var(--effect-secondary); animation: dice-impact-ring .72s ease-out both; }
-.dice-effect-layer i { position: absolute; width: var(--size); height: calc(var(--size) * 2.2); background: linear-gradient(var(--effect-secondary), var(--effect-primary)); border-radius: 999px; box-shadow: 0 0 9px var(--effect-primary); transform-origin: center; animation: dice-particle .9s cubic-bezier(.18,.74,.24,1) var(--delay) both; }
-.dice-effect-layer img { position: absolute; width: min(220px, 34vw); height: min(220px, 34vw); object-fit: contain; filter: drop-shadow(0 0 18px var(--effect-primary)); animation: dice-custom-impact 1.15s ease-out both; }
+.dice-effect-layer { position: fixed; inset: 0; z-index: 108; display: none; pointer-events: none; overflow: hidden; }
+.dice-effect-layer.active { display: block; }
+.dice-effect-burst { position: absolute; width: 0; height: 0; }
+.dice-effect-burst::before { content: ""; position: absolute; left: 0; top: 0; width: 150px; height: 150px; border: 4px solid var(--effect-primary); border-radius: 50%; box-shadow: 0 0 32px var(--effect-primary), inset 0 0 24px var(--effect-secondary); animation: dice-impact-ring .72s ease-out both; }
+.dice-effect-layer i { position: absolute; left: 0; top: 0; width: var(--size); height: calc(var(--size) * 2.2); background: linear-gradient(var(--effect-secondary), var(--effect-primary)); border-radius: 999px; box-shadow: 0 0 9px var(--effect-primary); transform-origin: center; animation: dice-particle .9s cubic-bezier(.18,.74,.24,1) var(--delay) both; }
+.dice-effect-layer img { position: absolute; left: 0; top: 0; width: min(220px, 34vw); height: min(220px, 34vw); object-fit: contain; filter: drop-shadow(0 0 18px var(--effect-primary)); animation: dice-custom-impact 1.15s ease-out both; }
 .dice-effect-layer.effect-cold i, .dice-effect-layer.effect-healing i { aspect-ratio: 1; height: var(--size); border-radius: 50%; }
 .dice-effect-layer.effect-lightning i { width: 3px; height: calc(var(--size) * 3.5); clip-path: polygon(40% 0,100% 0,65% 42%,100% 42%,20% 100%,42% 54%,0 54%); }
 .dice-effect-layer.effect-shadow i, .dice-effect-layer.effect-necrotic i, .dice-effect-layer.effect-fumble i { filter: blur(3px); }
-@keyframes dice-particle { 0% { opacity: 0; transform: translate(0,0) scale(.3) rotate(0); } 18% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--tx),var(--ty)) scale(.06) rotate(var(--spin)); } }
-@keyframes dice-impact-ring { 0% { opacity: 0; transform: scale(.15); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(3.2); } }
-@keyframes dice-custom-impact { 0% { opacity: 0; transform: scale(.3) rotate(-8deg); } 32% { opacity: 1; transform: scale(1.12) rotate(2deg); } 100% { opacity: 0; transform: scale(.95); } }
+@keyframes dice-particle { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(0); } 18% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--tx)),calc(-50% + var(--ty))) scale(.06) rotate(var(--spin)); } }
+@keyframes dice-impact-ring { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.15); } 35% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-50%) scale(3.2); } }
+@keyframes dice-custom-impact { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(-8deg); } 32% { opacity: 1; transform: translate(-50%,-50%) scale(1.12) rotate(2deg); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(.95); } }
 
 @media (max-width: 760px) {
   .dice-roll-routing, .dice-settings-grid, .dice-designer-grid { grid-template-columns: 1fr 1fr; }
