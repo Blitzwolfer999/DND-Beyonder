@@ -5535,9 +5535,16 @@ function spellRecordClass(spell, character) {
 }
 
 function characterSpellRecords(character) {
-  return (character.spells || []).map(spell => typeof spell === "string"
-    ? { name: spell, level: 0, className: primaryClassName(character) }
-    : { ...spell, className: spell.className || primaryClassName(character) });
+  return (character.spells || []).map(spell => {
+    if (typeof spell !== "string") return { ...spell, className: spell.className || primaryClassName(character) };
+    // Spell stored as a bare name (theme/quick builds): look up its real level
+    // from the class spell lists so cantrips vs leveled spells group correctly.
+    const className = primaryClassName(character);
+    const subclass = classSubclassName(character, className);
+    const lists = spellListsFor(character.edition || "2014", className, subclass) || {};
+    const listedLevel = Object.entries(lists).find(([, names]) => names.includes(spell))?.[0];
+    return { name: spell, level: listedLevel === undefined ? 0 : Number(listedLevel), className };
+  });
 }
 
 function classSpellRecords(character, className, leveledOnly = false) {
