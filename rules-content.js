@@ -212,6 +212,26 @@ const EQUIPMENT_CATALOG = [
   equipmentItem("Longbow", "Martial Ranged Weapon", "50 GP", 2, "1d8 piercing · Ammunition, heavy, two-handed · Slow mastery"),
   equipmentItem("Pistol", "Martial Ranged Weapon", "250 GP", 3, "1d10 piercing · Ammunition, loading · Vex mastery"),
   equipmentItem("Musket", "Martial Ranged Weapon", "500 GP", 10, "1d12 piercing · Ammunition, loading, two-handed · Slow mastery"),
+  // ── Firearms (renaissance) ──
+  equipmentItem("Palm Pistol", "Martial Ranged Weapon", "150 GP", 1, "1d8 piercing · Firearm · Ammunition (range 15/45), loading · easily concealed"),
+  equipmentItem("Pepperbox", "Martial Ranged Weapon", "250 GP", 4, "1d10 piercing · Firearm · Ammunition (range 40/120), reload 6 shots"),
+  equipmentItem("Blunderbuss", "Martial Ranged Weapon", "300 GP", 5, "2d6 piercing · Firearm · Ammunition (range 15/60), loading, two-handed"),
+  equipmentItem("Bad News", "Martial Ranged Weapon", "800 GP", 20, "2d12 piercing · Firearm · Ammunition (range 200/800), loading, two-handed · a heavy long-range rifle"),
+  // ── Firearms (modern) ──
+  equipmentItem("Semi-Automatic Pistol", "Martial Ranged Weapon", "—", 3, "2d6 piercing · Firearm · Ammunition (range 30/90), reload 15 shots"),
+  equipmentItem("Revolver", "Martial Ranged Weapon", "—", 3, "2d8 piercing · Firearm · Ammunition (range 40/120), reload 6 shots"),
+  equipmentItem("Hunting Rifle", "Martial Ranged Weapon", "—", 8, "2d10 piercing · Firearm · Ammunition (range 80/240), reload 5 shots, two-handed"),
+  equipmentItem("Automatic Rifle", "Martial Ranged Weapon", "—", 8, "2d8 piercing · Firearm · Ammunition (range 80/240), reload 30 shots, burst fire, two-handed"),
+  equipmentItem("Shotgun", "Martial Ranged Weapon", "—", 7, "2d8 piercing · Firearm · Ammunition (range 30/90), reload 2 shots, two-handed"),
+  equipmentItem("Automatic Shotgun", "Martial Ranged Weapon", "—", 8, "2d8 piercing · Firearm · Ammunition (range 30/90), reload 10 shots, burst fire, two-handed"),
+  // ── Firearms (futuristic) ──
+  equipmentItem("Laser Pistol", "Martial Ranged Weapon", "—", 2, "3d6 radiant · Firearm · Ammunition (range 40/120), reload 50 charges"),
+  equipmentItem("Laser Rifle", "Martial Ranged Weapon", "—", 7, "3d8 radiant · Firearm · Ammunition (range 100/300), reload 30 charges, two-handed"),
+  equipmentItem("Antimatter Rifle", "Martial Ranged Weapon", "—", 10, "6d8 necrotic · Firearm · Ammunition (range 120/360), reload 2 shots, two-handed"),
+  // ── Firearm ammunition ──
+  equipmentItem("Bullets, Firearm (10)", "Ammunition", "3 GP", 2, "Powder and shot for renaissance firearms such as pistols and muskets"),
+  equipmentItem("Bullets, Modern (10)", "Ammunition", "9 GP", 1, "Metal cartridges for modern firearms"),
+  equipmentItem("Energy Cell", "Ammunition", "—", 5, "Rechargeable power cell that feeds laser and antimatter weapons"),
   equipmentItem("Padded Armor", "Light Armor", "5 GP", 8, "AC 11 + Dexterity modifier · Stealth disadvantage"),
   equipmentItem("Leather Armor", "Light Armor", "10 GP", 10, "AC 11 + Dexterity modifier"),
   equipmentItem("Studded Leather Armor", "Light Armor", "45 GP", 13, "AC 12 + Dexterity modifier"),
