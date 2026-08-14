@@ -7712,7 +7712,7 @@ function renderInventorySection(character, extraClass = "") {
     <div class="inventory-summary">
       <span><strong>Carried:</strong> ${Number(weight.toFixed(2))} lb.</span>
       <span><strong>Capacity:</strong> ${capacity} lb.</span>
-      <span><strong>Attuned:</strong> ${attuned}/3</span>
+      <span class="attune-slots"><strong>Attunement</strong><span class="attune-pips" aria-hidden="true">${[0, 1, 2].map(slot => `<i class="${slot < attuned ? "used" : ""}"></i>`).join("")}</span><small>${attuned}/3 slots</small></span>
       <span><strong>Items:</strong> ${inventory.reduce((sum, item) => sum + Number(item.quantity || 1), 0)}</span>
     </div>
     ${inventory.length ? `<div class="inventory-scroll"><table class="inventory-table">
@@ -7721,9 +7721,9 @@ function renderInventorySection(character, extraClass = "") {
         <td><div class="item-state">
           <button type="button" class="${item.carried === false ? "" : "active"}" data-item-action="carry" data-character="${character.id}" data-item-id="${item.id}" title="Carried">C</button>
           <button type="button" class="${item.equipped ? "active" : ""}" data-item-action="equip" data-character="${character.id}" data-item-id="${item.id}" title="Equipped">E</button>
-          <button type="button" class="${item.attuned ? "active" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" title="${itemRequiresAttunement(item) ? "Attune" : "No attunement needed"}" ${itemRequiresAttunement(item) ? "" : "disabled"}>A</button>
+          ${itemRequiresAttunement(item) ? `<button type="button" class="item-attune-btn ${item.attuned ? "on" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${item.attuned}" title="${item.attuned ? "Attuned — click to end attunement" : "Requires attunement — click to attune"}">✦</button>` : ""}
         </div></td>
-        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}<small>${escapeHtml(item.type || "Item")}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</small></td>
+        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}</td>
         <td>${Number(item.quantity || 1)}</td>
         <td>${Number((Number(item.weight || 0) * Number(item.quantity || 1)).toFixed(2))} lb.</td>
         <td>${escapeHtml(item.cost || "—")}</td>
@@ -7741,6 +7741,16 @@ function itemRarity(item) {
   const source = String(item.rarity || item.notes || item.details || "").trim();
   const order = ["Very Rare", "Legendary", "Artifact", "Uncommon", "Common", "Rare"];
   return order.find(rarity => source.toLowerCase().startsWith(rarity.toLowerCase())) || "";
+}
+// Item description with the leading rarity + attunement segments removed
+// (those are shown as the rarity chip and the attunement badge instead).
+function itemEffectNote(item) {
+  const parts = String(item.notes || "").split(" · ");
+  const rarities = ["common", "uncommon", "rare", "very rare", "legendary", "artifact"];
+  let start = 0;
+  if (parts[start] && rarities.includes(parts[start].trim().toLowerCase())) start += 1;
+  if (parts[start] && /^requires attunement/i.test(parts[start].trim())) start += 1;
+  return parts.slice(start).join(" · ").trim();
 }
 function rarityChip(rarity) {
   if (!rarity) return "";
