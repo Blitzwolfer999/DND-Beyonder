@@ -15,6 +15,12 @@ MAP_ASSET_LIBRARY.forEach(pack => {
   assert.match(pack.license, /CC0|public domain/i);
 });
 const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+assert.match(appSource, /#campaigns\/map/, "expanded campaign maps should have a reloadable route");
+assert.match(appSource, /data-map-table-mode/, "campaign maps should expose the full-tab control");
+assert.match(appSource, /requestFullscreen/, "campaign maps should support browser fullscreen");
+assert.match(stylesSource, /\.campaign-map-room\.map-table-mode-active/, "full-tab maps should have a viewport layout");
+assert.match(stylesSource, /\.map-vtt-workspace\.dock-collapsed/, "full-tab maps should support a collapsed tool dock");
 const builtInTileIds = [...appSource.matchAll(/\{ id: "([^"]+)", name: "[^"]+", category: "[^"]+"/g)].map(match => match[1]);
 assert.ok(builtInTileIds.length >= 95, "expected a broad built-in terrain and prop catalog");
 assert.equal(new Set(builtInTileIds).size, builtInTileIds.length, "built-in map asset ids should be unique");

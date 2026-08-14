@@ -11,8 +11,15 @@
     .battle-map-board { --cols: 34; --rows: 22; --cell: 38px; --grid-color: #fff; --grid-opacity: .22; --grid-thickness: 1px; background: #17191d; }
   </style>
 </head>
-<body>
+<body class="map-table-open">
 <main>
+  <section class="campaign-panel campaign-map-panel campaign-map-room map-table-mode-active">
+  <div class="map-table-topbar">
+    <button type="button" class="map-table-exit" data-fixture-exit>&#8249; Campaign</button>
+    <div class="map-table-identity"><small>The Ember Crown</small><strong>Goblin Mine Ambush</strong></div>
+    <div class="map-table-map-switcher"><button class="active">Goblin Mine</button><button>Dragon Hoard</button><button>Vampire Ballroom</button></div>
+    <div class="map-table-session"><div class="map-session-controls"><span class="tag">Live</span><button>Pause</button><button>End</button></div><button class="map-table-mobile-tools" data-fixture-dock>Hide tools</button><button>Fullscreen</button></div>
+  </div>
   <div class="campaign-map-workspace map-vtt-workspace dock-scene">
     <nav class="map-tool-rail" aria-label="Map editor tools">
       <button><span>H</span><small>Pan</small></button>
@@ -57,7 +64,7 @@
       </div>
     </aside>
     <div class="map-canvas-column">
-      <div class="map-viewport-bar"><div><strong>Goblin Mine Ambush</strong><small>Classic Encounters &middot; Torchlight</small></div><div class="map-zoom-controls"><button>Grid on</button><button>-</button><span>72%</span><button>+</button><button>Fit</button></div></div>
+      <div class="map-viewport-bar"><div><strong>Goblin Mine Ambush</strong><small>Classic Encounters &middot; Torchlight</small></div><div class="map-zoom-controls"><button data-fixture-dock>Hide tools</button><button>Grid on</button><button>-</button><span>72%</span><button>+</button><button>Fit</button></div></div>
       <div class="battle-map-shell tool-paint">
         <div class="battle-map-board">
           <div class="battle-map-tiles">
@@ -81,6 +88,18 @@
       <div class="map-shortcut-hint"><span><kbd>Space</kbd> pan</span><span><kbd>Wheel + Ctrl</kbd> zoom</span><span><kbd>T</kbd> tokens</span><span><kbd>F</kbd> fog</span><span><kbd>R</kbd> ruler</span><span><kbd>X</kbd> ping</span></div>
     </div>
   </div>
+  </section>
 </main>
+<script>
+  document.querySelectorAll("[data-fixture-dock]").forEach(button => button.addEventListener("click", () => {
+    const workspace = document.querySelector(".map-vtt-workspace");
+    workspace.classList.toggle("dock-collapsed");
+    document.querySelectorAll("[data-fixture-dock]").forEach(control => control.textContent = workspace.classList.contains("dock-collapsed") ? "Show tools" : "Hide tools");
+  }));
+  document.querySelector("[data-fixture-exit]").addEventListener("click", () => {
+    document.body.classList.remove("map-table-open");
+    document.querySelector(".campaign-map-room").classList.remove("map-table-mode-active");
+  });
+</script>
 </body>
 </html>

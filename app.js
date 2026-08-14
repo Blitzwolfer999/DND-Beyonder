@@ -303,6 +303,8 @@ let selectedMapToken = null;
 let selectedMapTool = "token";
 let selectedMapTile = "stone-floor";
 let selectedMapSidebar = "tokens";
+let mapTableMode = /^#\/?campaigns\/map(?:[/?&#]|$)/i.test(location.hash);
+let mapDockCollapsed = false;
 let selectedMapBrushSize = 1;
 let selectedMapTileCategory = "All";
 let mapTileSearch = "";
@@ -970,6 +972,46 @@ function fitCampaignMap(mapId) {
     shell.scrollLeft = 0;
     shell.scrollTop = 0;
   });
+}
+function applyMapTableMode() {
+  const panel = document.querySelector(".campaign-map-panel");
+  const workspace = panel?.querySelector(".map-vtt-workspace");
+  const active = Boolean(mapTableMode && panel && workspace);
+  document.body.classList.toggle("map-table-open", active);
+  panel?.classList.toggle("map-table-mode-active", active);
+  workspace?.classList.toggle("dock-collapsed", mapDockCollapsed);
+  document.querySelectorAll("[data-map-table-mode]").forEach(button => {
+    const entering = button.dataset.mapTableMode === "enter";
+    button.setAttribute("aria-pressed", String(active));
+    if (entering) button.textContent = active ? "Table open" : "Open table";
+  });
+  document.querySelectorAll("[data-map-dock-toggle]").forEach(button => {
+    button.setAttribute("aria-pressed", String(!mapDockCollapsed));
+    button.textContent = mapDockCollapsed ? "Show tools" : "Hide tools";
+  });
+  document.querySelectorAll("[data-map-fullscreen]").forEach(button => {
+    button.setAttribute("aria-pressed", String(Boolean(document.fullscreenElement)));
+    button.textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+  });
+}
+function setMapTableMode(active, options = {}) {
+  mapTableMode = Boolean(active);
+  if (mapTableMode && window.innerWidth <= 760) mapDockCollapsed = true;
+  if (!mapTableMode) mapDockCollapsed = false;
+  applyMapTableMode();
+  if (options.updateRoute !== false) syncRoute("campaigns");
+  if (options.fullscreen && !document.fullscreenElement) {
+    if (document.fullscreenEnabled && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => toast("Fullscreen was blocked by the browser"));
+    } else toast("Fullscreen is not supported in this browser");
+  }
+  if (!mapTableMode && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  if (mapTableMode && activeMapId) setTimeout(() => fitCampaignMap(activeMapId), 80);
+}
+function setMapDockCollapsed(collapsed) {
+  mapDockCollapsed = Boolean(collapsed);
+  applyMapTableMode();
+  if (activeMapId) setTimeout(() => fitCampaignMap(activeMapId), 80);
 }
 function pushMapEditHistory(mapId, data) {
   const history = mapEditHistory.get(mapId) || [];
@@ -2595,7 +2637,7 @@ function routeViewFromHash() {
   return ROUTE_VIEWS.has(view) ? view : "dashboard";
 }
 function syncRoute(view, replace = false) {
-  const nextHash = `#${view}`;
+  const nextHash = view === "campaigns" && mapTableMode ? "#campaigns/map" : `#${view}`;
   if (location.hash === nextHash) return;
   const url = `${location.pathname}${location.search}${nextHash}`;
   if (replace) history.replaceState(null, "", url);
@@ -6477,6 +6519,7 @@ function setStep(step) {
 
 function navigate(view, options = {}) {
   if (!ROUTE_VIEWS.has(view)) view = "dashboard";
+  if (view !== "campaigns" && mapTableMode) setMapTableMode(false, { updateRoute: false });
   $$(".view").forEach(x => x.classList.toggle("active", x.id === `${view}-view`));
   $$(".nav-item").forEach(x => x.classList.toggle("active", x.dataset.view === view));
   $("#page-title").textContent = ({ dashboard: "Hall", builder: "Create", sheet: "Character Sheet", dice: "Dice Tray", vault: "Vault", campaigns: "Campaigns" })[view];
@@ -7050,7 +7093,13 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </form>
   </details>` : "";
   const runSheet = playerCanSeeMap ? renderDungeonRunSheet(activeMap, data, isDm) : "";
-  return `<section class="campaign-panel campaign-map-panel campaign-map-room">
+  return `<section class="campaign-panel campaign-map-panel campaign-map-room ${mapTableMode && playerCanSeeMap ? "map-table-mode-active" : ""}">
+    <div class="map-table-topbar">
+      <button type="button" class="map-table-exit" data-map-table-mode="exit" aria-label="Return to campaign">&#8249; Campaign</button>
+      <div class="map-table-identity"><small>${escapeHtml(campaign.name)}</small><strong>${escapeHtml(activeMap.name)}</strong></div>
+      <div class="map-table-map-switcher" aria-label="Campaign maps">${mapTabs}</div>
+      <div class="map-table-session">${sessionControls}<button type="button" class="map-table-mobile-tools" data-map-dock-toggle aria-pressed="${!mapDockCollapsed}">${mapDockCollapsed ? "Show tools" : "Hide tools"}</button><button type="button" data-map-fullscreen aria-pressed="${Boolean(document.fullscreenElement)}">${document.fullscreenElement ? "Exit fullscreen" : "Fullscreen"}</button></div>
+    </div>
     <div class="campaign-map-hero">
       <div>
         <span class="eyebrow">MAP STUDIO 3.0</span>
@@ -7065,7 +7114,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </div>
     <div class="map-room-command-bar">
       <div class="campaign-map-tabs">${mapTabs}</div>
-      ${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}
+      <div class="map-room-command-actions">${playerCanSeeMap ? `<button type="button" class="button primary small" data-map-table-mode="enter" aria-pressed="${mapTableMode}">Open table</button>` : ""}${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}</div>
     </div>
     ${sessionControls}
     ${createForm}
@@ -7073,13 +7122,14 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     ${creatureForm}
     ${fogControls}
     ${runSheet ? `<details class="map-run-drawer"><summary>Encounter and dungeon run sheet</summary>${runSheet}</details>` : ""}
-    ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace map-vtt-workspace dock-${escapeHtml(selectedMapSidebar)}">
+    ${!playerCanSeeMap ? `<div class="map-waiting"><strong>${sessionState === "paused" ? "Session paused" : sessionState === "ended" ? "Session ended" : "Waiting for the DM"}</strong><p>The map is hidden until the DM starts or resumes the session.</p></div>` : `<div class="campaign-map-workspace map-vtt-workspace dock-${escapeHtml(selectedMapSidebar)} ${mapDockCollapsed ? "dock-collapsed" : ""}">
       ${toolRail}
       <aside class="map-side-dock">${dockTabs}<div class="map-dock-body">${dockContent}</div></aside>
       <div class="map-canvas-column">
         <div class="map-viewport-bar">
           <div><strong>${escapeHtml(activeMap.name)}</strong><small>${data.scene?.name ? escapeHtml(data.scene.name) : data.background ? "Uploaded battle map" : "Custom canvas"}</small></div>
           <div class="map-zoom-controls" aria-label="Map zoom">
+            <button type="button" data-map-dock-toggle aria-pressed="${!mapDockCollapsed}">${mapDockCollapsed ? "Show tools" : "Hide tools"}</button>
             ${isDm ? `<button type="button" data-map-quick-grid="${escapeHtml(activeMap.id)}" aria-pressed="${data.gridEnabled}">${data.gridEnabled ? "Grid on" : "Grid off"}</button>` : ""}
             <button type="button" data-map-zoom="out" data-map-id="${escapeHtml(activeMap.id)}" aria-label="Zoom out">-</button>
             <span data-map-zoom-label="${escapeHtml(activeMap.id)}">${Math.round(viewport.zoom * 100)}%</span>
@@ -7217,6 +7267,7 @@ function renderCampaigns() {
   if (!signedIn) {
     $("#campaign-list").innerHTML = `<p>Sign in to see campaigns.</p>`;
     $("#campaign-detail").innerHTML = `<div class="empty-state"><span>⚑</span><h2>No account connected</h2><p>Campaigns need cloud sync so DMs and players can share sheets.</p></div>`;
+    applyMapTableMode();
     return;
   }
   $("#campaign-list").innerHTML = campaigns.length ? campaigns.map(campaign => {
@@ -7232,6 +7283,7 @@ function renderCampaigns() {
   const campaign = campaigns.find(item => item.id === activeCampaignId);
   if (!campaign) {
     $("#campaign-detail").innerHTML = `<div class="empty-state"><span>⚑</span><h2>No campaign selected</h2><p>Create or join a campaign to begin.</p></div>`;
+    applyMapTableMode();
     return;
   }
   const role = campaignRole(campaign.id) || (campaign.owner_id === cloudUser.id ? "dm" : "player");
@@ -7329,6 +7381,7 @@ function renderCampaigns() {
       }
     });
   }
+  applyMapTableMode();
 }
 
 function valueByLevel(level, rows) {
@@ -9355,7 +9408,15 @@ function initDice() {
 }
 
 function initEvents() {
-  window.addEventListener("hashchange", () => navigate(routeViewFromHash(), { updateHash: false }));
+  window.addEventListener("hashchange", () => {
+    mapTableMode = /^#\/?campaigns\/map(?:[/?&#]|$)/i.test(location.hash);
+    if (!mapTableMode) mapDockCollapsed = false;
+    navigate(routeViewFromHash(), { updateHash: false });
+  });
+  document.addEventListener("fullscreenchange", () => {
+    applyMapTableMode();
+    if (mapTableMode && activeMapId) setTimeout(() => fitCampaignMap(activeMapId), 80);
+  });
   document.addEventListener("click", event => {
     const creationMethod = event.target.closest("[data-creation-method]");
     if (creationMethod) {
@@ -9668,6 +9729,22 @@ function initEvents() {
         ? $(".campaign-map-panel")
         : $(".campaign-share-form");
       target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    const mapTableButton = event.target.closest("[data-map-table-mode]");
+    if (mapTableButton) {
+      setMapTableMode(mapTableButton.dataset.mapTableMode !== "exit");
+      return;
+    }
+    const mapFullscreen = event.target.closest("[data-map-fullscreen]");
+    if (mapFullscreen) {
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      else setMapTableMode(true, { fullscreen: true });
+      return;
+    }
+    const mapDockToggle = event.target.closest("[data-map-dock-toggle]");
+    if (mapDockToggle) {
+      setMapDockCollapsed(!mapDockCollapsed);
       return;
     }
     const mapSelect = event.target.closest("[data-campaign-map-select]");
@@ -10439,6 +10516,11 @@ function initEvents() {
       return;
     }
     if (event.key === "Escape") {
+      if (mapTableMode && !document.fullscreenElement) {
+        setMapTableMode(false);
+        event.preventDefault();
+        return;
+      }
       selectedMapToken = null;
       selectedMapRulerStart = null;
       renderCampaigns();
