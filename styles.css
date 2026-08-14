@@ -3008,6 +3008,70 @@ html[data-theme="dark"] .ability-method.active {
   background: #242c38;
   border-color: var(--gold);
 }
+html[data-theme="dark"] .live-preview::before {
+  background: linear-gradient(180deg, #2a3442, transparent);
+}
+html[data-theme="dark"] .sheet-tabs {
+  background: #111720;
+  border-bottom-color: #3f4a5d;
+}
+html[data-theme="dark"] .sheet-tabs button {
+  color: #cbd5e1;
+  background: transparent;
+}
+html[data-theme="dark"] .sheet-tabs button:hover {
+  color: #ffffff;
+  background: #202837;
+}
+html[data-theme="dark"] .sheet-tabs button.active {
+  color: #ff8f88;
+  background: #1b212c;
+  border-bottom-color: #e16f68;
+}
+html[data-theme="dark"] .sheet-ability {
+  color: #ffffff;
+  background: linear-gradient(180deg, #202936, #171e29);
+  border-color: #465369;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .24);
+}
+html[data-theme="dark"] .sheet-ability small {
+  color: #f3cf8d;
+}
+html[data-theme="dark"] .sheet-ability strong {
+  color: #ffffff;
+}
+html[data-theme="dark"] .sheet-ability span {
+  color: #f5d99f;
+  background: #111720;
+  border-color: #d3a85c;
+}
+html[data-theme="dark"] .sheet-ability:hover {
+  color: #ffffff;
+  background: linear-gradient(180deg, #2b3544, #202837);
+  border-color: var(--gold);
+}
+html[data-theme="dark"] .death-saves {
+  color: var(--ink);
+  background: #151b24;
+  border-color: var(--line);
+}
+html[data-theme="dark"] .death-save-group button {
+  border-color: #738096;
+  background: #111720;
+}
+html[data-theme="dark"] .death-save-group button.active {
+  box-shadow: inset 0 0 0 3px #151b24;
+}
+html[data-theme="dark"] .saving-throw-list span.proficient::before,
+html[data-theme="dark"] .skill-roll span.proficient::before {
+  box-shadow: inset 0 0 0 2px #151b24;
+}
+html[data-theme="dark"] .resource-pip {
+  box-shadow: inset 0 0 0 2px #151b24;
+}
+html[data-theme="dark"] .form-footer {
+  background: rgba(21, 27, 36, .96);
+}
 html[data-theme="dark"] .equipment-method.active,
 html[data-theme="dark"] .equipment-method:hover {
   color: #fff6e7;
