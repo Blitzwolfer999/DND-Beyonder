@@ -6232,7 +6232,9 @@ function weaponAttacks(character) {
     genericDmg = Math.max(genericDmg, eff.weaponDamage || 0);
   });
   const attacks = [];
-  equippedItems(character).forEach(item => {
+  // Show every weapon the character is carrying (equipped or not) so anything
+  // you add is rollable. Magic bonuses only apply when it's actually wielded.
+  (character.inventory || []).filter(item => item.carried !== false).forEach(item => {
     const profile = parseWeaponProfile(item);
     if (!profile) return;
     let ability = "STR", abilityMod = strMod;
@@ -6240,12 +6242,16 @@ function weaponAttacks(character) {
     else if (profile.finesse && dexMod > strMod) { ability = "DEX"; abilityMod = dexMod; }
     const proficient = proficientWithWeapon(character, item);
     const own = MAGIC_ITEM_EFFECTS[item.name] || {};
-    const magicLive = itemIsActive(item); // a magic weapon's bonus is on only when attuned (if it requires it)
-    const weaponAtk = Math.max(genericAtk, magicLive ? (own.weaponAttack || 0) : 0);
-    const weaponDmg = Math.max(genericDmg, magicLive ? (own.weaponDamage || 0) : 0);
+    const wielding = Boolean(item.equipped);
+    const magicLive = wielding && (!itemRequiresAttunement(item) || Boolean(item.attuned));
+    const weaponAtk = Math.max(wielding ? genericAtk : 0, magicLive ? (own.weaponAttack || 0) : 0);
+    const weaponDmg = Math.max(wielding ? genericDmg : 0, magicLive ? (own.weaponDamage || 0) : 0);
+    const noteBits = [profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient"];
+    if (!wielding) noteBits.push("not equipped");
+    else if (itemRequiresAttunement(item) && !item.attuned) noteBits.push("attune to activate");
     attacks.push({
       name: item.name,
-      note: [profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient", (itemRequiresAttunement(item) && !item.attuned) ? "attune to activate" : ""].filter(Boolean).join(" · "),
+      note: noteBits.filter(Boolean).join(" · "),
       ability,
       toHit: abilityMod + (proficient ? prof : 0) + weaponAtk,
       count: profile.count,
@@ -6275,6 +6281,23 @@ function weaponAttacks(character) {
   });
   return attacks;
 }
+function renderSpellAttackRow(spell, character) {
+  const data = spellDisplayData(spell, character);
+  const isAttack = /spell attack/i.test(data.saveAttack || "");
+  const attackMod = derived(character).prof + spellcastingModifierForSpell(character, spell) + activeItemEffects(character).spellAttack;
+  const options = spellRollOptions(data.dice, spell, character);
+  const damageButtons = options.map(option => `<button type="button" class="attack-damage" data-attack-damage data-sides="${option.sides}" data-count="${option.count}" data-modifier="${option.modifier}" data-roll-label="${escapeHtml(`${spell.name} ${option.label}`)}">${escapeHtml(option.label)}</button>`).join("");
+  const levelLabel = spell.level === "Custom" ? "Custom" : Number(spell.level) === 0 ? "Cantrip" : Number.isFinite(Number(spell.level)) ? `Level ${spell.level}` : "Spell";
+  const meta = [levelLabel, data.saveAttack && data.saveAttack !== "None" ? data.saveAttack : ""].filter(Boolean).join(" · ");
+  const middle = isAttack
+    ? `<button type="button" class="attack-tohit" data-sheet-roll="${escapeHtml(`${spell.name} spell attack`)}" data-modifier="${attackMod}">${signed(attackMod)} <small>to hit</small></button>`
+    : `<span class="attack-save">${escapeHtml(data.saveAttack && data.saveAttack !== "None" ? data.saveAttack : "spell")}</span>`;
+  return `<article class="attack-row spell-attack-row">
+    <div class="attack-name"><strong>${escapeHtml(spell.name)}</strong>${meta ? `<small>${escapeHtml(meta)}</small>` : ""}<button type="button" class="spell-unpin" data-pin-spell="${escapeHtml(spell.name)}" data-character="${escapeHtml(character.id)}" title="Remove from attacks">&times;</button></div>
+    ${middle}
+    <div class="attack-damage-group">${damageButtons || `<span class="attack-flat">${escapeHtml(data.dice && data.dice !== "None" ? data.dice : "see spell")}</span>`}</div>
+  </article>`;
+}
 function renderAttacksPanel(character, sectionClassName) {
   const attacks = weaponAttacks(character);
   const rows = attacks.map(attack => {
@@ -6295,7 +6318,16 @@ function renderAttacksPanel(character, sectionClassName) {
       <div class="attack-damage-group">${damageButtons.join("")}</div>
     </article>`;
   }).join("");
-  return `<section class="sheet-panel ${sectionClassName}"><h2>Attacks${helpChip("ac")}</h2><div class="attack-list">${rows}</div><p class="attack-hint">Damage from an equipped magic weapon (+X, Flame Tongue, etc.) is added to your attacks automatically.</p></section>`;
+  const casterClasses = classBreakdown(character).filter(entry => spellListsFor(character.edition, entry.name, classSubclassName(character, entry.name)));
+  let spellBlock = "";
+  if (casterClasses.length) {
+    const known = characterSpellRecords(character);
+    const pinned = new Set(character.attackSpells || []);
+    const pinnedRows = known.filter(spell => pinned.has(spell.name)).map(spell => renderSpellAttackRow(spell, character)).join("");
+    const chips = known.map(spell => `<button type="button" class="spell-pin-chip ${pinned.has(spell.name) ? "active" : ""}" data-pin-spell="${escapeHtml(spell.name)}" data-character="${escapeHtml(character.id)}">${escapeHtml(spell.name)}</button>`).join("");
+    spellBlock = `${pinnedRows}<details class="spell-attack-picker"><summary>Add spells to your attacks</summary>${chips ? `<div class="spell-pin-list">${chips}</div>` : `<p class="attack-hint">Learn or prepare spells to add them here.</p>`}</details>`;
+  }
+  return `<section class="sheet-panel ${sectionClassName}"><h2>Attacks${helpChip("ac")}</h2><div class="attack-list">${rows}${spellBlock}</div><p class="attack-hint">All carried weapons appear here; magic bonuses (+X, Flame Tongue, etc.) apply when the weapon is equipped and attuned. Casters can pin spells above.</p></section>`;
 }
 
 // Best unarmored AC, accounting for class, subclass, feat, and species rules.
@@ -10136,6 +10168,18 @@ function initEvents() {
     const attackDamage = event.target.closest("[data-attack-damage]");
     if (attackDamage) {
       roll(Number(attackDamage.dataset.sides), Number(attackDamage.dataset.count), Number(attackDamage.dataset.modifier || 0), attackDamage.dataset.rollLabel || "Damage", "normal", { source: "sheet", characterId: activeCharacterId || "", ...(window.DndDiceExperience?.rollOptions?.() || {}) });
+      return;
+    }
+    const pinSpell = event.target.closest("[data-pin-spell]");
+    if (pinSpell) {
+      const character = characters.find(entry => entry.id === pinSpell.dataset.character);
+      if (!character || !canControlCharacter(character)) return;
+      const name = pinSpell.dataset.pinSpell;
+      const pinned = new Set(character.attackSpells || []);
+      pinned.has(name) ? pinned.delete(name) : pinned.add(name);
+      character.attackSpells = [...pinned];
+      persistCharacters();
+      renderSheet();
       return;
     }
   });

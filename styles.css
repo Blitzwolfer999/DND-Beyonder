@@ -674,6 +674,17 @@ textarea { resize: vertical; }
 .attack-flat { padding: 4px 9px; color: var(--muted); font-size: 11px; }
 .attack-hint { margin: 8px 0 0; color: var(--muted); font-size: 10.5px; }
 .dark .attack-row, [data-theme="dark"] .attack-row { background: rgba(255,255,255,.04); }
+.spell-attack-row { border-left: 3px solid #6f57c4; }
+.spell-attack-row .attack-name { position: relative; padding-right: 20px; }
+.spell-unpin { position: absolute; top: -2px; right: 0; width: 18px; height: 18px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--muted); font: 700 12px/1 system-ui; cursor: pointer; }
+.spell-unpin:hover { border-color: #b0392e; color: #b0392e; }
+.attack-save { padding: 5px 10px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font: 700 11px system-ui, sans-serif; white-space: nowrap; text-transform: capitalize; }
+.spell-attack-picker { grid-column: 1 / -1; margin-top: 4px; border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; }
+.spell-attack-picker > summary { cursor: pointer; font-weight: 800; color: #6f57c4; font-size: 12px; }
+.spell-pin-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.spell-pin-chip { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font: 700 11px system-ui, sans-serif; cursor: pointer; }
+.spell-pin-chip:hover { border-color: #6f57c4; color: inherit; }
+.spell-pin-chip.active { background: #6f57c4; border-color: #6f57c4; color: #fff; }
 .combat-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(116px, 1fr)); gap: 8px; margin-bottom: 12px; }
 .combat-stat { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #f7f2e9; text-align: center; }
 .combat-stat small { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
