@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=overview-layout-11">
+  <link rel="stylesheet" href="styles.css?v=dice-sync-1">
 </head>
 <body>
   <div class="app-shell">
@@ -632,14 +632,7 @@
   </div>
 
   <div class="dice-stage" id="dice-stage" aria-hidden="true" hidden>
-    <div class="dice-stage-die" id="dice-stage-die">
-      <svg class="d20-svg" viewBox="0 0 100 100" aria-hidden="true">
-        <polygon class="d20-edge" points="50,4 92,28 92,72 50,96 8,72 8,28"/>
-        <polygon class="d20-face" points="50,34 74,64 26,64"/>
-        <path class="d20-spoke" d="M50,34 L50,4 M50,34 L92,28 M50,34 L8,28 M74,64 L92,72 M74,64 L50,96 M26,64 L8,72 M26,64 L50,96"/>
-      </svg>
-      <span id="dice-stage-num">20</span>
-    </div>
+    <div class="dice-stage-dice" id="dice-stage-dice"></div>
   </div>
 
   <div class="roll-overlay" id="roll-overlay" role="status" aria-live="polite" hidden>
@@ -653,8 +646,12 @@
         </svg>
         <span id="roll-die-num">20</span>
       </div>
-      <div class="roll-info"><strong id="roll-overlay-label">Roll</strong><span id="roll-overlay-detail"></span></div>
-      <div class="roll-total" id="roll-total"></div>
+      <div class="roll-info">
+        <strong id="roll-overlay-label">Roll</strong>
+        <span id="roll-overlay-detail"></span>
+        <span class="roll-dice-breakdown" id="roll-dice-breakdown"></span>
+      </div>
+      <div class="roll-total-group"><small>TOTAL</small><div class="roll-total" id="roll-total"></div></div>
     </div>
     <div class="roll-adv">
       <button type="button" data-roll-mode="advantage">Advantage</button>
@@ -676,6 +673,7 @@
   <script src="dungeon-data.js?v=dungeon-challenge-1"></script>
   <script src="map-library.js?v=vtt-4"></script>
   <script src="map-token-library.js?v=creature-vault-1"></script>
+  <script src="dice-engine.js?v=dice-sync-1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js?v=supabase-ifvyg-3"></script>
   <script>
@@ -684,6 +682,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=overview-layout-11"></script>
+  <script src="app.js?v=dice-sync-1"></script>
 </body>
 </html>

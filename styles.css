@@ -2341,6 +2341,7 @@ body { background: var(--paper); }
 .roll-overlay-close:hover { color: #f2ede3; }
 .roll-main { display: flex; align-items: center; gap: 14px; }
 .roll-die { position: relative; flex: 0 0 auto; width: 62px; height: 62px; perspective: 460px; }
+.roll-die[hidden] { display: none; }
 .d20-svg { width: 100%; height: 100%; display: block; transform-origin: 50% 52%; }
 .d20-edge { fill: var(--dice-fill); stroke: var(--dice-edge); stroke-width: 3.5; stroke-linejoin: round; }
 .d20-face { fill: var(--dice-face); stroke: var(--dice-edge); stroke-width: 2; stroke-linejoin: round; }
@@ -2361,6 +2362,16 @@ body { background: var(--paper); }
 .roll-info { flex: 1; min-width: 0; }
 .roll-info strong { display: block; font: 700 14px Cinzel, serif; }
 .roll-info span { display: block; margin-top: 2px; font-size: 12px; color: #9aa39a; }
+.roll-info .roll-dice-breakdown { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.roll-dice-breakdown:empty { display: none; }
+.roll-dice-breakdown .roll-die-chip {
+  display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 3px 7px;
+  color: #d8dcd8; background: rgba(255, 255, 255, .06); border: 1px solid #465149; border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+}
+.roll-dice-breakdown .roll-die-chip.chosen { color: #fff3cf; border-color: var(--dice-edge); background: rgba(185, 138, 62, .16); }
+.roll-total-group { flex: 0 0 auto; min-width: 52px; text-align: center; }
+.roll-total-group small { display: block; color: #9aa39a; font-size: 9px; font-weight: 700; letter-spacing: .12em; }
 .roll-total { flex: 0 0 auto; min-width: 46px; text-align: center; font: 700 34px Cinzel, serif; color: #fff; }
 .roll-adv { display: flex; gap: 8px; }
 .roll-adv[hidden] { display: none; }
@@ -2388,9 +2399,10 @@ body[data-dice="obsidian"] { --dice-edge: #9aa3ad; --dice-fill: rgba(154, 163, 1
 
 .dice-stage { position: fixed; top: 0; left: 0; right: 0; height: 264px; z-index: 90; pointer-events: none; overflow: hidden; }
 .dice-stage[hidden] { display: none; }
+.dice-stage-dice { position: absolute; inset: 0; }
 .dice-stage-die { position: absolute; top: 0; left: 0; width: 72px; height: 72px; will-change: transform; filter: drop-shadow(0 7px 12px rgba(0, 0, 0, .42)); }
 .dice-stage-die .d20-svg { width: 100%; height: 100%; display: block; }
-.dice-stage-die #dice-stage-num { position: absolute; inset: 0; display: grid; place-items: center; padding-top: 9px; color: var(--dice-num); font: 700 24px Cinzel, serif; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.dice-stage-die .dice-stage-num { position: absolute; inset: 0; display: grid; place-items: center; padding-top: 9px; color: var(--dice-num); font: 700 24px Cinzel, serif; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
 .dice-stage.crit .d20-edge, .dice-stage.crit .d20-face { stroke: #84e3a4; fill: rgba(76, 175, 114, .24); }
 .dice-stage.fumble .d20-edge, .dice-stage.fumble .d20-face { stroke: #ef918c; fill: rgba(197, 84, 78, .24); }
 

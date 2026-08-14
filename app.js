@@ -8688,35 +8688,24 @@ function resetCanvasFromPortrait() {
   image.src = portraitData;
 }
 
+let activeDiceRollId = 0;
+
 function roll(sides = selectedDie, count = 1, mod = 0, label = "", mode = selectedRollMode) {
-  sides = Math.max(2, Number(sides || 20));
-  count = Math.max(1, Number(count || 1));
-  mod = Number(mod || 0);
-  mode = mode || "normal";
-  let rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
-  let chosen = rolls.reduce((sum, value) => sum + value, 0);
-  let modeLabel = "";
-  if (mode === "advantage" || mode === "disadvantage") {
-    rolls = [Math.floor(Math.random() * sides) + 1, Math.floor(Math.random() * sides) + 1];
-    chosen = mode === "advantage" ? Math.max(...rolls) : Math.min(...rolls);
-    count = 1;
-    modeLabel = mode === "advantage" ? " (advantage)" : " (disadvantage)";
-  }
-  const total = chosen + mod;
-  const detail = mode === "normal"
-    ? `${count}d${sides}${mod ? signed(mod) : ""} [${rolls.join(", ")}]`
-    : `2d${sides}${mod ? signed(mod) : ""} [${rolls.join(", ")} → ${chosen}]`;
-  const entry = { total, detail, label: (label || "Custom roll") + modeLabel, time: Date.now() };
+  const result = window.createDiceRoll({ sides, count, modifier: mod, mode });
+  const rollId = ++activeDiceRollId;
+  const modeLabel = result.mode === "advantage" ? " (advantage)" : result.mode === "disadvantage" ? " (disadvantage)" : "";
+  const detail = window.formatDiceRollDetail(result);
+  const entry = { total: result.total, detail, label: (label || "Custom roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
-  animateDiceResult({ rollValue: chosen, total, sides, label: entry.label, detail });
-  const overlayData = { label: label || `d${sides} roll`, modifier: mod, rolls, d20s: rolls, chosen, faceValue: chosen, total, mode, sides, count };
+  const rollData = { ...result, rollId, label: label || `d${result.sides} roll` };
+  animateDiceResult({ ...rollData, label: entry.label, detail });
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(chosen, () => showRollOverlay({ ...overlayData, settled: true }), sides);
-  else showRollOverlay(overlayData);
-  return total;
+  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(rollData, () => showRollOverlay({ ...rollData, settled: true }));
+  else showRollOverlay(rollData);
+  return result.total;
 }
 
-function animateDiceResult({ rollValue, total, sides, label, detail }) {
+function animateDiceResult({ rawValue, total, sides, label, detail, rollId }) {
   const panel = $("#dice-result");
   const number = $("#dice-result strong");
   const copy = $("#dice-result p");
@@ -8728,14 +8717,15 @@ function animateDiceResult({ rollValue, total, sides, label, detail }) {
   let ticks = 0;
   clearInterval(animateDiceResult.timer);
   animateDiceResult.timer = setInterval(() => {
+    if (rollId !== activeDiceRollId) { clearInterval(animateDiceResult.timer); return; }
     number.textContent = Math.floor(Math.random() * Math.max(2, Number(sides || 20))) + 1;
     if (++ticks > 16) {
       clearInterval(animateDiceResult.timer);
-      number.textContent = rollValue;
-      copy.textContent = `${label} - raw ${rollValue}${total !== rollValue ? ` - total ${total}` : ""} - ${detail}`;
+      number.textContent = rawValue;
+      copy.textContent = `${label} - raw ${rawValue}${total !== rawValue ? ` - total ${total}` : ""} - ${detail}`;
       panel.classList.remove("rolling");
       panel.classList.add("landed");
-      setTimeout(() => panel.classList.remove("landed"), 900);
+      setTimeout(() => { if (rollId === activeDiceRollId) panel.classList.remove("landed"); }, 900);
     }
   }, 42);
 }
@@ -8751,92 +8741,126 @@ let rollOverlayTimer = null;
 let rollOverlayHideTimer = null;
 // Roll a d20 check/save/skill and show the animated result in place (no page change).
 function rollOnSheet(label, modifier, mode, options = {}) {
-  mode = mode || "normal";
-  modifier = Number(modifier || 0);
-  let d20s = [Math.floor(Math.random() * 20) + 1];
-  let chosen = d20s[0];
-  if (mode === "advantage" || mode === "disadvantage") {
-    d20s = [Math.floor(Math.random() * 20) + 1, Math.floor(Math.random() * 20) + 1];
-    chosen = mode === "advantage" ? Math.max(...d20s) : Math.min(...d20s);
-  }
-  const total = chosen + modifier;
-  const modeLabel = mode === "advantage" ? " (advantage)" : mode === "disadvantage" ? " (disadvantage)" : "";
-  const detail = `1d20${modifier ? signed(modifier) : ""} [${d20s.join(", ")}${mode !== "normal" ? " → " + chosen : ""}]`;
-  const entry = { total, detail, label: (label || "Roll") + modeLabel, time: Date.now() };
+  const result = window.createDiceRoll({ sides: 20, count: 1, modifier, mode });
+  const rollId = ++activeDiceRollId;
+  const modeLabel = result.mode === "advantage" ? " (advantage)" : result.mode === "disadvantage" ? " (disadvantage)" : "";
+  const detail = window.formatDiceRollDetail(result);
+  const entry = { total: result.total, detail, label: (label || "Roll") + modeLabel, time: Date.now() };
   rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
   if (options.campaignId) {
     recordCampaignGameLog(options.campaignId, {
       source: options.source || "sheet",
       characterId: options.characterId || "",
       label: entry.label,
-      rolls: d20s,
-      rawTotal: chosen,
-      modifier,
-      total,
+      rolls: result.rolls,
+      rawTotal: result.rawValue,
+      modifier: result.modifier,
+      total: result.total,
       visibility: options.visibility || "public"
     });
   }
-  if ($("#dice-result strong")) {
-    $("#dice-result strong").textContent = chosen;
-    $("#dice-result p").textContent = `${entry.label} - raw ${chosen}${total !== chosen ? ` - total ${total}` : ""} - ${detail}`;
-  }
-  const overlayData = { label: label || "Roll", modifier, rolls: d20s, d20s, chosen, faceValue: chosen, total, mode, sides: 20, count: 1 };
+  const rollData = { ...result, rollId, label: label || "Roll" };
+  animateDiceResult({ ...rollData, label: entry.label, detail });
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(chosen, () => showRollOverlay({ ...overlayData, settled: true }), 20);
-  else showRollOverlay(overlayData);
-  return total;
+  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(rollData, () => showRollOverlay({ ...rollData, settled: true }));
+  else showRollOverlay(rollData);
+  return result.total;
 }
 
 function dicePhysicsEnabled() {
   try { return localStorage.getItem("af-dice-physics") !== "0"; } catch (e) { return true; }
 }
 
-// Original 2D physics dice roll: the d20 drops in and tumbles/bounces off the
-// walls and floor (gravity + restitution + friction), differently each time,
-// before settling on the rolled value.
 let diceRaf = null, diceFadeTimer = null;
-function rollPhysics(finalValue, onSettle, sides = 20) {
-  const stage = $("#dice-stage"), die = $("#dice-stage-die"), num = $("#dice-stage-num");
-  if (!stage || !die || !num) { if (onSettle) onSettle(); return; }
-  sides = Math.max(2, Number(sides || 20));
-  const animationMax = Math.max(sides, Number(finalValue) || sides);
+function createPhysicsDie(size, index) {
+  const die = document.createElement("div");
+  die.className = "dice-stage-die";
+  die.dataset.rollIndex = String(index);
+  die.style.width = `${size}px`;
+  die.style.height = `${size}px`;
+  die.innerHTML = `<svg class="d20-svg" viewBox="0 0 100 100" aria-hidden="true">
+    <polygon class="d20-edge" points="50,4 92,28 92,72 50,96 8,72 8,28"></polygon>
+    <polygon class="d20-face" points="50,34 74,64 26,64"></polygon>
+    <path class="d20-spoke" d="M50,34 L50,4 M50,34 L92,28 M50,34 L8,28 M74,64 L92,72 M74,64 L50,96 M26,64 L8,72 M26,64 L50,96"></path>
+    </svg><span class="dice-stage-num"></span>`;
+  return die;
+}
+
+function rollPhysics(result, onSettle) {
+  const stage = $("#dice-stage"), tray = $("#dice-stage-dice");
+  if (!stage || !tray) { if (onSettle) onSettle(); return; }
+  const rollId = result.rollId;
+  const sides = Math.max(2, Number(result.sides || 20));
+  const values = Array.isArray(result.rolls) && result.rolls.length ? result.rolls : [result.rawValue];
   cancelAnimationFrame(diceRaf); clearTimeout(diceFadeTimer);
-  die.style.transition = "";
+  tray.replaceChildren();
   stage.hidden = false;
   stage.classList.remove("landed", "crit", "fumble");
-  const size = 72;
   const W = stage.clientWidth || window.innerWidth;
-  const H = stage.clientHeight || 260;
-  let x = Math.random() * Math.max(40, W - size - 80) + 30;
-  let y = -size - 8;
-  let vx = (Math.random() - 0.5) * 26;
-  let vy = Math.random() * 3 + 2.5;
-  let rot = Math.random() * 360;
-  let vr = (Math.random() - 0.5) * 60;
-  const g = 1.05, rest = 0.6, fric = 0.82, floor = H - size, wallR = Math.max(0, W - size);
-  let restCount = 0, last = performance.now(), startT = last, tick = 0, settled = false;
+  const size = values.length > 12 ? 38 : values.length > 6 ? 44 : values.length > 3 ? 54 : 72;
+  const columns = Math.max(1, Math.min(values.length, Math.floor(Math.max(size, W - 16) / (size + 6))));
+  const rows = Math.ceil(values.length / columns);
+  const H = Math.max(264, Math.min(window.innerHeight * .72, 76 + rows * (size + 6)));
+  stage.style.height = `${H}px`;
+  const cellWidth = W / columns;
+  const now = performance.now();
+  const states = values.map((finalValue, index) => {
+    const die = createPhysicsDie(size, index);
+    const num = die.querySelector(".dice-stage-num");
+    num.textContent = String(Math.floor(Math.random() * sides) + 1);
+    tray.append(die);
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const wallL = column * cellWidth + 3;
+    const wallR = Math.max(wallL, (column + 1) * cellWidth - size - 3);
+    return {
+      die, num, finalValue,
+      x: wallL + Math.random() * Math.max(0, wallR - wallL),
+      y: -size - Math.random() * 90,
+      vx: (Math.random() - .5) * 14,
+      vy: Math.random() * 3 + 2.5,
+      rot: Math.random() * 360,
+      vr: (Math.random() - .5) * 60,
+      floor: H - size - row * (size + 6),
+      wallL, wallR, restCount: 0, tick: 0, settled: false
+    };
+  });
+  const g = 1.05, rest = .6, fric = .82;
+  let last = now, startT = now;
   function step(now) {
+    if (rollId !== activeDiceRollId) return;
     let dt = (now - last) / 16.67; last = now; if (dt > 2.5) dt = 2.5;
-    vy += g * dt; x += vx * dt; y += vy * dt; rot += vr * dt;
-    if (x < 0) { x = 0; vx = -vx * rest; vr *= -fric; }
-    else if (x > wallR) { x = wallR; vx = -vx * rest; vr *= -fric; }
-    if (y >= floor) {
-      y = floor; vy = -vy * rest; vx *= fric; vr *= fric;
-      if (Math.abs(vy) < 3 && Math.abs(vx) < 1.4) restCount += dt; else restCount = 0;
-    } else restCount = 0;
-    if ((Math.abs(vx) + Math.abs(vy)) > 2.5 && (++tick % 2 === 0)) num.textContent = Math.floor(Math.random() * animationMax) + 1;
-    die.style.transform = `translate(${x}px, ${y}px) rotate(${rot}deg)`;
-    if ((restCount > 16 || now - startT > 3200) && !settled) {
-      settled = true;
-      num.textContent = finalValue;
-      const upright = Math.round(rot / 360) * 360;
-      die.style.transition = "transform .16s ease-out";
-      die.style.transform = `translate(${x}px, ${floor}px) rotate(${upright}deg)`;
+    states.forEach(state => {
+      if (state.settled) return;
+      state.vy += g * dt; state.x += state.vx * dt; state.y += state.vy * dt; state.rot += state.vr * dt;
+      if (state.x < state.wallL) { state.x = state.wallL; state.vx = -state.vx * rest; state.vr *= -fric; }
+      else if (state.x > state.wallR) { state.x = state.wallR; state.vx = -state.vx * rest; state.vr *= -fric; }
+      if (state.y >= state.floor) {
+        state.y = state.floor; state.vy = -state.vy * rest; state.vx *= fric; state.vr *= fric;
+        if (Math.abs(state.vy) < 3 && Math.abs(state.vx) < 1.4) state.restCount += dt; else state.restCount = 0;
+      } else state.restCount = 0;
+      if ((Math.abs(state.vx) + Math.abs(state.vy)) > 2.5 && (++state.tick % 2 === 0)) state.num.textContent = String(Math.floor(Math.random() * sides) + 1);
+      state.die.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.rot}deg)`;
+      if (state.restCount > 16 || now - startT > 3200) {
+        state.settled = true;
+        state.num.textContent = String(state.finalValue);
+        const upright = Math.round(state.rot / 360) * 360;
+        state.die.style.transition = "transform .16s ease-out";
+        state.die.style.transform = `translate(${state.x}px, ${state.floor}px) rotate(${upright}deg)`;
+      }
+    });
+    if (states.every(state => state.settled)) {
       stage.classList.add("landed");
-      if (sides === 20 && finalValue === 20) stage.classList.add("crit");
-      else if (finalValue === 1) stage.classList.add("fumble");
+      const isCheck = sides === 20 && (result.mode !== "normal" || values.length === 1);
+      if (isCheck && result.rawValue === 20) stage.classList.add("crit");
+      else if (isCheck && result.rawValue === 1) stage.classList.add("fumble");
       if (onSettle) onSettle();
-      diceFadeTimer = setTimeout(() => { stage.hidden = true; stage.classList.remove("landed", "crit", "fumble"); }, 2200);
+      diceFadeTimer = setTimeout(() => {
+        if (rollId !== activeDiceRollId) return;
+        stage.hidden = true;
+        stage.style.height = "";
+        stage.classList.remove("landed", "crit", "fumble");
+      }, 2200);
       return;
     }
     diceRaf = requestAnimationFrame(step);
@@ -8846,51 +8870,64 @@ function rollPhysics(finalValue, onSettle, sides = 20) {
 
 function showRollOverlay(r) {
   const overlay = $("#roll-overlay");
-  if (!overlay) return;
+  if (!overlay || (r.rollId && r.rollId !== activeDiceRollId)) return;
   const sides = Number(r.sides || 20);
   const rolls = Array.isArray(r.rolls) ? r.rolls : Array.isArray(r.d20s) ? r.d20s : [r.chosen];
-  const faceValue = Number(r.faceValue ?? r.chosen ?? r.total);
-  const animationMax = Math.max(sides, faceValue || sides);
-  const allowsRollMode = sides === 20 && Number(r.count || 1) === 1;
+  const rawValue = Number(r.rawValue ?? r.faceValue ?? r.chosen ?? r.total);
+  const requestedCount = Number(r.requestedCount || 1);
+  const allowsRollMode = sides === 20 && requestedCount === 1;
   currentRollContext = allowsRollMode ? { label: r.label, modifier: r.modifier, sides } : null;
   const rollModeControls = overlay.querySelector(".roll-adv");
   if (rollModeControls) rollModeControls.hidden = !allowsRollMode;
   $("#roll-overlay-label").textContent = r.label;
-  const parts = [r.d20s.length > 1 ? `rolled ${r.d20s.join(" & ")} → ${r.chosen}` : `d${sides}`];
-  parts[0] = rolls.length > 1 ? `rolled ${rolls.join(" & ")} -> ${r.chosen}` : `rolled ${faceValue} on d${sides}`;
-  if (r.modifier) parts.push(signed(r.modifier));
-  if (r.mode === "advantage") parts.push("· advantage");
-  else if (r.mode === "disadvantage") parts.push("· disadvantage");
-  $("#roll-overlay-detail").textContent = parts.join(" ");
+  const parts = [r.mode === "normal" && rolls.length > 1
+    ? `raw ${rolls.join(" + ")} = ${rawValue}`
+    : r.mode !== "normal" ? `raw ${rawValue} from ${rolls.join(" and ")}` : `raw ${rawValue} on d${sides}`];
+  if (r.modifier) parts.push(`modifier ${signed(r.modifier)}`);
+  if (r.mode === "advantage") parts.push("advantage");
+  else if (r.mode === "disadvantage") parts.push("disadvantage");
+  $("#roll-overlay-detail").textContent = parts.join(" | ");
+  const breakdown = $("#roll-dice-breakdown");
+  if (breakdown) {
+    breakdown.replaceChildren(...rolls.map(value => {
+      const chip = document.createElement("span");
+      chip.className = "roll-die-chip" + (r.mode !== "normal" && value === rawValue ? " chosen" : "");
+      chip.textContent = `d${sides}: ${value}`;
+      return chip;
+    }));
+  }
   overlay.hidden = false;
   overlay.classList.remove("crit", "fumble");
   const die = $("#roll-die"), num = $("#roll-die-num"), totalEl = $("#roll-total");
+  die.hidden = r.mode === "normal" && rolls.length > 1;
   die.classList.remove("spin"); void die.offsetWidth; die.classList.add("spin");
   totalEl.textContent = "";
   clearInterval(rollOverlayTimer);
-  if (r.settled) {
+  clearTimeout(rollOverlayHideTimer);
+  const settleOverlay = () => {
+    if (r.rollId && r.rollId !== activeDiceRollId) return;
     die.classList.remove("spin");
-    num.textContent = faceValue;
+    num.textContent = rawValue;
     totalEl.textContent = r.total;
-    if (sides === 20 && faceValue === 20 && (r.mode !== "normal" || Number(r.count || 1) === 1)) overlay.classList.add("crit");
-    else if (faceValue === 1) overlay.classList.add("fumble");
-    clearTimeout(rollOverlayHideTimer);
-    rollOverlayHideTimer = setTimeout(() => { overlay.hidden = true; }, 8000);
+    const isCheck = sides === 20 && (r.mode !== "normal" || rolls.length === 1);
+    if (isCheck && rawValue === 20) overlay.classList.add("crit");
+    else if (isCheck && rawValue === 1) overlay.classList.add("fumble");
+  };
+  if (r.settled) {
+    settleOverlay();
+    rollOverlayHideTimer = setTimeout(() => { if (!r.rollId || r.rollId === activeDiceRollId) overlay.hidden = true; }, 8000);
     return;
   }
   let ticks = 0;
   rollOverlayTimer = setInterval(() => {
-    num.textContent = Math.floor(Math.random() * animationMax) + 1;
+    if (r.rollId && r.rollId !== activeDiceRollId) { clearInterval(rollOverlayTimer); return; }
+    num.textContent = Math.floor(Math.random() * sides) + 1;
     if (++ticks > 14) {
       clearInterval(rollOverlayTimer);
-      num.textContent = faceValue;
-      totalEl.textContent = r.total;
-      if (sides === 20 && faceValue === 20 && (r.mode !== "normal" || Number(r.count || 1) === 1)) overlay.classList.add("crit");
-      else if (faceValue === 1) overlay.classList.add("fumble");
+      settleOverlay();
     }
   }, 45);
-  clearTimeout(rollOverlayHideTimer);
-  rollOverlayHideTimer = setTimeout(() => { overlay.hidden = true; }, 8000);
+  rollOverlayHideTimer = setTimeout(() => { if (!r.rollId || r.rollId === activeDiceRollId) overlay.hidden = true; }, 8000);
 }
 
 function saveResourceUsage(character, resourceId, used) {
