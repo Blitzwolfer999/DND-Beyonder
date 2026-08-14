@@ -7261,7 +7261,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     </div>
     <div class="map-room-command-bar">
       <div class="campaign-map-tabs">${mapTabs}</div>
-      <div class="map-room-command-actions">${playerCanSeeMap ? `<button type="button" class="button primary small" data-map-table-mode="enter" aria-pressed="${mapTableMode}">Open table</button>` : ""}${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}</div>
+      <div class="map-room-command-actions">${playerCanSeeMap ? `<button type="button" class="button primary small" data-map-table-mode="enter" aria-pressed="${mapTableMode}">Open table</button><button type="button" class="button ghost small" data-map-fullscreen aria-pressed="${Boolean(document.fullscreenElement)}" title="Fill the whole screen with the map">${document.fullscreenElement ? "Exit fullscreen" : "⛶ Fullscreen"}</button>` : ""}${isDm ? `<button type="button" class="button primary small" data-campaign-map-add-tokens="${escapeHtml(activeMap.id)}">Add party tokens</button>` : ""}</div>
     </div>
     ${sessionControls}
     ${createForm}
@@ -7282,6 +7282,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
             <span data-map-zoom-label="${escapeHtml(activeMap.id)}">${Math.round(viewport.zoom * 100)}%</span>
             <button type="button" data-map-zoom="in" data-map-id="${escapeHtml(activeMap.id)}" aria-label="Zoom in">+</button>
             <button type="button" data-map-zoom="fit" data-map-id="${escapeHtml(activeMap.id)}">Fit</button>
+            <button type="button" data-map-fullscreen aria-pressed="${Boolean(document.fullscreenElement)}" title="Fullscreen" aria-label="Toggle fullscreen">⛶</button>
           </div>
         </div>
         <div class="battle-map-shell tool-${escapeHtml(selectedMapTool)}" data-map-shell="${escapeHtml(activeMap.id)}">
