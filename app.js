@@ -2610,7 +2610,7 @@ function renderSpellFact(label, value) {
 function spellcastingModifierForSpell(character, spell) {
   const className = spell.className && spell.className !== "Character" ? spell.className : primaryClassName(character);
   const context = withClassContext(character, className, classLevel(character, className) || characterTotalLevel(character));
-  return modifier(character[spellcastingAbility(context)]);
+  return modifier(effectiveAbilities(character)[spellcastingAbility(context)]);
 }
 
 function spellRollOptions(value, spell, character) {
@@ -2643,7 +2643,7 @@ function renderSpellDiceFact(value, spell, character) {
 
 function renderSpellHitSaveFact(value, spell, character) {
   if (!value || !/spell attack/i.test(value)) return renderSpellFact("Hit / Save", value);
-  const attackModifier = derived(character).prof + spellcastingModifierForSpell(character, spell);
+  const attackModifier = derived(character).prof + spellcastingModifierForSpell(character, spell) + activeItemEffects(character).spellAttack;
   return `<span class="spell-fact spell-attack-fact"><small>Hit / Save</small><button type="button" class="spell-attack-roll" data-sheet-roll="${escapeHtml(`${spell.name} spell attack`)}" data-modifier="${attackModifier}">${escapeHtml(value)} <strong>${signed(attackModifier)}</strong></button></span>`;
 }
 
@@ -5879,17 +5879,47 @@ const MAGIC_ITEM_EFFECTS = {
   "Belt of Stone Giant Strength": { setSTR: 23 },
   "Belt of Fire Giant Strength": { setSTR: 25 },
   "Belt of Cloud Giant Strength": { setSTR: 27 },
-  "Belt of Storm Giant Strength": { setSTR: 29 }
+  "Belt of Storm Giant Strength": { setSTR: 29 },
+  // Weapon bonuses (applied to weapon attacks)
+  "Weapon, +1": { weaponAttack: 1, weaponDamage: 1 },
+  "Weapon, +2": { weaponAttack: 2, weaponDamage: 2 },
+  "Weapon, +3": { weaponAttack: 3, weaponDamage: 3 },
+  "Dagger of Venom": { weaponAttack: 1, weaponDamage: 1 },
+  "Berserker Axe": { weaponAttack: 1, weaponDamage: 1 },
+  "Mace of Smiting": { weaponAttack: 1, weaponDamage: 1 },
+  "Sun Blade": { weaponAttack: 2, weaponDamage: 2 },
+  "Scimitar of Speed": { weaponAttack: 2, weaponDamage: 2 },
+  "Dwarven Thrower": { weaponAttack: 3, weaponDamage: 3 },
+  "Dancing Sword": { weaponAttack: 3, weaponDamage: 3 },
+  "Nine Lives Stealer": { weaponAttack: 2, weaponDamage: 2 },
+  "Vorpal Sword": { weaponAttack: 3, weaponDamage: 3 },
+  "Holy Avenger": { weaponAttack: 3, weaponDamage: 3 },
+  "Defender": { weaponAttack: 3, weaponDamage: 3 },
+  "Luck Blade": { weaponAttack: 1, weaponDamage: 1 },
+  "Flame Tongue": { bonusDamage: "2d6 fire" },
+  "Frost Brand": { bonusDamage: "1d6 cold" },
+  // Spellcasting focuses (spell attack / save DC)
+  "Rod of the Pact Keeper, +1": { spellAttack: 1, spellDc: 1 },
+  "Amulet of the Devout, +1": { spellAttack: 1, spellDc: 1 },
+  "Bloodwell Vial, +1": { spellAttack: 1, spellDc: 1 },
+  "Arcane Grimoire, +1": { spellAttack: 1, spellDc: 1 },
+  "Rhythm-Maker's Drum, +1": { spellAttack: 1, spellDc: 1 },
+  "All-Purpose Tool, +1": { spellAttack: 1, spellDc: 1 },
+  "Wand of the War Mage, +1": { spellAttack: 1 },
+  "Robe of the Archmagi": { spellDc: 2 }
 };
+// Staff of Power also boosts weapon and spell attacks.
+MAGIC_ITEM_EFFECTS["Staff of Power"] = { ac: 2, save: 2, weaponAttack: 2, weaponDamage: 2, spellAttack: 2, spellDc: 2 };
 function activeItemEffects(data) {
-  const out = { ac: 0, acUnarmored: 0, save: 0, check: 0, setSTR: 0, setDEX: 0, setCON: 0, setINT: 0, setWIS: 0, setCHA: 0 };
+  const out = { ac: 0, acUnarmored: 0, save: 0, check: 0, weaponAttack: 0, weaponDamage: 0, spellAttack: 0, spellDc: 0, bonusDamage: [], setSTR: 0, setDEX: 0, setCON: 0, setINT: 0, setWIS: 0, setCHA: 0 };
   (data.inventory || []).forEach(item => {
     if (item.carried === false) return;
     if (!(item.attuned || item.equipped)) return;
     const effect = MAGIC_ITEM_EFFECTS[item.name];
     if (!effect) return;
     ["ac", "acUnarmored", "save", "check"].forEach(key => { if (effect[key]) out[key] += effect[key]; });
-    ["setSTR", "setDEX", "setCON", "setINT", "setWIS", "setCHA"].forEach(key => { if (effect[key]) out[key] = Math.max(out[key], effect[key]); });
+    ["weaponAttack", "weaponDamage", "spellAttack", "spellDc", "setSTR", "setDEX", "setCON", "setINT", "setWIS", "setCHA"].forEach(key => { if (effect[key]) out[key] = Math.max(out[key], effect[key]); });
+    if (effect.bonusDamage && !out.bonusDamage.includes(effect.bonusDamage)) out.bonusDamage.push(effect.bonusDamage);
   });
   return out;
 }
@@ -5902,6 +5932,107 @@ function effectiveAbilities(data) {
     if (set) clone[ability] = Math.max(Number(data[ability] || 10), set);
   });
   return clone;
+}
+
+const MARTIAL_WEAPON_CLASSES = new Set(["Barbarian", "Fighter", "Paladin", "Ranger"]);
+const FINESSE_MARTIAL_WEAPONS = new Set(["Rapier", "Shortsword", "Longsword", "Hand Crossbow", "Scimitar", "Whip"]);
+function proficientWithWeapon(character, item) {
+  const type = String(item.type || "").toLowerCase();
+  const classes = classBreakdown(character).map(entry => entry.name);
+  if ((character.weaponMastery || []).includes(item.name)) return true;
+  if (type.includes("simple")) return true;
+  if (type.includes("martial")) {
+    if (classes.some(name => MARTIAL_WEAPON_CLASSES.has(name))) return true;
+    if (classes.some(name => ["Rogue", "Bard", "Warlock", "Monk"].includes(name)) && FINESSE_MARTIAL_WEAPONS.has(item.name)) return true;
+    return false;
+  }
+  return true; // uncategorized weapon the character chose to wield
+}
+// Extract dice/type/properties from a weapon's stat text.
+function parseWeaponProfile(item) {
+  const text = `${item.details || ""} ${item.notes || ""}`;
+  const dice = text.match(/(\d+)\s*d\s*(\d+)/i);
+  if (!dice) return null;
+  const versatile = text.match(/versatile\s*\((\d+)d(\d+)\)/i);
+  const typeMatch = text.match(/\b(slashing|piercing|bludgeoning)\b/i);
+  return {
+    count: Number(dice[1]),
+    sides: Number(dice[2]),
+    versatile: versatile ? { count: Number(versatile[1]), sides: Number(versatile[2]) } : null,
+    damageType: typeMatch ? typeMatch[1].toLowerCase() : "",
+    finesse: /finesse/i.test(text),
+    ranged: /ranged/i.test(item.type || "") || /ammunition/i.test(text),
+    thrown: /thrown/i.test(text),
+    twoHanded: /two-handed/i.test(text)
+  };
+}
+function weaponAttacks(character) {
+  const fx = activeItemEffects(character);
+  const abil = effectiveAbilities(character);
+  const prof = proficiency(characterTotalLevel(character));
+  const strMod = modifier(abil.STR);
+  const dexMod = modifier(abil.DEX);
+  const attacks = [];
+  equippedItems(character).forEach(item => {
+    const profile = parseWeaponProfile(item);
+    if (!profile) return;
+    let ability = "STR", abilityMod = strMod;
+    if (profile.ranged) { ability = "DEX"; abilityMod = dexMod; }
+    else if (profile.finesse && dexMod > strMod) { ability = "DEX"; abilityMod = dexMod; }
+    const proficient = proficientWithWeapon(character, item);
+    attacks.push({
+      name: item.name,
+      note: [profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient"].filter(Boolean).join(" · "),
+      ability,
+      toHit: abilityMod + (proficient ? prof : 0) + fx.weaponAttack,
+      count: profile.count,
+      sides: profile.sides,
+      dmgMod: abilityMod + fx.weaponDamage,
+      versatile: profile.versatile,
+      damageType: profile.damageType,
+      bonusDamage: fx.bonusDamage.slice()
+    });
+  });
+  const monkLevel = classLevel(character, "Monk");
+  const monkDie = monkLevel >= 17 ? 10 : monkLevel >= 11 ? 8 : monkLevel >= 5 ? 6 : monkLevel >= 1 ? 4 : 0;
+  const unarmedDex = monkLevel && dexMod > strMod;
+  const unarmedMod = unarmedDex ? dexMod : strMod;
+  attacks.push({
+    name: "Unarmed Strike",
+    note: monkLevel ? "martial arts" : "",
+    ability: unarmedDex ? "DEX" : "STR",
+    toHit: unarmedMod + prof,
+    count: monkDie ? 1 : 0,
+    sides: monkDie || 0,
+    dmgMod: unarmedMod,
+    flatBase: monkDie ? 0 : 1,
+    versatile: null,
+    damageType: "bludgeoning",
+    bonusDamage: []
+  });
+  return attacks;
+}
+function renderAttacksPanel(character, sectionClassName) {
+  const attacks = weaponAttacks(character);
+  const rows = attacks.map(attack => {
+    const damageButtons = [];
+    if (attack.sides) {
+      damageButtons.push(`<button type="button" class="attack-damage" data-attack-damage data-sides="${attack.sides}" data-count="${attack.count}" data-modifier="${attack.dmgMod}" data-roll-label="${escapeHtml(`${attack.name} damage`)}">${attack.count}d${attack.sides}${attack.dmgMod ? signed(attack.dmgMod) : ""}${attack.damageType ? ` ${escapeHtml(attack.damageType)}` : ""}</button>`);
+      if (attack.versatile) damageButtons.push(`<button type="button" class="attack-damage" data-attack-damage data-sides="${attack.versatile.sides}" data-count="${attack.versatile.count}" data-modifier="${attack.dmgMod}" data-roll-label="${escapeHtml(`${attack.name} two-handed damage`)}">${attack.versatile.count}d${attack.versatile.sides}${attack.dmgMod ? signed(attack.dmgMod) : ""} (2H)</button>`);
+    } else {
+      damageButtons.push(`<span class="attack-flat">${(attack.flatBase || 0) + attack.dmgMod} ${escapeHtml(attack.damageType)}</span>`);
+    }
+    attack.bonusDamage.forEach(bonus => {
+      const dice = String(bonus).match(/(\d+)d(\d+)/i);
+      if (dice) damageButtons.push(`<button type="button" class="attack-damage bonus" data-attack-damage data-sides="${dice[2]}" data-count="${dice[1]}" data-modifier="0" data-roll-label="${escapeHtml(`${attack.name} bonus (${bonus})`)}">+${escapeHtml(bonus)}</button>`);
+    });
+    return `<article class="attack-row">
+      <div class="attack-name"><strong>${escapeHtml(attack.name)}</strong>${attack.note ? `<small>${escapeHtml(attack.note)}</small>` : ""}</div>
+      <button type="button" class="attack-tohit" data-sheet-roll="${escapeHtml(`${attack.name} attack`)}" data-modifier="${attack.toHit}">${signed(attack.toHit)} <small>to hit</small></button>
+      <div class="attack-damage-group">${damageButtons.join("")}</div>
+    </article>`;
+  }).join("");
+  return `<section class="sheet-panel ${sectionClassName}"><h2>Attacks${helpChip("ac")}</h2><div class="attack-list">${rows}</div><p class="attack-hint">Damage from an equipped magic weapon (+X, Flame Tongue, etc.) is added to your attacks automatically.</p></section>`;
 }
 
 // Best unarmored AC, accounting for class, subclass, feat, and species rules.
@@ -7744,6 +7875,7 @@ function renderSheet() {
       const value = skillModifier(c, skill);
       return `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${value}"><span class="${proficient ? "proficient" : ""}">${skill} <small>(${ability})${expertise ? " · Expertise" : ""}</small></span><strong>${signed(value)}</strong></button>`;
     }).join("")}</div></section>
+    ${renderAttacksPanel(c, sectionClass("overview"))}
     <section class="sheet-panel ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <p><strong>Proficiency bonus:</strong> ${signed(d.prof)}</p><p><strong>Passive Perception:</strong> ${d.passive}</p>
@@ -7791,8 +7923,11 @@ function renderSheet() {
       <div class="sheet-spell-summary">${spellcastingClasses.map(entry => {
         const context = withClassContext(c, entry.name, entry.level);
         const ability = spellcastingAbility(context);
-        const attack = d.prof + modifier(c[ability]);
-        return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${8 + attack} · ${signed(attack)} attack</span>`;
+        const spellFx = activeItemEffects(c);
+        const baseMod = d.prof + modifier(eff[ability]);
+        const attack = baseMod + spellFx.spellAttack;
+        const dc = 8 + baseMod + spellFx.spellDc;
+        return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${dc} · ${signed(attack)} attack</span>`;
       }).join("")}<span><strong>Ready to cast:</strong> ${castableSpells.length}</span></div>
       ${renderSpellPreparationControls(c, spellcastingClasses, canControl)}
       ${renderSpellManagerPanel(c)}
@@ -9384,6 +9519,11 @@ function initEvents() {
     const spellRoll = event.target.closest("[data-spell-roll]");
     if (spellRoll) {
       roll(Number(spellRoll.dataset.sides), Number(spellRoll.dataset.count), Number(spellRoll.dataset.modifier || 0), spellRoll.dataset.rollLabel || "Spell roll", "normal");
+      return;
+    }
+    const attackDamage = event.target.closest("[data-attack-damage]");
+    if (attackDamage) {
+      roll(Number(attackDamage.dataset.sides), Number(attackDamage.dataset.count), Number(attackDamage.dataset.modifier || 0), attackDamage.dataset.rollLabel || "Damage", "normal");
       return;
     }
   });

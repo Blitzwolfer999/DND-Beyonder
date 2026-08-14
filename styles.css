@@ -662,6 +662,18 @@ textarea { resize: vertical; }
 .sheet-ability span { font-size: 11px; }
 .skill-list { display: grid; gap: 4px; }
 .skill-roll { padding: 7px 4px; display: flex; justify-content: space-between; border: 0; border-bottom: 1px dotted var(--line); background: transparent; cursor: pointer; text-align: left; }
+.attack-list { display: grid; gap: 8px; }
+.attack-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #f7f2e9; }
+.attack-name strong { display: block; font-weight: 800; }
+.attack-name small { color: var(--muted); font-size: 10px; text-transform: capitalize; }
+.attack-tohit { padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-weight: 800; cursor: pointer; white-space: nowrap; }
+.attack-tohit small { font-weight: 600; color: var(--muted); }
+.attack-damage-group { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.attack-damage { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font: 700 11px system-ui, sans-serif; cursor: pointer; }
+.attack-damage.bonus { border-color: #d08a2c; color: #b5651d; }
+.attack-flat { padding: 4px 9px; color: var(--muted); font-size: 11px; }
+.attack-hint { margin: 8px 0 0; color: var(--muted); font-size: 10.5px; }
+.dark .attack-row, [data-theme="dark"] .attack-row { background: rgba(255,255,255,.04); }
 .sheet-notes { white-space: pre-wrap; }
 .sheet-wide { grid-column: 1 / -1; }
 .feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
