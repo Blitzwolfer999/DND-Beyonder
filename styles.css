@@ -2769,6 +2769,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-token-browser { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #35404e; }
 .map-token-preset-list { display: grid; gap: 6px; max-height: 260px; overflow: auto; padding-right: 2px; scrollbar-color: #596372 #171b22; }
 .map-token-preset-card { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 6px; border: 1px solid #35404e; border-radius: 9px; background: #202733; }
+.map-vault-tokens { margin: 8px 0; border: 1px solid #35404e; border-radius: 9px; background: #1b212b; }
+.map-vault-tokens > summary { padding: 9px 11px; cursor: pointer; font-weight: 800; color: #9ecbff; font-size: 12px; }
+.map-vault-token-list { display: grid; gap: 6px; max-height: 230px; overflow: auto; padding: 0 8px 8px; }
+.map-vault-token-card { display: grid; grid-template-columns: 34px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px; border: 1px solid #35404e; border-radius: 9px; background: #202733; color: #e7ecf3; cursor: pointer; text-align: left; }
+.map-vault-token-card:hover { border-color: #6f9fe0; background: #263042; }
+.map-vault-token-face { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--token, #6f9fe0); background: #11151c; color: #fff; font: 800 15px system-ui, sans-serif; overflow: hidden; }
+.map-vault-token-face img { width: 100%; height: 100%; object-fit: cover; }
+.map-vault-token-copy strong { display: block; font-size: 12px; }
+.map-vault-token-copy small { color: #93a1b3; font-size: 10.5px; }
 .map-token-preset-card:hover { border-color: #59687c; background: #252e3b; }
 .map-token-preset-portrait { width: 38px; height: 38px; overflow: hidden; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--token); box-shadow: 0 3px 8px #0007; }
 .map-token-preset-portrait img { width: 100%; height: 100%; object-fit: cover; }

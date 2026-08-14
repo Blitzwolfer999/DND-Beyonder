@@ -881,7 +881,7 @@ async function addCampaignPresetToken(mapId, presetId) {
     color: preset.color,
     x: position.x,
     y: position.y,
-    hidden: preset.side !== "ally",
+    hidden: false, // visible to players by default; the DM can hide for an ambush
     quickStats: {
       ac: preset.ac,
       maxHp: preset.hp,
@@ -908,6 +908,49 @@ async function addCampaignPresetToken(mapId, presetId) {
   selectedMapTool = "token";
   selectedMapSidebar = "tokens";
   await saveCampaignMap(map, `${preset.name} added to the map`);
+}
+// Drop any character from the DM's own vault onto the map as a token (NPC/ally
+// the DM controls), using the character's portrait and derived AC/HP.
+async function addCampaignVaultToken(mapId, characterId) {
+  const map = campaignMapById(mapId);
+  if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can add tokens"); return; }
+  const character = characters.find(item => item.id === characterId);
+  if (!character) { toast("Character not found in your vault"); return; }
+  const latest = await fetchCampaignMap(map.id);
+  if (latest?.data) map.data = normalizeMapData(latest.data);
+  const data = normalizeMapData(map.data);
+  const stats = derived(character);
+  const position = firstOpenMapPosition(data, 1);
+  const token = {
+    id: `vault-${character.id}-${crypto.randomUUID()}`,
+    dmCharacterId: character.id,
+    kind: "npc",
+    side: "ally",
+    role: classSummary(character),
+    name: character.name || "Character",
+    portrait: character.portrait || "",
+    size: 1,
+    color: tokenColor(character.name || "Character"),
+    x: position.x,
+    y: position.y,
+    hidden: false,
+    quickStats: { ac: stats.ac, maxHp: stats.hp, initiativeBonus: modifier(character.DEX || 10), attackBonus: 0, saveDc: 0, damage: "" },
+    sourceNote: "Placed from the DM's vault."
+  };
+  data.tokens.push(token);
+  if (data.encounter.status === "active" || data.encounter.status === "paused") {
+    const activeId = data.encounter.combatants[data.encounter.turnIndex]?.id;
+    const combatant = mapCombatantFromToken(token);
+    combatant.initiative = Math.floor(Math.random() * 20) + 1 + combatant.initiativeBonus;
+    data.encounter.combatants.push(combatant);
+    data.encounter.combatants.sort((a, b) => Number(b.initiative || 0) - Number(a.initiative || 0));
+    data.encounter.turnIndex = Math.max(0, data.encounter.combatants.findIndex(item => item.id === activeId));
+  }
+  map.data = data;
+  selectedMapToken = token.id;
+  selectedMapTool = "token";
+  selectedMapSidebar = "tokens";
+  await saveCampaignMap(map, `${character.name} placed on the map`);
 }
 function mapTokenSize(token) {
   return Math.min(4, Math.max(1, Math.round(Number(token?.size || 1))));
@@ -7118,7 +7161,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
     <button type="button" class="${selectedMapSidebar === "tokens" ? "active" : ""}" data-map-sidebar="tokens">Tokens</button>
     ${isDm ? `<button type="button" class="${selectedMapSidebar === "tiles" ? "active" : ""}" data-map-sidebar="tiles">Assets</button><button type="button" class="${selectedMapSidebar === "scene" ? "active" : ""}" data-map-sidebar="scene">Scenes</button><button type="button" class="${selectedMapSidebar === "layers" ? "active" : ""}" data-map-sidebar="layers">Layers</button>` : ""}
   </div>`;
-  let dockContent = `${tokenBrowser}<div class="map-token-list-heading"><strong>Tokens on this map</strong><span>${data.tokens.length}</span></div><div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens or choose a quick token above." : "No tokens have been placed yet."}</p>`}</div>`;
+  const vaultTokenSection = isDm ? `<details class="map-vault-tokens"><summary>Place a character from your vault</summary>${ownCharacters().length ? `<div class="map-vault-token-list">${ownCharacters().map(vaultChar => `<button type="button" class="map-vault-token-card" data-map-vault-token="${escapeHtml(vaultChar.id)}" data-map-id="${escapeHtml(activeMap.id)}"><span class="map-vault-token-face" style="--token:${escapeHtml(tokenColor(vaultChar.name || "?"))}">${vaultChar.portrait ? `<img src="${escapeHtml(vaultChar.portrait)}" alt="">` : escapeHtml((vaultChar.name || "?").charAt(0).toUpperCase())}</span><span class="map-vault-token-copy"><strong>${escapeHtml(vaultChar.name || "Unnamed")}</strong><small>${escapeHtml(classSummary(vaultChar))}</small></span></button>`).join("")}</div>` : `<p class="map-dock-note">No characters in your vault yet. Build one under Create, then drop it onto any map here.</p>`}</details>` : "";
+  let dockContent = `${tokenBrowser}${vaultTokenSection}<div class="map-token-list-heading"><strong>Tokens on this map</strong><span>${data.tokens.length}</span></div><div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens, a vault character, or a quick token above." : "No tokens have been placed yet."}</p>`}</div>`;
   if (isDm && selectedMapSidebar === "tiles") dockContent = `<div class="map-dock-heading"><div><small>Asset browser</small><strong>Paint terrain and props</strong></div><label>Brush<select data-map-brush-size><option value="1" ${selectedMapBrushSize === 1 ? "selected" : ""}>1 x 1</option><option value="2" ${selectedMapBrushSize === 2 ? "selected" : ""}>2 x 2</option><option value="3" ${selectedMapBrushSize === 3 ? "selected" : ""}>3 x 3</option></select></label></div>${tilePalette}`;
   const classicPackHero = classicSceneTemplates.length ? `<section class="map-classic-pack-hero"><small>PRELOADED COLLECTION</small><strong>Classic Encounters</strong><p>Twelve richly dressed battle maps for the adventures every table remembers: mines, crypts, castles, forests, temples, lairs, ships, and more.</p><div><span>12 editable maps</span><span>36 tactical landmarks</span><span>Original terrain art</span></div><button type="button" data-map-scene-category="Classic Pack">Browse the pack</button></section>` : "";
   if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">${visibleScenes.length}/${sceneTemplates.length}</span></div>${classicPackHero}<div class="map-library-filter"><label><span>Find a scene</span><input type="search" value="${escapeHtml(mapSceneSearch)}" placeholder="Crypt, ship, forest, wizard..." data-map-scene-search></label></div><div class="map-library-categories" aria-label="Scene categories">${sceneCategories.map(category => `<button type="button" class="${selectedMapSceneCategory === category ? "active" : ""}" data-map-scene-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div><p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, atmosphere, and tactical landmarks. Existing tokens are kept and clamped to the new board.</p>${sceneGallery || `<p class="map-dock-note">No scenes match that search.</p>`}<div class="map-asset-library-head"><div><small>Verified free sources</small><strong>More fantasy map artwork</strong></div><button type="button" data-map-open-settings="${escapeHtml(activeMap.id)}">Import map</button></div><p class="map-dock-note">These source packs are listed as CC0 or public domain. Download from the author page, then import a finished map or individual art assets.</p><div class="map-asset-card-list">${assetPackCards}</div></div>`;
@@ -7175,7 +7219,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
         <label>Token color<input name="color" type="color" value="#8f2f2f"></label>
         <label>Portrait URL<input name="portraitUrl" placeholder="Optional image URL"></label>
         <label>Upload portrait<input type="file" accept="image/*" data-campaign-creature-upload><small class="field-hint" data-creature-upload-status>Generated art will be used</small></label>
-        <label class="map-grid-toggle"><input name="hidden" type="checkbox" checked><span><strong>Start hidden</strong><small>Players will not see the token until you reveal it.</small></span></label>
+        <label class="map-grid-toggle"><input name="hidden" type="checkbox"><span><strong>Start hidden</strong><small>Leave off so players see it immediately; check to hide until you reveal it (ambush).</small></span></label>
       </div>
       <p class="field-hint">Use this for creatures from books you own or homebrew. Without an image, DND Beyonder generates a type-based token automatically.</p>
       <button class="button primary small" type="submit">Place creature</button>
@@ -9910,6 +9954,11 @@ function initEvents() {
       addCampaignPresetToken(tokenPresetAdd.dataset.mapId, tokenPresetAdd.dataset.mapTokenPresetAdd);
       return;
     }
+    const vaultTokenAdd = event.target.closest("[data-map-vault-token]");
+    if (vaultTokenAdd) {
+      addCampaignVaultToken(vaultTokenAdd.dataset.mapId, vaultTokenAdd.dataset.mapVaultToken);
+      return;
+    }
     const tokenCategory = event.target.closest("[data-map-token-category]");
     if (tokenCategory) {
       selectedMapTokenCategory = tokenCategory.dataset.mapTokenCategory || "All";
@@ -10464,14 +10513,14 @@ function initEvents() {
       if (status) status.textContent = "No image selected";
       return;
     }
-    const maximumSize = creatureUpload ? 900_000 : 2_500_000;
+    const maximumSize = creatureUpload ? 900_000 : 10_000_000;
     if (file.size > maximumSize) {
       upload.value = "";
       if (tileUpload) campaignTileImageDraft = "";
       else if (creatureUpload) campaignCreatureImageDraft = "";
       else campaignMapImageDraft = "";
       if (status) status.textContent = "Image is too large for cloud sync";
-      toast(`Use an image under ${creatureUpload ? "900 KB" : "2.5 MB"}, or paste an image URL`);
+      toast(`Use an image under ${creatureUpload ? "900 KB" : "10 MB"}, or paste an image URL`);
       return;
     }
     const reader = new FileReader();
