@@ -1670,6 +1670,13 @@ async function moveCampaignMapToken(mapId, tokenId, x, y) {
   if (!token) { toast("Choose Add party tokens first"); return; }
   if (!canMoveMapToken(token, map.campaign_id)) { toast("You can move your own token; the DM can move any token"); return; }
   const position = clampMapTokenPosition(data, token, x, y);
+  // Optimistic: place the token locally and repaint immediately so the mover's
+  // own screen is instant; the RPC below persists it and broadcasts to others.
+  token.x = position.x;
+  token.y = position.y;
+  map.data = data;
+  updateCampaignMapCache(map);
+  renderCampaigns();
   const { data: updatedMap, error } = await cloudClient.rpc("move_campaign_map_token", {
     p_map_id: map.id,
     p_token_id: tokenId,
@@ -6700,23 +6707,40 @@ function startCampaignLiveSync(active) {
     campaignRealtimeChannel = null;
   }
   if (!active || !cloudUser || !cloudClient) return;
+  const myCampaignIds = () => new Set(campaignMemberships.filter(member => member.user_id === cloudUser.id).map(member => member.campaign_id));
   campaignRealtimeChannel = cloudClient
-    .channel(`campaign-rolls-${cloudUser.id}`)
+    .channel(`campaign-live-${cloudUser.id}`)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "campaign_game_log" }, payload => {
       const entry = payload.new;
-      const campaignIds = new Set(campaignMemberships.filter(member => member.user_id === cloudUser.id).map(member => member.campaign_id));
-      if (!entry?.id || !campaignIds.has(entry.campaign_id)) return;
+      if (!entry?.id || !myCampaignIds().has(entry.campaign_id)) return;
       campaignGameLogs = [entry, ...campaignGameLogs.filter(item => item.id !== entry.id)].slice(0, 160);
       saveCampaignCache();
       if (entry.actor_user_id !== cloudUser.id) toast(`${entry.actor_name || "A player"} rolled ${entry.label}: ${entry.total}`);
       if ($("#campaigns-view")?.classList.contains("active")) renderCampaigns();
     })
+    // Live map/token sync: a token move, add, reveal, or scene change on any
+    // map in one of the user's campaigns updates the other screens instantly.
+    .on("postgres_changes", { event: "*", schema: "public", table: "campaign_maps" }, payload => {
+      const row = payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
+      if (!row?.id || (row.campaign_id && !myCampaignIds().has(row.campaign_id))) return;
+      if (payload.eventType === "DELETE") {
+        campaignMaps = campaignMaps.filter(item => item.id !== row.id);
+      } else {
+        const local = campaignMaps.find(item => item.id === row.id);
+        // Skip our own just-saved change echoing back (local is same/newer).
+        if (local && Date.parse(local.updated_at || 0) >= Date.parse(payload.new.updated_at || 0)) return;
+        campaignMaps = [...campaignMaps.filter(item => item.id !== row.id), payload.new];
+      }
+      saveCampaignCache();
+      if ($("#campaigns-view")?.classList.contains("active")) renderCampaigns();
+    })
     .subscribe(status => {
-      if (status === "CHANNEL_ERROR") setCloudStatus("Live campaign rolls are reconnecting; polling remains active.", true);
+      if (status === "CHANNEL_ERROR") setCloudStatus("Live sync reconnecting; polling remains active.", true);
     });
+  // Fallback poll (in case realtime isn't enabled for a table); tightened from 7s.
   campaignLiveTimer = setInterval(() => {
     if (!document.hidden && $("#campaigns-view")?.classList.contains("active")) loadCampaigns();
-  }, 7000);
+  }, 3500);
 }
 
 function startNewCharacter() {

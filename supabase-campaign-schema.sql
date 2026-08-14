@@ -760,3 +760,24 @@ exception
     raise notice 'Enable Realtime for public.campaign_game_log in the Supabase dashboard.';
 end
 $$;
+
+-- Enable immediate map/token broadcasts so player and DM screens stay in sync
+-- (token moves, additions, reveals, and scene changes) without waiting for the
+-- polling fallback. REPLICA IDENTITY FULL lets DELETE events carry the row id.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'campaign_maps'
+    ) then
+    alter table public.campaign_maps replica identity full;
+    alter publication supabase_realtime add table public.campaign_maps;
+  end if;
+exception
+  when insufficient_privilege then
+    raise notice 'Enable Realtime for public.campaign_maps in the Supabase dashboard.';
+end
+$$;
