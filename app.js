@@ -2563,7 +2563,11 @@ function prepareUserVault(user) {
   writeRecoverySnapshot("before account switch");
   const priorOwner = localStorage.getItem(CLOUD_OWNER_KEY);
   const sameOwnerLocal = priorOwner === user.id;
-  const localCharacters = sameOwnerLocal ? (Array.isArray(characters) ? characters : []) : [];
+  // Keep this account's own characters AND adopt any guest-built (unowned) ones
+  // created in this browser. Never absorb a different signed-in account's data.
+  // (Previously this dropped everything on first sign-in, wiping local builds.)
+  const localCharacters = (Array.isArray(characters) ? characters : [])
+    .filter(character => !isDemoCharacter(character) && (!character.cloudOwnerId || character.cloudOwnerId === user.id));
   const localCampaigns = sameOwnerLocal ? (Array.isArray(campaigns) ? campaigns : []) : [];
   const localMemberships = sameOwnerLocal ? (Array.isArray(campaignMemberships) ? campaignMemberships : []) : [];
   const localCampaignCharacters = sameOwnerLocal ? (Array.isArray(campaignCharacters) ? campaignCharacters : []) : [];
