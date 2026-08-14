@@ -1,5 +1,12 @@
 const assert = require("node:assert/strict");
-const { createDiceRoll, formatDiceRollDetail, rollDie } = require("../dice-engine.js");
+const {
+  createDiceRoll,
+  evaluateDiceNotation,
+  formatDiceRollDetail,
+  notationCanUseCinematic,
+  parseDiceNotation,
+  rollDie,
+} = require("../dice-engine.js");
 
 function sequence(values) {
   let index = 0;
@@ -30,5 +37,49 @@ const disadvantage = createDiceRoll({ sides: 20, modifier: -2, mode: "disadvanta
 assert.deepEqual(disadvantage.rolls, [20, 5]);
 assert.equal(disadvantage.rawValue, 5);
 assert.equal(disadvantage.total, 3);
+
+const physical = createDiceRoll({ sides: 12, count: 2, modifier: 1, rolls: [12, 3], random: () => 0 });
+assert.deepEqual(physical.rolls, [12, 3], "supplied physical faces must be authoritative");
+assert.equal(physical.total, 16);
+
+const keepHighest = evaluateDiceNotation("2d20kh1+5", { random: sequence([0.1, 0.8]) });
+assert.deepEqual(keepHighest.rolls, [3, 17]);
+assert.deepEqual(keepHighest.keptRolls, [17]);
+assert.equal(keepHighest.rawValue, 17);
+assert.equal(keepHighest.total, 22);
+assert.equal(keepHighest.mode, "advantage");
+
+const abilityRoll = evaluateDiceNotation("4d6dl1", { random: sequence([0, 0.2, 0.5, 0.999]) });
+assert.deepEqual(abilityRoll.rolls, [1, 2, 4, 6]);
+assert.deepEqual(abilityRoll.keptRolls, [2, 4, 6]);
+assert.equal(abilityRoll.total, 12);
+assert.match(formatDiceRollDetail(abilityRoll), /\(1\)/);
+
+const exploding = evaluateDiceNotation("2d6!", { random: sequence([0.999, 0.2, 0.5]) });
+assert.deepEqual(exploding.rolls, [6, 2, 4]);
+assert.equal(exploding.groups[0].rolls[1].exploded, true);
+assert.equal(exploding.total, 12);
+
+const rerolled = evaluateDiceNotation("2d6r1", { random: sequence([0, 0.5, 0.999]) });
+assert.deepEqual(rerolled.rolls, [4, 6]);
+assert.equal(rerolled.groups[0].rolls[0].original, 1);
+assert.equal(rerolled.total, 10);
+
+const fate = evaluateDiceNotation("4df", { random: sequence([0, 0.34, 0.67, 0.9]) });
+assert.deepEqual(fate.rolls, [-1, 0, 1, 1]);
+assert.equal(fate.total, 1);
+
+const coins = evaluateDiceNotation("3dc", { random: sequence([0, 0.6, 0.9]) });
+assert.deepEqual(coins.rolls, [0, 1, 1]);
+assert.equal(coins.total, 2);
+
+const mixed = evaluateDiceNotation("1d8+2d4-3", { random: sequence([0.5, 0, 0.999]) });
+assert.deepEqual(mixed.rolls, [5, 1, 4]);
+assert.equal(mixed.total, 7);
+
+assert.equal(notationCanUseCinematic(parseDiceNotation("2d20kh1+5")), true);
+assert.equal(notationCanUseCinematic(parseDiceNotation("2d6!")), false);
+assert.throws(() => parseDiceNotation("51d6"), /at most 50 dice/i);
+assert.throws(() => parseDiceNotation("2d6++4"), /unsupported dice notation/i);
 
 console.log("dice-engine tests passed");

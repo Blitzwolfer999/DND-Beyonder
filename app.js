@@ -319,6 +319,8 @@ let campaignMapImageDraft = "";
 let campaignTileImageDraft = "";
 let campaignCreatureImageDraft = "";
 let campaignLiveTimer = null;
+let campaignRealtimeChannel = null;
+let dicePreferencesSyncTimer = null;
 let dungeonWorkshopPreview = null;
 let dungeonWorkshopCr = 5;
 let dungeonWorkshopTheme = "random";
@@ -340,6 +342,7 @@ const BUILT_IN_MAP_TILES = [
   { id: "cracked-stone", name: "Cracked Stone", category: "Dungeon", style: "background:#6c665e;background-image:linear-gradient(135deg,transparent 45%,rgba(24,20,18,.36) 46%,transparent 50%),linear-gradient(35deg,transparent 58%,rgba(255,255,255,.12) 59%,transparent 62%);" },
   { id: "mossy-stone", name: "Mossy Stone", category: "Dungeon", style: "background:#61675a;background-image:radial-gradient(circle at 18% 78%,rgba(74,111,55,.65) 0 14%,transparent 15%),radial-gradient(circle at 82% 20%,rgba(58,94,43,.45) 0 11%,transparent 12%),linear-gradient(90deg,rgba(0,0,0,.2) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.2) 1px,transparent 1px);background-size:34px 34px,42px 42px,50% 50%,50% 50%;" },
   { id: "crypt-floor", name: "Crypt Floor", category: "Dungeon", style: "background:#565058;background-image:repeating-linear-gradient(90deg,transparent 0 28%,rgba(15,12,18,.34) 29% 32%,transparent 33% 65%,rgba(15,12,18,.34) 66% 69%),linear-gradient(rgba(255,255,255,.08),rgba(0,0,0,.2));" },
+  { id: "webbed-floor", name: "Webbed Crypt Floor", category: "Dungeon", style: "background:#514b52;background-image:repeating-radial-gradient(circle at 8% 8%,transparent 0 7px,rgba(225,224,215,.34) 8px 9px,transparent 10px 15px),repeating-linear-gradient(45deg,transparent 0 13px,rgba(225,224,215,.2) 14px 15px,transparent 16px 28px);" },
   { id: "dungeon-wall", name: "Dungeon Wall", category: "Dungeon", style: "background:#3e3935;background-image:linear-gradient(90deg,rgba(255,255,255,.09) 2px,transparent 2px),linear-gradient(rgba(0,0,0,.3) 50%,transparent 50%);background-size:22px 100%,100% 50%;" },
   { id: "brick-wall", name: "Brick Wall", category: "Dungeon", style: "background:#684c42;background-image:linear-gradient(rgba(20,14,12,.42) 2px,transparent 2px),linear-gradient(90deg,rgba(20,14,12,.35) 2px,transparent 2px);background-size:100% 50%,50% 50%;" },
   { id: "cave-floor", name: "Cave Floor", category: "Dungeon", style: "background:#625a4f;background-image:radial-gradient(ellipse at 26% 34%,rgba(255,255,255,.1) 0 22%,transparent 23%),radial-gradient(ellipse at 76% 70%,rgba(22,18,15,.22) 0 27%,transparent 28%);background-size:38px 33px;" },
@@ -348,6 +351,7 @@ const BUILT_IN_MAP_TILES = [
   { id: "dark-wood", name: "Dark Wood", category: "Town", style: "background:#53351f;background-image:repeating-linear-gradient(90deg,rgba(16,8,3,.38) 0 2px,transparent 2px 17px),linear-gradient(rgba(236,183,112,.1),rgba(0,0,0,.24));" },
   { id: "cobblestone", name: "Cobblestone", category: "Town", style: "background:#8c877b;background-image:radial-gradient(ellipse at 35% 35%,rgba(255,255,255,.18) 0 18%,transparent 19%),radial-gradient(ellipse at 75% 65%,rgba(0,0,0,.18) 0 22%,transparent 23%);background-size:26px 22px;" },
   { id: "marble", name: "Marble", category: "Town", style: "background:#d5d0c4;background-image:linear-gradient(112deg,transparent 44%,rgba(83,91,101,.24) 45%,transparent 48%),linear-gradient(28deg,transparent 63%,rgba(172,148,135,.28) 64%,transparent 67%);" },
+  { id: "checker-tile", name: "Checker Tile", category: "Town", style: "background:#d7d0c4;background-image:linear-gradient(45deg,#4d4850 25%,transparent 25%,transparent 75%,#4d4850 75%),linear-gradient(45deg,#4d4850 25%,transparent 25%,transparent 75%,#4d4850 75%);background-position:0 0,12px 12px;background-size:24px 24px;" },
   { id: "roof-tile", name: "Roof Tile", category: "Town", style: "background:#84483c;background-image:radial-gradient(ellipse at 50% 0,transparent 0 48%,rgba(43,20,17,.4) 49% 53%,transparent 54%);background-size:22px 18px;" },
   { id: "rug", name: "Woven Rug", category: "Town", style: "background:#7d292e;background-image:repeating-linear-gradient(45deg,rgba(234,186,93,.35) 0 3px,transparent 3px 11px),repeating-linear-gradient(-45deg,rgba(35,16,19,.28) 0 2px,transparent 2px 13px);" },
   { id: "grass", name: "Grass", category: "Wilderness", style: "background:#4f7a3c;background-image:linear-gradient(115deg,rgba(255,255,255,.08) 12%,transparent 12%),linear-gradient(25deg,rgba(0,0,0,.12) 18%,transparent 18%);background-size:14px 14px;" },
@@ -1335,7 +1339,7 @@ function rollMapCombatant(mapId, combatantId, kind = "attack") {
     const match = expression.match(/(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
     if (!match) return;
     const modifier = match[3] ? Number(match[4] || 0) * (match[3] === "-" ? -1 : 1) : 0;
-    roll(Number(match[2]), Number(match[1]), modifier, `${combatant.name} damage`, "normal");
+    roll(Number(match[2]), Number(match[1]), modifier, `${combatant.name} damage`, "normal", { campaignId: map.campaign_id, source: "map", visibility: "public" });
     return;
   }
   rollOnSheet(`${combatant.name} attack`, Number(token.quickStats?.attackBonus || 0), "normal", { campaignId: map.campaign_id, source: "map" });
@@ -6331,7 +6335,25 @@ function startCampaignLiveSync(active) {
     clearInterval(campaignLiveTimer);
     campaignLiveTimer = null;
   }
+  if (campaignRealtimeChannel && cloudClient) {
+    cloudClient.removeChannel(campaignRealtimeChannel);
+    campaignRealtimeChannel = null;
+  }
   if (!active || !cloudUser || !cloudClient) return;
+  campaignRealtimeChannel = cloudClient
+    .channel(`campaign-rolls-${cloudUser.id}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "campaign_game_log" }, payload => {
+      const entry = payload.new;
+      const campaignIds = new Set(campaignMemberships.filter(member => member.user_id === cloudUser.id).map(member => member.campaign_id));
+      if (!entry?.id || !campaignIds.has(entry.campaign_id)) return;
+      campaignGameLogs = [entry, ...campaignGameLogs.filter(item => item.id !== entry.id)].slice(0, 160);
+      saveCampaignCache();
+      if (entry.actor_user_id !== cloudUser.id) toast(`${entry.actor_name || "A player"} rolled ${entry.label}: ${entry.total}`);
+      if ($("#campaigns-view")?.classList.contains("active")) renderCampaigns();
+    })
+    .subscribe(status => {
+      if (status === "CHANNEL_ERROR") setCloudStatus("Live campaign rolls are reconnecting; polling remains active.", true);
+    });
   campaignLiveTimer = setInterval(() => {
     if (!document.hidden && $("#campaigns-view")?.classList.contains("active")) loadCampaigns();
   }, 7000);
@@ -6987,6 +7009,7 @@ function renderCards(filter = "") {
 }
 
 function renderCampaigns() {
+  window.DndDiceExperience?.setCampaigns?.(campaigns);
   const warning = $("#campaign-cloud-warning");
   if (!$("#campaign-list") || !$("#campaign-detail")) return;
   const signedIn = Boolean(cloudUser && cloudClient);
@@ -7747,8 +7770,9 @@ function renderWizardSpellbooks(character) {
 
 function renderSheet() {
   const c = characters.find(x => x.id === activeCharacterId) || characters[0];
-  if (!c) { $("#sheet-empty").classList.remove("hidden"); $("#character-sheet").classList.add("hidden"); return; }
+  if (!c) { window.DndDiceExperience?.setActiveCharacter?.(""); $("#sheet-empty").classList.remove("hidden"); $("#character-sheet").classList.add("hidden"); return; }
   activeCharacterId = c.id;
+  window.DndDiceExperience?.setActiveCharacter?.(c.id);
   if (spellManagerState && spellManagerState.characterId !== c.id) spellManagerState = null;
   const d = derived(c);
   const eff = effectiveAbilities(c);
@@ -8689,23 +8713,147 @@ function resetCanvasFromPortrait() {
 }
 
 let activeDiceRollId = 0;
+let diceRollQueue = Promise.resolve();
 
-function roll(sides = selectedDie, count = 1, mod = 0, label = "", mode = selectedRollMode) {
-  const result = window.createDiceRoll({ sides, count, modifier: mod, mode });
-  const rollId = ++activeDiceRollId;
-  const modeLabel = result.mode === "advantage" ? " (advantage)" : result.mode === "disadvantage" ? " (disadvantage)" : "";
-  const detail = window.formatDiceRollDetail(result);
-  const entry = { total: result.total, detail, label: (label || "Custom roll") + modeLabel, time: Date.now() };
-  rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
-  const rollData = { ...result, rollId, label: label || `d${result.sides} roll` };
-  animateDiceResult({ ...rollData, label: entry.label, detail });
-  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(rollData, () => showRollOverlay({ ...rollData, settled: true }));
-  else showRollOverlay(rollData);
-  return result.total;
+function setDiceRendererStatus(message, error = false) {
+  const status = $("#dice-renderer-status");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("error", error);
 }
 
-function animateDiceResult({ rawValue, total, sides, label, detail, rollId }) {
+function setDicePending(label) {
+  const panel = $("#dice-result");
+  if (!panel) return;
+  panel.classList.remove("landed");
+  panel.classList.add("rolling");
+  $("#dice-result strong").textContent = "...";
+  $("#dice-result p").textContent = `${label || "Roll"} is rolling...`;
+}
+
+function cinematicGroupsForSimple(sides, count, mode) {
+  return [{ sides: Math.max(2, Number(sides || 20)), count: mode === "normal" ? Math.max(1, Number(count || 1)) : 2 }];
+}
+
+function cinematicGroupsForPlan(plan) {
+  return plan.terms.filter(term => term.type === "dice").map(term => ({ sides: term.sides, count: term.count }));
+}
+
+async function acquireDiceResult(config) {
+  const experience = window.DndDiceExperience;
+  const settings = experience?.getSettings?.() || { renderer: "performance", keepDice: false };
+  const profile = experience?.currentProfile?.(config.options?.characterId || activeCharacterId) || {};
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let usedCinematic = false;
+  if (config.notation) {
+    const plan = window.parseDiceNotation(config.notation);
+    let physicalGroups = null;
+    if (settings.renderer === "cinematic" && !reduced && window.DndCinematicDice && window.notationCanUseCinematic(plan)) {
+      try {
+        setDiceRendererStatus("Cinematic dice are rolling...");
+        physicalGroups = await window.DndCinematicDice.roll(cinematicGroupsForPlan(plan), profile, { keepDice: settings.keepDice });
+        usedCinematic = true;
+        setDiceRendererStatus(settings.keepDice ? "Cinematic dice remain on the table." : "Cinematic roll complete.");
+      } catch (error) {
+        setDiceRendererStatus(`Cinematic mode unavailable: ${error.message || error}. Performance mode completed the roll.`, true);
+      }
+    } else if (settings.renderer === "cinematic" && !window.notationCanUseCinematic(plan)) {
+      setDiceRendererStatus("This reroll, explosion, coin, or Fate formula uses the synchronized Performance renderer.");
+    }
+    return { result: window.evaluateDiceNotation(plan, { rollsByGroup: physicalGroups || [] }), usedCinematic };
+  }
+  const sides = Math.max(2, Number(config.sides || 20));
+  const count = Math.max(1, Number(config.count || 1));
+  const mode = config.mode || "normal";
+  let physicalRolls = null;
+  if (settings.renderer === "cinematic" && !reduced && window.DndCinematicDice) {
+    try {
+      setDiceRendererStatus("Cinematic dice are rolling...");
+      const groups = await window.DndCinematicDice.roll(cinematicGroupsForSimple(sides, count, mode), profile, { keepDice: settings.keepDice });
+      physicalRolls = groups[0];
+      usedCinematic = true;
+      setDiceRendererStatus(settings.keepDice ? "Cinematic dice remain on the table." : "Cinematic roll complete.");
+    } catch (error) {
+      setDiceRendererStatus(`Cinematic mode unavailable: ${error.message || error}. Performance mode completed the roll.`, true);
+    }
+  }
+  return { result: window.createDiceRoll({ sides, count, modifier: config.modifier, mode, rolls: physicalRolls || [] }), usedCinematic };
+}
+
+function finishDicePresentation(rollData, entry, usedCinematic) {
+  const settle = () => {
+    showRollOverlay({ ...rollData, settled: true });
+    window.DndDiceExperience?.playEffect?.(rollData);
+    window.DndDiceExperience?.playSound?.(rollData);
+  };
+  if (usedCinematic) {
+    animateDiceResult({ ...rollData, label: entry.label, detail: entry.detail, immediate: true });
+    settle();
+    return;
+  }
+  animateDiceResult({ ...rollData, label: entry.label, detail: entry.detail });
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(rollData, settle);
+  else {
+    showRollOverlay(rollData);
+    setTimeout(() => {
+      if (rollData.rollId !== activeDiceRollId) return;
+      window.DndDiceExperience?.playEffect?.(rollData);
+      window.DndDiceExperience?.playSound?.(rollData);
+    }, 720);
+  }
+}
+
+async function performDiceRoll(config) {
+  const label = config.label || (config.notation ? config.notation : `d${config.sides || 20} roll`);
+  const rollId = ++activeDiceRollId;
+  setDicePending(label);
+  try {
+    const { result, usedCinematic } = await acquireDiceResult(config);
+    const modeLabel = result.mode === "advantage" ? " (advantage)" : result.mode === "disadvantage" ? " (disadvantage)" : "";
+    const detail = window.formatDiceRollDetail(result);
+    const entry = { total: result.total, rawValue: result.rawValue, rolls: result.rolls, detail, label: label + modeLabel, time: Date.now() };
+    rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
+    const options = config.options || {};
+    const rollData = { ...result, rollId, label, effect: options.effect || "auto", characterId: options.characterId || activeCharacterId || "" };
+    if (options.campaignId && options.visibility !== "self") {
+      recordCampaignGameLog(options.campaignId, {
+        source: options.source || "dice",
+        characterId: options.characterId || null,
+        label: entry.label,
+        rolls: result.rolls,
+        rawTotal: result.rawValue,
+        modifier: result.modifier,
+        total: result.total,
+        visibility: options.visibility === "dm" ? "dm" : "public"
+      });
+    }
+    finishDicePresentation(rollData, entry, usedCinematic);
+    return result.total;
+  } catch (error) {
+    setDiceRendererStatus(error.message || "The dice formula could not be rolled.", true);
+    toast(error.message || "The dice formula could not be rolled");
+    const panel = $("#dice-result"); if (panel) panel.classList.remove("rolling");
+    return null;
+  }
+}
+
+function queueDiceRoll(config) {
+  const task = () => performDiceRoll(config);
+  const queued = diceRollQueue.then(task, task);
+  diceRollQueue = queued.catch(() => null);
+  return queued;
+}
+
+function roll(sides = selectedDie, count = 1, mod = 0, label = "", mode = selectedRollMode, options = {}) {
+  return queueDiceRoll({ sides, count, modifier: mod, label: label || `d${sides} roll`, mode, options });
+}
+
+function rollNotation(notation, label = "", options = {}) {
+  return queueDiceRoll({ notation, label: label || String(notation || "Formula roll"), options });
+}
+
+function animateDiceResult({ rawValue, total, sides, label, detail, rollId, immediate = false }) {
   const panel = $("#dice-result");
   const number = $("#dice-result strong");
   const copy = $("#dice-result p");
@@ -8714,6 +8862,14 @@ function animateDiceResult({ rawValue, total, sides, label, detail, rollId }) {
   void panel.offsetWidth;
   panel.classList.add("rolling");
   copy.textContent = "Rolling...";
+  if (immediate) {
+    number.textContent = rawValue;
+    copy.textContent = `${label} - raw ${rawValue}${total !== rawValue ? ` - total ${total}` : ""} - ${detail}`;
+    panel.classList.remove("rolling");
+    panel.classList.add("landed");
+    setTimeout(() => { if (rollId === activeDiceRollId) panel.classList.remove("landed"); }, 900);
+    return;
+  }
   let ticks = 0;
   clearInterval(animateDiceResult.timer);
   animateDiceResult.timer = setInterval(() => {
@@ -8741,30 +8897,7 @@ let rollOverlayTimer = null;
 let rollOverlayHideTimer = null;
 // Roll a d20 check/save/skill and show the animated result in place (no page change).
 function rollOnSheet(label, modifier, mode, options = {}) {
-  const result = window.createDiceRoll({ sides: 20, count: 1, modifier, mode });
-  const rollId = ++activeDiceRollId;
-  const modeLabel = result.mode === "advantage" ? " (advantage)" : result.mode === "disadvantage" ? " (disadvantage)" : "";
-  const detail = window.formatDiceRollDetail(result);
-  const entry = { total: result.total, detail, label: (label || "Roll") + modeLabel, time: Date.now() };
-  rollHistory.unshift(entry); rollHistory = rollHistory.slice(0, 40); saveJson(ROLL_KEY, rollHistory); renderRolls();
-  if (options.campaignId) {
-    recordCampaignGameLog(options.campaignId, {
-      source: options.source || "sheet",
-      characterId: options.characterId || "",
-      label: entry.label,
-      rolls: result.rolls,
-      rawTotal: result.rawValue,
-      modifier: result.modifier,
-      total: result.total,
-      visibility: options.visibility || "public"
-    });
-  }
-  const rollData = { ...result, rollId, label: label || "Roll" };
-  animateDiceResult({ ...rollData, label: entry.label, detail });
-  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduce && dicePhysicsEnabled() && $("#dice-stage")) rollPhysics(rollData, () => showRollOverlay({ ...rollData, settled: true }));
-  else showRollOverlay(rollData);
-  return result.total;
+  return roll(20, 1, modifier, label || "Roll", mode || "normal", { source: "sheet", visibility: "public", ...options });
 }
 
 function dicePhysicsEnabled() {
@@ -8786,35 +8919,70 @@ function createPhysicsDie(size, index) {
   return die;
 }
 
+function visualDiceForResult(result) {
+  if (result.advanced && Array.isArray(result.groups)) {
+    return result.groups.flatMap(group => group.rolls.map(roll => ({
+      value: roll.value,
+      sides: group.sides,
+      label: group.fate ? "dF" : group.coin ? "Coin" : `d${group.sides}`,
+      kept: roll.kept !== false,
+      exploded: Boolean(roll.exploded),
+      rerolled: roll.original,
+    })));
+  }
+  const rolls = Array.isArray(result.rolls) && result.rolls.length ? result.rolls : [result.rawValue];
+  return rolls.map((value, index) => ({
+    value,
+    sides: Math.max(2, Number(result.sides || 20)),
+    label: `d${Math.max(2, Number(result.sides || 20))}`,
+    kept: result.mode === "normal" || value === result.rawValue,
+    exploded: false,
+    rerolled: null,
+    index,
+  }));
+}
+
+function randomDisplayFace(die) {
+  if (die.label === "dF") return [-1, 0, 1][Math.floor(Math.random() * 3)];
+  if (die.label === "Coin") return Math.random() >= .5 ? "Heads" : "Tails";
+  return Math.floor(Math.random() * Math.max(2, die.sides)) + 1;
+}
+
+function isD20CheckResult(result, dice) {
+  return dice.length > 0 && dice.every(die => die.sides === 20) && (result.mode !== "normal" || dice.length === 1);
+}
+
 function rollPhysics(result, onSettle) {
   const stage = $("#dice-stage"), tray = $("#dice-stage-dice");
   if (!stage || !tray) { if (onSettle) onSettle(); return; }
   const rollId = result.rollId;
-  const sides = Math.max(2, Number(result.sides || 20));
-  const values = Array.isArray(result.rolls) && result.rolls.length ? result.rolls : [result.rawValue];
+  const visualDice = visualDiceForResult(result);
   cancelAnimationFrame(diceRaf); clearTimeout(diceFadeTimer);
   tray.replaceChildren();
   stage.hidden = false;
   stage.classList.remove("landed", "crit", "fumble");
   const W = stage.clientWidth || window.innerWidth;
-  const size = values.length > 12 ? 38 : values.length > 6 ? 44 : values.length > 3 ? 54 : 72;
-  const columns = Math.max(1, Math.min(values.length, Math.floor(Math.max(size, W - 16) / (size + 6))));
-  const rows = Math.ceil(values.length / columns);
+  const size = visualDice.length > 12 ? 38 : visualDice.length > 6 ? 44 : visualDice.length > 3 ? 54 : 72;
+  const columns = Math.max(1, Math.min(visualDice.length, Math.floor(Math.max(size, W - 16) / (size + 6))));
+  const rows = Math.ceil(visualDice.length / columns);
   const H = Math.max(264, Math.min(window.innerHeight * .72, 76 + rows * (size + 6)));
   stage.style.height = `${H}px`;
   const cellWidth = W / columns;
   const now = performance.now();
-  const states = values.map((finalValue, index) => {
+  const states = visualDice.map((visualDie, index) => {
     const die = createPhysicsDie(size, index);
     const num = die.querySelector(".dice-stage-num");
-    num.textContent = String(Math.floor(Math.random() * sides) + 1);
+    die.classList.toggle("dropped", !visualDie.kept);
+    die.classList.toggle("exploded", visualDie.exploded);
+    die.title = `${visualDie.label}${visualDie.kept ? "" : " (dropped)"}`;
+    num.textContent = String(randomDisplayFace(visualDie));
     tray.append(die);
     const column = index % columns;
     const row = Math.floor(index / columns);
     const wallL = column * cellWidth + 3;
     const wallR = Math.max(wallL, (column + 1) * cellWidth - size - 3);
     return {
-      die, num, finalValue,
+      die, num, visualDie, finalValue: visualDie.value,
       x: wallL + Math.random() * Math.max(0, wallR - wallL),
       y: -size - Math.random() * 90,
       vx: (Math.random() - .5) * 14,
@@ -8839,7 +9007,7 @@ function rollPhysics(result, onSettle) {
         state.y = state.floor; state.vy = -state.vy * rest; state.vx *= fric; state.vr *= fric;
         if (Math.abs(state.vy) < 3 && Math.abs(state.vx) < 1.4) state.restCount += dt; else state.restCount = 0;
       } else state.restCount = 0;
-      if ((Math.abs(state.vx) + Math.abs(state.vy)) > 2.5 && (++state.tick % 2 === 0)) state.num.textContent = String(Math.floor(Math.random() * sides) + 1);
+      if ((Math.abs(state.vx) + Math.abs(state.vy)) > 2.5 && (++state.tick % 2 === 0)) state.num.textContent = String(randomDisplayFace(state.visualDie));
       state.die.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.rot}deg)`;
       if (state.restCount > 16 || now - startT > 3200) {
         state.settled = true;
@@ -8851,7 +9019,7 @@ function rollPhysics(result, onSettle) {
     });
     if (states.every(state => state.settled)) {
       stage.classList.add("landed");
-      const isCheck = sides === 20 && (result.mode !== "normal" || values.length === 1);
+      const isCheck = isD20CheckResult(result, visualDice);
       if (isCheck && result.rawValue === 20) stage.classList.add("crit");
       else if (isCheck && result.rawValue === 1) stage.classList.add("fumble");
       if (onSettle) onSettle();
@@ -8871,35 +9039,39 @@ function rollPhysics(result, onSettle) {
 function showRollOverlay(r) {
   const overlay = $("#roll-overlay");
   if (!overlay || (r.rollId && r.rollId !== activeDiceRollId)) return;
-  const sides = Number(r.sides || 20);
-  const rolls = Array.isArray(r.rolls) ? r.rolls : Array.isArray(r.d20s) ? r.d20s : [r.chosen];
+  const visualDice = visualDiceForResult(r);
+  const sides = Number(r.sides || visualDice[0]?.sides || 20);
+  const rolls = visualDice.map(die => die.value);
   const rawValue = Number(r.rawValue ?? r.faceValue ?? r.chosen ?? r.total);
   const requestedCount = Number(r.requestedCount || 1);
-  const allowsRollMode = sides === 20 && requestedCount === 1;
+  const allowsRollMode = !r.advanced && sides === 20 && requestedCount === 1;
   currentRollContext = allowsRollMode ? { label: r.label, modifier: r.modifier, sides } : null;
   const rollModeControls = overlay.querySelector(".roll-adv");
   if (rollModeControls) rollModeControls.hidden = !allowsRollMode;
   $("#roll-overlay-label").textContent = r.label;
-  const parts = [r.mode === "normal" && rolls.length > 1
-    ? `raw ${rolls.join(" + ")} = ${rawValue}`
-    : r.mode !== "normal" ? `raw ${rawValue} from ${rolls.join(" and ")}` : `raw ${rawValue} on d${sides}`];
+  const parts = [r.advanced
+    ? `${r.notation} | raw ${rawValue}`
+    : r.mode === "normal" && rolls.length > 1
+      ? `raw ${rolls.join(" + ")} = ${rawValue}`
+      : r.mode !== "normal" ? `raw ${rawValue} from ${rolls.join(" and ")}` : `raw ${rawValue} on d${sides}`];
   if (r.modifier) parts.push(`modifier ${signed(r.modifier)}`);
   if (r.mode === "advantage") parts.push("advantage");
   else if (r.mode === "disadvantage") parts.push("disadvantage");
   $("#roll-overlay-detail").textContent = parts.join(" | ");
   const breakdown = $("#roll-dice-breakdown");
   if (breakdown) {
-    breakdown.replaceChildren(...rolls.map(value => {
+    breakdown.replaceChildren(...visualDice.map(visualDie => {
       const chip = document.createElement("span");
-      chip.className = "roll-die-chip" + (r.mode !== "normal" && value === rawValue ? " chosen" : "");
-      chip.textContent = `d${sides}: ${value}`;
+      chip.className = `roll-die-chip${visualDie.kept ? "" : " dropped"}${visualDie.exploded ? " exploded" : ""}${r.mode !== "normal" && visualDie.value === rawValue ? " chosen" : ""}`;
+      const reroll = visualDie.rerolled !== null ? `${visualDie.rerolled} -> ` : "";
+      chip.textContent = `${visualDie.label}: ${reroll}${visualDie.label === "Coin" ? (visualDie.value ? "Heads" : "Tails") : visualDie.value}`;
       return chip;
     }));
   }
   overlay.hidden = false;
   overlay.classList.remove("crit", "fumble");
   const die = $("#roll-die"), num = $("#roll-die-num"), totalEl = $("#roll-total");
-  die.hidden = r.mode === "normal" && rolls.length > 1;
+  die.hidden = visualDice.length !== 1;
   die.classList.remove("spin"); void die.offsetWidth; die.classList.add("spin");
   totalEl.textContent = "";
   clearInterval(rollOverlayTimer);
@@ -8909,7 +9081,7 @@ function showRollOverlay(r) {
     die.classList.remove("spin");
     num.textContent = rawValue;
     totalEl.textContent = r.total;
-    const isCheck = sides === 20 && (r.mode !== "normal" || rolls.length === 1);
+    const isCheck = isD20CheckResult(r, visualDice);
     if (isCheck && rawValue === 20) overlay.classList.add("crit");
     else if (isCheck && rawValue === 1) overlay.classList.add("fumble");
   };
@@ -8921,7 +9093,7 @@ function showRollOverlay(r) {
   let ticks = 0;
   rollOverlayTimer = setInterval(() => {
     if (r.rollId && r.rollId !== activeDiceRollId) { clearInterval(rollOverlayTimer); return; }
-    num.textContent = Math.floor(Math.random() * sides) + 1;
+    num.textContent = randomDisplayFace(visualDice[0] || { sides, label: `d${sides}` });
     if (++ticks > 14) {
       clearInterval(rollOverlayTimer);
       settleOverlay();
@@ -9590,15 +9762,15 @@ function initEvents() {
       });
     }
     const sheetRoll = event.target.closest("[data-sheet-roll]");
-    if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.rollMode || "normal"); return; }
+    if (sheetRoll) { rollOnSheet(sheetRoll.dataset.sheetRoll, Number(sheetRoll.dataset.modifier || 0), sheetRoll.dataset.rollMode || "normal", { characterId: activeCharacterId || "", ...(window.DndDiceExperience?.rollOptions?.() || {}) }); return; }
     const spellRoll = event.target.closest("[data-spell-roll]");
     if (spellRoll) {
-      roll(Number(spellRoll.dataset.sides), Number(spellRoll.dataset.count), Number(spellRoll.dataset.modifier || 0), spellRoll.dataset.rollLabel || "Spell roll", "normal");
+      roll(Number(spellRoll.dataset.sides), Number(spellRoll.dataset.count), Number(spellRoll.dataset.modifier || 0), spellRoll.dataset.rollLabel || "Spell roll", "normal", { source: "sheet", characterId: activeCharacterId || "", ...(window.DndDiceExperience?.rollOptions?.() || {}) });
       return;
     }
     const attackDamage = event.target.closest("[data-attack-damage]");
     if (attackDamage) {
-      roll(Number(attackDamage.dataset.sides), Number(attackDamage.dataset.count), Number(attackDamage.dataset.modifier || 0), attackDamage.dataset.rollLabel || "Damage", "normal");
+      roll(Number(attackDamage.dataset.sides), Number(attackDamage.dataset.count), Number(attackDamage.dataset.modifier || 0), attackDamage.dataset.rollLabel || "Damage", "normal", { source: "sheet", characterId: activeCharacterId || "", ...(window.DndDiceExperience?.rollOptions?.() || {}) });
       return;
     }
   });
@@ -10062,19 +10234,16 @@ function initEvents() {
       applyHelp();
     });
   }
-  // --- Dice settings: color "skin" + on-screen physics roll toggle ---
+  // --- Dice experience: profiles, effects, sound, routing, and renderer settings ---
   (function initDiceSettings() {
-    let skin = "gold";
-    try { skin = localStorage.getItem("af-dice-skin") || "gold"; } catch (e) {}
-    if (skin && skin !== "gold") document.body.setAttribute("data-dice", skin);
-    $$("#dice-skins [data-dice-skin]").forEach(b => b.classList.toggle("active", b.dataset.diceSkin === skin));
+    const profileIds = { gold: "royal-gold", crimson: "dragon-fire", emerald: "emerald-restoration", sapphire: "frost-rune", amethyst: "shadow-amethyst", obsidian: "obsidian" };
+    window.DndDiceExperience?.init?.();
+    const activeProfile = window.DndDiceExperience?.getSettings?.().activeProfileId || "royal-gold";
+    $$("#dice-skins [data-dice-skin]").forEach(button => button.classList.toggle("active", profileIds[button.dataset.diceSkin] === activeProfile));
     $("#dice-skins")?.addEventListener("click", event => {
       const btn = event.target.closest("[data-dice-skin]");
       if (!btn) return;
-      const value = btn.dataset.diceSkin;
-      if (value === "gold") document.body.removeAttribute("data-dice");
-      else document.body.setAttribute("data-dice", value);
-      try { localStorage.setItem("af-dice-skin", value); } catch (e) {}
+      window.DndDiceExperience?.selectProfile?.(profileIds[btn.dataset.diceSkin] || "royal-gold");
       $$("#dice-skins [data-dice-skin]").forEach(b => b.classList.toggle("active", b === btn));
     });
     const physToggle = $("#dice-physics-toggle");
@@ -10084,8 +10253,19 @@ function initEvents() {
         try { localStorage.setItem("af-dice-physics", physToggle.checked ? "1" : "0"); } catch (e) {}
       });
     }
-    $("#dice-test-roll")?.addEventListener("click", () => rollOnSheet("Test roll", 0, "normal"));
+    $("#dice-test-roll")?.addEventListener("click", () => roll(20, 1, 0, "Test roll", "normal", { source: "dice", ...(window.DndDiceExperience?.rollOptions?.() || {}) }));
   })();
+  window.addEventListener("dnd-dice-formula", event => {
+    rollNotation(event.detail?.notation, event.detail?.label || event.detail?.notation || "Formula roll", { source: "dice", characterId: activeCharacterId || "", ...(window.DndDiceExperience?.rollOptions?.() || {}) });
+  });
+  window.addEventListener("dnd-dice-error", event => toast(event.detail || "Dice customization could not be saved"));
+  window.addEventListener("dnd-dice-settings-changed", event => syncDicePreferences(event.detail));
+  window.addEventListener("dnd-dice-cinematic-state", event => {
+    const state = event.detail || {};
+    if (state.state === "loading") setDiceRendererStatus("Loading cinematic dice...");
+    else if (state.state === "ready") setDiceRendererStatus("Cinematic dice are ready.");
+    else if (state.state === "error") setDiceRendererStatus(`Cinematic renderer unavailable: ${state.message || "unknown error"}.`, true);
+  });
   $$(".edition-toggle button").forEach(button => button.addEventListener("click", () => {
     edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
     if (!$("#quick-builder").classList.contains("hidden")) initializeQuickBuilder();
@@ -10189,8 +10369,8 @@ function initEvents() {
     $$("[data-dice-mode]", $("#dice-mode")).forEach(button => button.classList.toggle("active", button === mode));
     $("#dice-count").disabled = selectedRollMode !== "normal";
   });
-  $("#roll-selected").addEventListener("click", () => roll(selectedDie, Number($("#dice-count").value), Number($("#dice-mod").value), `d${selectedDie} roll`, selectedRollMode));
-  $("#quick-roll").addEventListener("click", () => rollOnSheet("Quick d20", 0, "normal"));
+  $("#roll-selected").addEventListener("click", () => roll(selectedDie, Number($("#dice-count").value), Number($("#dice-mod").value), `d${selectedDie} roll`, selectedRollMode, { source: "dice", characterId: activeCharacterId || "", ...(window.DndDiceExperience?.rollOptions?.() || {}) }));
+  $("#quick-roll").addEventListener("click", () => roll(20, 1, 0, "Quick d20", "normal", { source: "dice", characterId: activeCharacterId || "", ...(window.DndDiceExperience?.rollOptions?.() || {}) }));
   $("#roll-overlay-close")?.addEventListener("click", () => { const ov = $("#roll-overlay"); if (ov) ov.hidden = true; });
   $("#roll-overlay")?.addEventListener("click", event => {
     const adv = event.target.closest("[data-roll-mode]");
@@ -10407,6 +10587,7 @@ async function handleAccountSubmit(event) {
   }
   saveJson(PROFILE_KEY, { displayName, email: values.email });
   cloudUser = result.data.user;
+  applyCloudDicePreferences(cloudUser);
   prepareUserVault(cloudUser);
   updateAccount();
   await syncCharactersToCloud();
@@ -10415,6 +10596,25 @@ async function handleAccountSubmit(event) {
   await createAccountBackup("Sign-in backup");
   $("#account-modal").classList.add("hidden");
   toast(`Welcome, ${displayName}`);
+}
+
+function applyCloudDicePreferences(user) {
+  const remote = user?.user_metadata?.dice_preferences;
+  if (remote) window.DndDiceExperience?.applyRemoteSettings?.(remote);
+  else if (user) syncDicePreferences(window.DndDiceExperience?.cloudSettings?.());
+}
+
+function syncDicePreferences(preferences) {
+  clearTimeout(dicePreferencesSyncTimer);
+  if (!cloudUser || !cloudClient || !preferences) return;
+  dicePreferencesSyncTimer = setTimeout(async () => {
+    const { data, error } = await cloudClient.auth.updateUser({ data: { dice_preferences: preferences } });
+    if (error) {
+      setCloudStatus(`Dice preferences remain local: ${error.message}`, true);
+      return;
+    }
+    if (data?.user) cloudUser = data.user;
+  }, 600);
 }
 
 function updateAccount() {
@@ -10452,7 +10652,10 @@ async function initCloud() {
   const { data, error } = await cloudClient.auth.getSession();
   if (error) setCloudStatus(cloudAuthErrorMessage(error), true);
   cloudUser = data?.session?.user || null;
-  if (cloudUser) prepareUserVault(cloudUser);
+  if (cloudUser) {
+    applyCloudDicePreferences(cloudUser);
+    prepareUserVault(cloudUser);
+  }
   updateAccount();
   if (cloudUser) {
     await syncCharactersToCloud();
@@ -10464,7 +10667,10 @@ async function initCloud() {
     const nextUser = session?.user || null;
     const changed = nextUser?.id !== cloudUser?.id;
     cloudUser = nextUser;
-    if (cloudUser) prepareUserVault(cloudUser);
+    if (cloudUser) {
+      applyCloudDicePreferences(cloudUser);
+      prepareUserVault(cloudUser);
+    }
     updateAccount();
     if (changed && cloudUser) setTimeout(async () => {
       await syncCharactersToCloud();

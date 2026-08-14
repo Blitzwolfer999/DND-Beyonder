@@ -13,7 +13,7 @@ A dependency-free fantasy character builder for 2014 5e and revised 2024 5e rule
 - Class and subclass features listed at the levels where they are gained
 - Resource tracking for spell slots, class uses, hit dice, and point pools
 - Searchable equipment, inventory, currency, carried weight, and attunement
-- Built-in rolls, roll history, portraits, import, and export
+- Secure dice rolls with advanced notation, advantage/disadvantage, roll history, cinematic 3D fallback, profiles, sounds, effects, and campaign visibility
 - Email/password cloud accounts with local fallback
 - Per-account character synchronization through Supabase Row Level Security
 - Conflict-aware cloud deletion and automatic refresh when returning online
@@ -42,7 +42,7 @@ GitHub will publish it at `https://YOUR-NAME.github.io/REPOSITORY/`.
 ## Enable Cloud Accounts
 
 1. Create a Supabase project.
-2. Open its SQL editor and run `supabase-schema.sql`.
+2. Open its SQL editor and run `supabase-schema.sql`, then `supabase-campaign-schema.sql` for campaigns, backups, live game logs, and maps.
 3. Enable email/password sign-in in Authentication settings.
 4. Add the public site URL to the Authentication URL configuration.
 5. In the GitHub repository, open **Settings > Secrets and variables > Actions > Variables**.

@@ -937,6 +937,7 @@ textarea { resize: vertical; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 7px; }
 .tag { padding: 7px 10px; color: var(--gold-dark); border: 1px solid #cdb68f; background: #f6ead6; font-size: 12px; font-weight: 700; }
 .dice-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; }
+.dice-panel, .roll-history { min-width: 0; }
 .dice-panel { padding: 35px; }
 .dice-result { min-height: 210px; display: grid; place-items: center; align-content: center; border: 1px solid var(--line); background: radial-gradient(circle, #fffdf7, #e8dfd1); text-align: center; }
 .dice-result small { letter-spacing: .18em; color: var(--muted); }
@@ -964,7 +965,7 @@ textarea { resize: vertical; }
 .dice-mode button.active { color: #fff; background: #2f2a22; border-color: #2f2a22; box-shadow: inset 0 -2px 0 var(--gold); }
 .roll-controls { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px; }
 .roll-controls input:disabled { opacity: .55; cursor: not-allowed; }
-.roll-history { padding: 20px; }
+.roll-history { align-self: start; padding: 20px; }
 .roll-history .section-heading { margin: 0 0 12px; align-items: center; }
 .roll-history h2 { font-size: 18px; }
 .roll-history ol { list-style: none; padding: 0; margin: 0; max-height: 500px; overflow: auto; }
@@ -2370,6 +2371,8 @@ body { background: var(--paper); }
   font-size: 11px; font-weight: 700;
 }
 .roll-dice-breakdown .roll-die-chip.chosen { color: #fff3cf; border-color: var(--dice-edge); background: rgba(185, 138, 62, .16); }
+.roll-dice-breakdown .roll-die-chip.dropped { opacity: .5; text-decoration: line-through; }
+.roll-dice-breakdown .roll-die-chip.exploded { border-color: #d76e3d; box-shadow: 0 0 10px rgba(215, 110, 61, .3); }
 .roll-total-group { flex: 0 0 auto; min-width: 52px; text-align: center; }
 .roll-total-group small { display: block; color: #9aa39a; font-size: 9px; font-weight: 700; letter-spacing: .12em; }
 .roll-total { flex: 0 0 auto; min-width: 46px; text-align: center; font: 700 34px Cinzel, serif; color: #fff; }
@@ -2401,6 +2404,8 @@ body[data-dice="obsidian"] { --dice-edge: #9aa3ad; --dice-fill: rgba(154, 163, 1
 .dice-stage[hidden] { display: none; }
 .dice-stage-dice { position: absolute; inset: 0; }
 .dice-stage-die { position: absolute; top: 0; left: 0; width: 72px; height: 72px; will-change: transform; filter: drop-shadow(0 7px 12px rgba(0, 0, 0, .42)); }
+.dice-stage-die.dropped { opacity: .48; filter: grayscale(.5) drop-shadow(0 4px 7px rgba(0, 0, 0, .32)); }
+.dice-stage-die.exploded { filter: drop-shadow(0 0 14px rgba(220, 100, 49, .8)); }
 .dice-stage-die .d20-svg { width: 100%; height: 100%; display: block; }
 .dice-stage-die .dice-stage-num { position: absolute; inset: 0; display: grid; place-items: center; padding-top: 9px; color: var(--dice-num); font: 700 24px Cinzel, serif; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
 .dice-stage.crit .d20-edge, .dice-stage.crit .d20-face { stroke: #84e3a4; fill: rgba(76, 175, 114, .24); }
@@ -2420,6 +2425,69 @@ body[data-dice="obsidian"] { --dice-edge: #9aa3ad; --dice-fill: rgba(154, 163, 1
 .dice-skin[data-dice-skin="sapphire"] { background: #5b8dd6; }
 .dice-skin[data-dice-skin="amethyst"] { background: #a978d6; }
 .dice-skin[data-dice-skin="obsidian"] { background: #6e7780; }
+
+/* ===== Dice experience: notation, routing, profiles, 3D, and effects ===== */
+.dice-notation { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper-2); }
+.dice-notation label { display: grid; gap: 5px; }
+.dice-notation label span { font-size: 12px; font-weight: 700; }
+.dice-notation input { font: 700 15px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .02em; }
+.dice-notation small { grid-column: 1 / -1; color: var(--muted); }
+.dice-roll-routing, .dice-settings-grid, .dice-designer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dice-roll-routing { margin-top: 12px; }
+.dice-roll-routing label, .dice-settings-grid label, .dice-designer-grid label { display: grid; align-content: start; gap: 5px; font-size: 12px; font-weight: 700; }
+.dice-roll-routing select, .dice-settings-grid select, .dice-designer-grid select { min-width: 0; }
+.dice-settings-grid .dice-physics-row, .dice-settings-grid .dice-sound-toggle { display: flex; align-items: center; align-self: end; min-height: 42px; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.dice-settings-grid input[type="checkbox"] { width: auto; }
+.dice-settings-grid input[type="range"], .dice-designer-grid input[type="range"] { width: 100%; }
+.dice-renderer-status { margin: 10px 0 2px; padding: 8px 10px; color: var(--muted); background: var(--paper-2); border-radius: 9px; font-size: 12px; }
+.dice-renderer-status.error { color: var(--red); }
+.dice-workshop { margin-top: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); overflow: hidden; }
+.dice-workshop summary { padding: 13px 15px; cursor: pointer; color: var(--ink); font: 700 13px Cinzel, serif; background: var(--paper-2); }
+.dice-workshop > p, .dice-workshop > .field-hint { margin: 12px 15px; color: var(--muted); font-size: 12px; }
+.persistent-dice-list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 52px; margin: 12px 15px; align-items: center; }
+.persistent-dice-list > p { margin: 0; color: var(--muted); font-size: 12px; }
+.persistent-die { position: relative; display: grid; place-items: center; width: 54px; height: 54px; padding: 0; color: var(--dice-num); background: var(--dice-fill); border: 2px solid var(--dice-edge); border-radius: 15px 8px 15px 8px; box-shadow: inset 0 0 0 3px var(--dice-face), 0 5px 14px rgba(0,0,0,.12); cursor: pointer; transform: rotate(3deg); }
+.persistent-die:nth-child(even) { transform: rotate(-4deg); }
+.persistent-die strong { font: 700 14px Cinzel, serif; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+.persistent-die span { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 19px; height: 19px; color: #fff; background: var(--red); border: 2px solid var(--panel); border-radius: 50%; font-size: 10px; }
+.persistent-dice-actions, .dice-designer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 15px 15px; }
+.persistent-dice-actions select { width: auto; min-width: 90px; }
+.dice-designer-grid { padding: 15px 15px 2px; }
+.dice-designer-grid label small { color: var(--muted); font-weight: 400; }
+.dice-designer-grid input[type="color"] { width: 100%; min-height: 42px; padding: 4px; }
+.file-button { position: relative; overflow: hidden; cursor: pointer; }
+.file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.dice-cinematic-stage { position: fixed; inset: 0 0 auto; z-index: 92; width: 100vw; height: min(58vh, 520px); pointer-events: none; overflow: hidden; opacity: 0; transition: opacity .18s ease; }
+.dice-cinematic-stage[hidden] { display: none; }
+.dice-cinematic-stage.active { opacity: 1; }
+.dice-cinematic-stage canvas { width: 100% !important; height: 100% !important; pointer-events: none; }
+.dice-cinematic-stage[data-state="loading"]::after { content: "Preparing cinematic dice..."; position: absolute; top: 82px; left: 50%; transform: translateX(-50%); padding: 8px 13px; color: #fff; background: rgba(15,18,22,.78); border-radius: 999px; font-size: 12px; font-weight: 700; }
+
+.dice-effect-layer { position: fixed; inset: 0; z-index: 108; display: none; place-items: center; pointer-events: none; overflow: hidden; }
+.dice-effect-layer.active { display: grid; }
+.dice-effect-layer::before { content: ""; position: absolute; width: 150px; height: 150px; border: 4px solid var(--effect-primary); border-radius: 50%; box-shadow: 0 0 32px var(--effect-primary), inset 0 0 24px var(--effect-secondary); animation: dice-impact-ring .72s ease-out both; }
+.dice-effect-layer i { position: absolute; width: var(--size); height: calc(var(--size) * 2.2); background: linear-gradient(var(--effect-secondary), var(--effect-primary)); border-radius: 999px; box-shadow: 0 0 9px var(--effect-primary); transform-origin: center; animation: dice-particle .9s cubic-bezier(.18,.74,.24,1) var(--delay) both; }
+.dice-effect-layer img { position: absolute; width: min(220px, 34vw); height: min(220px, 34vw); object-fit: contain; filter: drop-shadow(0 0 18px var(--effect-primary)); animation: dice-custom-impact 1.15s ease-out both; }
+.dice-effect-layer.effect-cold i, .dice-effect-layer.effect-healing i { aspect-ratio: 1; height: var(--size); border-radius: 50%; }
+.dice-effect-layer.effect-lightning i { width: 3px; height: calc(var(--size) * 3.5); clip-path: polygon(40% 0,100% 0,65% 42%,100% 42%,20% 100%,42% 54%,0 54%); }
+.dice-effect-layer.effect-shadow i, .dice-effect-layer.effect-necrotic i, .dice-effect-layer.effect-fumble i { filter: blur(3px); }
+@keyframes dice-particle { 0% { opacity: 0; transform: translate(0,0) scale(.3) rotate(0); } 18% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--tx),var(--ty)) scale(.06) rotate(var(--spin)); } }
+@keyframes dice-impact-ring { 0% { opacity: 0; transform: scale(.15); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(3.2); } }
+@keyframes dice-custom-impact { 0% { opacity: 0; transform: scale(.3) rotate(-8deg); } 32% { opacity: 1; transform: scale(1.12) rotate(2deg); } 100% { opacity: 0; transform: scale(.95); } }
+
+@media (max-width: 760px) {
+  .dice-roll-routing, .dice-settings-grid, .dice-designer-grid { grid-template-columns: 1fr 1fr; }
+  .dice-cinematic-stage { height: 48vh; }
+}
+@media (max-width: 520px) {
+  .dice-notation { grid-template-columns: 1fr; }
+  .dice-notation small { grid-column: auto; }
+  .dice-roll-routing, .dice-settings-grid, .dice-designer-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dice-effect-layer, .dice-cinematic-stage { display: none !important; }
+}
 
 /* ===== Source-grouped choice lists (feats / spells) ===== */
 .choice-group + .choice-group { margin-top: 10px; }

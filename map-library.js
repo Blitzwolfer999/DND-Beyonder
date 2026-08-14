@@ -24,8 +24,8 @@
   ];
 
   const SCENE_TILE_IDS = [
-    "stone-floor", "flagstone", "cracked-stone", "mossy-stone", "crypt-floor", "dungeon-wall", "brick-wall", "cave-floor", "chasm",
-    "wood-planks", "dark-wood", "cobblestone", "marble", "roof-tile", "rug", "grass", "forest", "dirt", "sand", "snow", "ice",
+    "stone-floor", "flagstone", "cracked-stone", "mossy-stone", "crypt-floor", "webbed-floor", "dungeon-wall", "brick-wall", "cave-floor", "chasm",
+    "wood-planks", "dark-wood", "cobblestone", "marble", "checker-tile", "roof-tile", "rug", "grass", "forest", "dirt", "sand", "snow", "ice",
     "water", "deep-water", "lava", "acid", "shadow",
   ];
 

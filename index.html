@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=dice-sync-1">
+  <link rel="stylesheet" href="styles.css?v=dice-experience-2">
 </head>
 <body>
   <div class="app-shell">
@@ -444,11 +444,27 @@
               <label>Modifier<input id="dice-mod" type="number" min="-99" max="99" value="0"></label>
               <button class="button primary" id="roll-selected">Roll</button>
             </div>
+            <form class="dice-notation" id="dice-notation-form">
+              <label><span>Advanced formula</span><input id="dice-notation" value="4d6dl1" maxlength="80" spellcheck="false" aria-describedby="dice-notation-help"></label>
+              <button class="button primary" type="submit">Roll formula</button>
+              <small id="dice-notation-help">Try 2d20kh1+5, 4d6dl1, 6d6!, 4d6r1, 1d%, 1dc, or 4df.</small>
+            </form>
+            <div class="dice-roll-routing">
+              <label>Roll visibility<select id="dice-roll-visibility"><option value="self">Private to me</option><option value="public">Share with campaign</option><option value="dm">DM only</option></select></label>
+              <label>Campaign<select id="dice-campaign-target"><option value="">No campaign available</option></select></label>
+              <label>Roll effect<select id="dice-effect-select"><option value="auto">Automatic</option><option value="arcane">Arcane</option><option value="fire">Fire</option><option value="cold">Cold</option><option value="lightning">Lightning</option><option value="acid">Acid</option><option value="poison">Poison</option><option value="radiant">Radiant</option><option value="necrotic">Necrotic</option><option value="psychic">Psychic</option><option value="force">Force</option><option value="healing">Healing</option><option value="custom">Uploaded effect</option><option value="none">None</option></select></label>
+            </div>
             <div class="dice-settings">
-              <label class="dice-physics-row">
-                <input type="checkbox" id="dice-physics-toggle">
-                <span>Roll dice across the screen (physics)</span>
-              </label>
+              <div class="dice-settings-grid">
+                <label>Renderer<select id="dice-renderer"><option value="performance">Performance 2D</option><option value="cinematic">Cinematic 3D</option></select></label>
+                <label>Dice profile<select id="dice-profile-select"></select></label>
+                <label>Effects<select id="dice-effects-level"><option value="full">Full effects</option><option value="reduced">Reduced effects</option><option value="off">Effects off</option></select></label>
+                <label class="dice-sound-toggle"><input type="checkbox" id="dice-sound-enabled"><span>Roll sounds</span></label>
+                <label>Volume<input type="range" id="dice-volume" min="0" max="1" step="0.05"></label>
+                <label class="dice-physics-row"><input type="checkbox" id="dice-physics-toggle"><span>Animate Performance dice</span></label>
+                <label class="dice-physics-row"><input type="checkbox" id="dice-keep-on-table"><span>Keep 3D dice on the table</span></label>
+              </div>
+              <p class="dice-renderer-status" id="dice-renderer-status">Performance mode is ready. Cinematic mode loads its open-source renderer when first used.</p>
               <div class="dice-skin-row">
                 <span class="dice-skin-label">Dice color</span>
                 <div class="dice-skins" id="dice-skins" role="group" aria-label="Dice color">
@@ -462,6 +478,38 @@
                 <button type="button" class="button ghost small" id="dice-test-roll">Test roll</button>
               </div>
             </div>
+            <details class="dice-workshop" open>
+              <summary>Persistent dice tray</summary>
+              <p>Pin the dice you use most. The tray is saved between visits, and cinematic dice can remain on the table until cleared.</p>
+              <div class="persistent-dice-list" id="persistent-dice-list"></div>
+              <div class="persistent-dice-actions">
+                <select id="persistent-dice-type" aria-label="Die to add"><option value="2">d2</option><option value="3">d3</option><option value="4">d4</option><option value="6">d6</option><option value="8">d8</option><option value="10">d10</option><option value="12">d12</option><option value="20" selected>d20</option><option value="100">d100</option></select>
+                <button type="button" class="button ghost small" id="persistent-dice-add">Add die</button>
+                <button type="button" class="button primary small" id="persistent-dice-roll">Roll tray</button>
+                <button type="button" class="button ghost small" id="persistent-dice-clear">Clear table</button>
+              </div>
+            </details>
+            <details class="dice-workshop dice-designer">
+              <summary>Dice designer and effects</summary>
+              <div class="dice-designer-grid">
+                <label>Profile name<input id="dice-design-name" maxlength="40"></label>
+                <label>Body color<input id="dice-design-primary" type="color"></label>
+                <label>Number color<input id="dice-design-secondary" type="color"></label>
+                <label>Default trail<select id="dice-design-effect"><option value="arcane">Arcane</option><option value="fire">Fire</option><option value="cold">Cold</option><option value="lightning">Lightning</option><option value="acid">Acid</option><option value="poison">Poison</option><option value="radiant">Radiant</option><option value="necrotic">Necrotic</option><option value="psychic">Psychic</option><option value="force">Force</option><option value="healing">Healing</option><option value="shadow">Shadow</option></select></label>
+                <label>Landing sound<select id="dice-design-sound"><option value="felt">Felt</option><option value="wood">Wood</option><option value="stone">Stone</option><option value="metal">Metal</option><option value="crystal">Crystal</option><option value="arcane">Arcane</option><option value="custom">Uploaded sound</option></select></label>
+                <label>3D size<input id="dice-design-scale" type="range" min="3" max="8" step="0.5"></label>
+                <label>Landing image<input id="dice-effect-image" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small>Local only, up to 650 KB.</small></label>
+                <label>Custom landing sound file<input id="dice-effect-sound" type="file" accept="audio/*"><small>Local only, up to 500 KB.</small></label>
+              </div>
+              <div class="dice-designer-actions">
+                <button type="button" class="button primary small" id="dice-profile-save">Save as new profile</button>
+                <button type="button" class="button ghost small" id="dice-profile-assign">Assign to selected character</button>
+                <button type="button" class="button ghost small" id="dice-profile-export">Export profile</button>
+                <label class="button ghost small file-button">Import profile<input id="dice-profile-import" type="file" accept="application/json"></label>
+                <button type="button" class="button ghost small danger-button" id="dice-profile-delete">Delete custom profile</button>
+              </div>
+              <p class="field-hint" id="dice-character-profile-status">Open a character sheet to assign this profile.</p>
+            </details>
           </div>
           <aside class="roll-history"><div class="section-heading"><h2>Roll history</h2><button id="clear-history" class="text-button">Clear</button></div><ol id="roll-history"></ol></aside>
         </div>
@@ -635,6 +683,9 @@
     <div class="dice-stage-dice" id="dice-stage-dice"></div>
   </div>
 
+  <div class="dice-cinematic-stage" id="dice-cinematic-stage" aria-live="polite" hidden></div>
+  <div class="dice-effect-layer" id="dice-effect-layer" aria-hidden="true"></div>
+
   <div class="roll-overlay" id="roll-overlay" role="status" aria-live="polite" hidden>
     <button type="button" class="roll-overlay-close" id="roll-overlay-close" aria-label="Dismiss">×</button>
     <div class="roll-main">
@@ -673,7 +724,9 @@
   <script src="dungeon-data.js?v=dungeon-challenge-1"></script>
   <script src="map-library.js?v=vtt-4"></script>
   <script src="map-token-library.js?v=creature-vault-1"></script>
-  <script src="dice-engine.js?v=dice-sync-1"></script>
+  <script src="dice-engine.js?v=dice-experience-2"></script>
+  <script src="dice-cinematic.js?v=dice-experience-2"></script>
+  <script src="dice-experience.js?v=dice-experience-2"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-config.js?v=supabase-ifvyg-3"></script>
   <script>
@@ -682,6 +735,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=dice-sync-1"></script>
+  <script src="app.js?v=dice-experience-2"></script>
 </body>
 </html>

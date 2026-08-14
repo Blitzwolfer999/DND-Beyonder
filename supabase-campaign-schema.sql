@@ -741,3 +741,22 @@ on public.campaign_game_log (campaign_id, created_at desc);
 
 create index if not exists account_backups_user_created_idx
 on public.account_backups (user_id, created_at desc);
+
+-- Enable immediate campaign roll broadcasts. The client keeps its polling fallback,
+-- so the campaign remains usable even when Realtime is temporarily unavailable.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'campaign_game_log'
+    ) then
+    alter publication supabase_realtime add table public.campaign_game_log;
+  end if;
+exception
+  when insufficient_privilege then
+    raise notice 'Enable Realtime for public.campaign_game_log in the Supabase dashboard.';
+end
+$$;
