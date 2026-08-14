@@ -2695,6 +2695,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-cell-tile { image-rendering: auto; }
 .map-token { overflow: visible; display: block; padding: 0; border: 0; background: transparent; box-shadow: none; user-select: none; touch-action: none; transition: filter .15s ease,transform .15s ease; }
 .map-token-face { width: 100%; height: 100%; overflow: hidden; display: grid; place-items: center; border: 3px solid #e7edf4; border-radius: 50%; color: #fff; background: var(--token); box-shadow: 0 5px 14px #000b,inset 0 0 0 2px #0003; }
+.map-token-face img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center; }
 .map-token.enemy-token { border: 0; box-shadow: none; }
 .map-token.enemy-token .map-token-face { border-color: #e39b91; box-shadow: 0 5px 14px #000b,inset 0 0 0 2px #571d1d,0 0 0 2px rgba(132,42,42,.55); }
 .map-token.selected { outline: 0; transform: scale(1.06); }

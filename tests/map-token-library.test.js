@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { MAP_TOKEN_LIBRARY, MAP_TOKEN_TYPES, MAP_SRD_CREATURE_NAMES, TOKEN_LIBRARY_NOTICE, createCreatureTokenPreset, tokenPresetPortrait } = require("../map-token-library.js");
 
 assert.ok(MAP_TOKEN_LIBRARY.length >= 340, "expected the complete SRD catalog plus featured tokens");
@@ -23,4 +25,10 @@ assert.equal(custom.category, "Construct");
 assert.equal(custom.profileKind, "editable");
 assert.match(tokenPresetPortrait(custom), /^data:image\/svg\+xml/);
 assert.match(TOKEN_LIBRARY_NOTICE.attribution, /Creative Commons Attribution 4\.0/);
+const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+const styleSource = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+assert.match(appSource, /if \(character\?\.portrait\) return character\.portrait;/, "character portraits should take priority for map tokens");
+assert.match(appSource, /portrait: character\?\.portrait \|\| prior\.portrait \|\| ""/, "party tokens should copy character art when added");
+assert.match(appSource, /await syncCampaignMapCharacterPortraits\(\);/, "campaign refresh should update existing tokens with changed character art");
+assert.match(styleSource, /\.map-token-face img\s*\{[^}]*object-fit:\s*cover;/s, "character art should fill and crop inside the board token");
 console.log(`map-token-library tests passed (${MAP_TOKEN_LIBRARY.length} presets)`);

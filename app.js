@@ -296,6 +296,7 @@ let campaignMemberships = readJson(CAMPAIGN_MEMBER_KEY, []);
 let campaignCharacters = readJson(CAMPAIGN_CHARACTER_KEY, []);
 let campaignMaps = readJson(CAMPAIGN_MAP_KEY, []);
 let campaignGameLogs = readJson(CAMPAIGN_LOG_KEY, []);
+let campaignTokenArtSyncing = false;
 let activeCampaignId = "";
 let activeMapId = "";
 let selectedMapToken = null;
@@ -734,7 +735,9 @@ function mapTokenId(ownerUserId, characterId) {
   return `${ownerUserId}:${characterId}`;
 }
 function characterForMapToken(token) {
-  return characters.find(character => character.id === token.characterId && characterOwnerId(character) === token.ownerUserId);
+  const characterId = token?.characterId || token?.character_id || "";
+  const ownerUserId = token?.ownerUserId || token?.owner_user_id || "";
+  return characters.find(character => character.id === characterId && characterOwnerId(character) === ownerUserId);
 }
 function tokenColor(name = "") {
   const palette = ["#8f2f2f", "#2f5f8f", "#3f7a55", "#8f6b2f", "#693b8f", "#8f4f2f", "#2f7f82", "#6d7330"];
@@ -1030,6 +1033,49 @@ function tokensForCampaignMap(map, links) {
     };
     return { ...token, ...clampMapTokenPosition(data, token, token.x, token.y) };
   });
+}
+async function syncCampaignMapCharacterPortraits() {
+  if (!cloudUser || !cloudClient || campaignTokenArtSyncing) return;
+  const editableMaps = campaignMaps.filter(map => canEditCampaign(map.campaign_id));
+  if (!editableMaps.length) return;
+  campaignTokenArtSyncing = true;
+  try {
+    const results = await Promise.all(editableMaps.map(async map => {
+      const latest = await fetchCampaignMap(map.id);
+      const data = normalizeMapData(latest?.data || map.data);
+      let changed = false;
+      data.tokens = data.tokens.map(token => {
+        const character = characterForMapToken(token);
+        if (!character) return token;
+        const portrait = String(character.portrait || "");
+        const name = String(character.name || token.name || "Hero");
+        const ownerUserId = token.ownerUserId || token.owner_user_id || characterOwnerId(character);
+        const characterId = token.characterId || token.character_id || character.id;
+        if (String(token.portrait || "") === portrait
+          && String(token.name || "") === name
+          && token.ownerUserId === ownerUserId
+          && token.characterId === characterId) return token;
+        changed = true;
+        return { ...token, ownerUserId, characterId, name, portrait };
+      });
+      if (!changed) return { map, error: null, changed: false };
+      const updatedAt = new Date().toISOString();
+      const { error } = await cloudClient.from("campaign_maps")
+        .update({ data, updated_at: updatedAt })
+        .eq("id", map.id);
+      if (!error) {
+        map.data = data;
+        map.updated_at = updatedAt;
+      }
+      return { map, error, changed: true };
+    }));
+    const changed = results.filter(result => result.changed);
+    const failed = changed.filter(result => result.error);
+    if (failed.length) console.warn(`Could not refresh character art on ${failed.length} campaign map${failed.length === 1 ? "" : "s"}`);
+    if (changed.some(result => !result.error)) saveCampaignCache();
+  } finally {
+    campaignTokenArtSyncing = false;
+  }
 }
 function updateCampaignMapCache(map) {
   if (!map?.id) return;
@@ -2241,6 +2287,7 @@ async function loadCampaigns() {
   saveCampaignCache();
   renderCampaigns();
   await loadCloudCharacters();
+  await syncCampaignMapCharacterPortraits();
   renderCampaigns();
   if ($("#campaigns-view")?.classList.contains("active")) startCampaignLiveSync(true);
 }
