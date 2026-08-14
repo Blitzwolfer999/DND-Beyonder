@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Map Studio 3.0 visual fixture</title>
+  <title>Classic Encounters visual fixture</title>
   <link rel="stylesheet" href="../styles.css">
   <style>
     body { margin: 0; padding: 20px; background: #0d1118; }
     main { max-width: 1480px; margin: auto; }
-    .battle-map-board { --cols: 24; --rows: 16; --cell: 44px; --grid-color: #fff; --grid-opacity: .28; --grid-thickness: 1px; background: #3a493c; }
+    .battle-map-board { --cols: 34; --rows: 22; --cell: 38px; --grid-color: #fff; --grid-opacity: .22; --grid-thickness: 1px; background: #17191d; }
   </style>
 </head>
 <body>
@@ -28,41 +28,54 @@
       <div class="map-dock-tabs"><button>Tokens</button><button>Assets</button><button class="active">Scenes</button><button>Layers</button></div>
       <div class="map-dock-body">
         <div class="map-scene-library">
-          <div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">21/21</span></div>
+          <div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">12/33</span></div>
+          <section class="map-classic-pack-hero">
+            <small>PRELOADED COLLECTION</small><strong>Classic Encounters</strong>
+            <p>Twelve richly dressed battle maps for the adventures every table remembers: mines, crypts, castles, forests, temples, lairs, ships, and more.</p>
+            <div><span>12 editable maps</span><span>36 tactical landmarks</span><span>Original terrain art</span></div>
+            <button>Browse the pack</button>
+          </section>
           <div class="map-library-filter"><label><span>Find a scene</span><input type="search" placeholder="Crypt, ship, forest, wizard..."></label></div>
-          <div class="map-library-categories"><button class="active">All</button><button>Dungeon</button><button>Wilderness</button><button>Town</button><button>Horror</button><button>Arcane</button></div>
-          <p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, and atmosphere.</p>
-          <article class="map-scene-card">
-            <div class="map-scene-preview ambience-storm"><span style="background:#153f62"></span><span style="background:#79502d"></span><span style="background:#53351f"></span><span style="background:#2f6f94"></span><i></i></div>
-            <div class="map-scene-copy"><small>Coastal &middot; 30 x 16</small><strong>Stormbound Ship</strong><p>A broad sailing ship deck with raised ends, rigging, cargo, and dangerous open water.</p><em>Rain storm</em></div>
+          <div class="map-library-categories"><button>All</button><button class="active">Classic Pack</button><button>Dungeon</button><button>Wilderness</button><button>Town</button><button>Horror</button><button>Arcane</button></div>
+          <p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, atmosphere, and tactical landmarks.</p>
+          <article class="map-scene-card classic-scene">
+            <div class="map-scene-preview ambience-torchlight"><b class="map-scene-pack-badge">Classic</b><span style="background:#363238"></span><span style="background:#524433"></span><span style="background:#17191d"></span><span style="background:repeating-linear-gradient(90deg,#2b241c 0 6px,#80633c 7px 9px)"></span><i></i></div>
+            <div class="map-scene-copy"><small>Dungeon &middot; 34 x 22</small><strong>Goblin Mine Ambush</strong><p>A branching mine with ore cuts, a rail line, rope bridge, hidden ledges, and a defended goblin den.</p><div class="map-scene-features"><span>Rope bridge over chasm</span><span>Mine-cart track</span><span>Hidden overlook</span></div><em>Torchlight</em></div>
             <button>Use scene</button>
           </article>
-          <article class="map-scene-card">
-            <div class="map-scene-preview ambience-arcane"><span style="background:#343b48"></span><span style="background:#454a50"></span><span style="background:#21232b"></span><span style="background:#a69b83"></span><i></i></div>
-            <div class="map-scene-copy"><small>Arcane &middot; 28 x 18</small><strong>Wizard Laboratory</strong><p>A rune-lit laboratory packed with bookcases, crystals, experiments, and unstable portals.</p><em>Arcane glow</em></div>
+          <article class="map-scene-card classic-scene">
+            <div class="map-scene-preview ambience-embers"><b class="map-scene-pack-badge">Classic</b><span style="background:#211f24"></span><span style="background:#6f2d19"></span><span style="background:radial-gradient(circle,#e6b95d,#80521c 55%,#35251b 56%)"></span><span style="background:#493d34"></span><i></i></div>
+            <div class="map-scene-copy"><small>Boss Lair &middot; 36 x 24</small><strong>Dragon's Hoard Cavern</strong><p>A colossal volcanic cavern built around a glittering hoard, lava fissures, bone fields, and elevated lair shelves.</p><div class="map-scene-features"><span>Central hoard mound</span><span>Lava channels</span><span>Perched shelves</span></div><em>Drifting embers</em></div>
             <button>Use scene</button>
           </article>
-          <article class="map-scene-card">
-            <div class="map-scene-preview ambience-moonlight"><span style="background:#777047"></span><span style="background:#565058"></span><span style="background:#5a4327"></span><span style="background:#684c42"></span><i></i></div>
-            <div class="map-scene-copy"><small>Horror &middot; 30 x 20</small><strong>Graveyard Chapel</strong><p>A moonlit cemetery surrounding a ruined chapel, mausoleum, and freshly opened graves.</p><em>Moonlight</em></div>
+          <article class="map-scene-card classic-scene">
+            <div class="map-scene-preview ambience-moonlight"><b class="map-scene-pack-badge">Classic</b><span style="background:#25252e"></span><span style="background:#6e1f28"></span><span style="background:#44302b"></span><span style="background:#85714c"></span><i></i></div>
+            <div class="map-scene-copy"><small>Horror &middot; 32 x 22</small><strong>Vampire Manor Ballroom</strong><p>A grand decaying ballroom with sweeping stairs, dining alcoves, curtained ambush points, and a moonlit terrace.</p><div class="map-scene-features"><span>Raised dais</span><span>Grand staircase</span><span>Moonlit terrace</span></div><em>Moonlight</em></div>
             <button>Use scene</button>
           </article>
         </div>
       </div>
     </aside>
     <div class="map-canvas-column">
-      <div class="map-viewport-bar"><div><strong>Stormbound Ship</strong><small>Coastal encounter &middot; Rain storm</small></div><div class="map-zoom-controls"><button>Grid on</button><button>-</button><span>78%</span><button>+</button><button>Fit</button></div></div>
+      <div class="map-viewport-bar"><div><strong>Goblin Mine Ambush</strong><small>Classic Encounters &middot; Torchlight</small></div><div class="map-zoom-controls"><button>Grid on</button><button>-</button><span>72%</span><button>+</button><button>Fit</button></div></div>
       <div class="battle-map-shell tool-paint">
         <div class="battle-map-board">
           <div class="battle-map-tiles">
-            <div class="map-cell-tile" style="--x:0;--y:0;width:calc(var(--cell) * 24);height:calc(var(--cell) * 16);background:#153f62;background-image:linear-gradient(135deg,#ffffff18 12%,transparent 13%);background-size:24px 24px"></div>
-            <div class="map-cell-tile" style="--x:5;--y:3;width:calc(var(--cell) * 14);height:calc(var(--cell) * 10);background:#79502d;background-image:repeating-linear-gradient(90deg,#0005 0 2px,transparent 2px 14px)"></div>
+            <div class="map-cell-tile" style="--x:0;--y:0;width:calc(var(--cell) * 34);height:calc(var(--cell) * 22);background:#17191d;background-image:radial-gradient(circle at 25% 25%,#333039 0 16%,transparent 17%),radial-gradient(circle at 75% 60%,#29272e 0 20%,transparent 21%)"></div>
+            <div class="map-cell-tile" style="--x:2;--y:8;width:calc(var(--cell) * 29);height:calc(var(--cell) * 5);background:#524433;background-image:repeating-linear-gradient(100deg,#ffffff08 0 2px,transparent 2px 13px)"></div>
+            <div class="map-cell-tile" style="--x:14;--y:1;width:calc(var(--cell) * 6);height:calc(var(--cell) * 20);background:#090b0e"></div>
+            <div class="map-cell-tile" style="--x:15;--y:9;width:calc(var(--cell) * 4);height:calc(var(--cell) * 2);background:repeating-linear-gradient(90deg,#34291f 0 5px,#9a7746 6px 8px)"></div>
           </div>
           <div class="battle-map-grid"></div>
-          <div class="battle-map-overlays"><div class="map-cell-prop" style="--x:12;--y:8;background:radial-gradient(circle,#b78750 0 18%,#4f3019 19% 26%,transparent 27%)"></div></div>
-          <div class="battle-map-ambience ambience-storm" style="--ambience-strength:.5"><i></i><i></i></div>
-          <button class="map-token selected" style="--x:9;--y:8;--size:1;--token:#8f2f2f"><span class="map-token-face">A</span><span class="map-token-name">Astrid Vale</span><span class="map-token-health"><i style="width:82%"></i></span></button>
-          <button class="map-token enemy-token" style="--x:15;--y:6;--size:2;--token:#315f89"><span class="map-token-face">S</span><span class="map-token-name">Sea Spawn</span></button>
+          <div class="battle-map-overlays">
+            <div class="map-cell-prop" style="--x:8;--y:10;background:radial-gradient(circle,#8d6b3e 0 18%,#3d2b19 19% 35%,transparent 36%)"></div>
+            <div class="map-cell-prop" style="--x:25;--y:9;background:radial-gradient(circle,#b47a31 0 10%,#6e3d1d 11% 26%,transparent 27%)"></div>
+            <div class="map-cell-prop" style="--x:28;--y:12;background:linear-gradient(45deg,transparent 25%,#8e734c 26% 38%,transparent 39% 61%,#8e734c 62% 74%,transparent 75%)"></div>
+          </div>
+          <div class="battle-map-ambience ambience-torchlight" style="--ambience-strength:.52"><i></i><i></i></div>
+          <button class="map-token selected" style="--x:8;--y:10;--size:1;--token:#8f2f2f"><span class="map-token-face">A</span><span class="map-token-name">Astrid Vale</span><span class="map-token-health"><i style="width:82%"></i></span></button>
+          <button class="map-token enemy-token" style="--x:24;--y:9;--size:1;--token:#597841"><span class="map-token-face">G</span><span class="map-token-name">Goblin Boss</span></button>
+          <button class="map-token enemy-token" style="--x:27;--y:12;--size:1;--token:#697b45"><span class="map-token-face">G</span><span class="map-token-name">Goblin Archer</span></button>
         </div>
       </div>
       <div class="map-shortcut-hint"><span><kbd>Space</kbd> pan</span><span><kbd>Wheel + Ctrl</kbd> zoom</span><span><kbd>T</kbd> tokens</span><span><kbd>F</kbd> fog</span><span><kbd>R</kbd> ruler</span><span><kbd>X</kbd> ping</span></div>

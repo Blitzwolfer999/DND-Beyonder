@@ -2,6 +2,18 @@
   "use strict";
 
   const MAP_SCENE_TEMPLATES = [
+    { id: "classic-goblin-mine", name: "Goblin Mine Ambush", category: "Dungeon", size: "34 x 22", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["cave-floor", "chasm", "cracked-stone", "mine-track"], ambience: "torchlight", tags: "classic goblin mine cave ambush rails bridge", features: ["Three approach lanes", "Mine-cart cover", "Rope bridge chokepoint"], tactics: "A low-level cave assault with crossfire ledges, a trapped rail lane, and a boss den beyond a narrow bridge.", description: "A sprawling goblin mine with branching tunnels, ore works, a guarded rope bridge, and a cluttered boss den." },
+    { id: "classic-dragon-hoard", name: "Dragon's Hoard Cavern", category: "Dungeon", size: "36 x 24", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["volcanic-rock", "obsidian", "lava", "gold-floor"], ambience: "embers", tags: "classic dragon lair hoard lava boss cavern", features: ["Central boss dais", "Lava hazard lanes", "Cliffside flanking paths"], tactics: "A cinematic boss arena with a visible treasure objective, dangerous lava channels, and side ledges that reward movement.", description: "A vast volcanic lair where a treasure dais rises between lava channels, broken columns, and dragon-scorched ledges." },
+    { id: "classic-vampire-ballroom", name: "Vampire Manor Ballroom", category: "Horror", size: "32 x 22", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["marble", "checker-tile", "rug", "dark-wood"], ambience: "moonlight", tags: "classic vampire manor ballroom gothic coffin", features: ["Grand dance floor", "Raised side galleries", "Hidden coffin chamber"], tactics: "A social scene turned battle, with open central sightlines, furniture cover, balcony stairs, and a concealed retreat room.", description: "A moonlit gothic ballroom with a grand dance floor, banquet galleries, pipe organ, and a secret coffin chamber." },
+    { id: "classic-lich-crypt", name: "Lich's Ritual Crypt", category: "Horror", size: "34 x 22", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["crypt-floor", "rune-stone", "shadow", "obsidian"], ambience: "arcane", tags: "classic lich crypt ritual undead phylactery", features: ["Four ritual anchors", "Sarcophagus cover", "Phylactery vault"], tactics: "A multi-objective crypt fight where the party can disrupt ritual anchors before crossing the central death circle.", description: "An ancient burial complex centered on a death ritual, guarded sarcophagi, and a sealed phylactery vault." },
+    { id: "classic-orc-war-camp", name: "Orc War Camp", category: "Wilderness", size: "36 x 24", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["dead-grass", "dirt", "palisade-wall", "forest"], ambience: "sunset", tags: "classic orc war camp palisade tents assault", features: ["Fortified palisade", "Watchtower crossfire", "Two breach points"], tactics: "A fortified assault with a visible front gate, a damaged side wall, sentry towers, traps, and dense camp cover.", description: "A heavily occupied war camp behind timber walls, with watchtowers, tents, supply lanes, and a vulnerable breach." },
+    { id: "classic-haunted-forest", name: "Haunted Forest Shrine", category: "Horror", size: "34 x 22", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["forest", "dead-grass", "bog-water", "temple-tile"], ambience: "mist", tags: "classic haunted forest shrine ghosts ruins", features: ["Winding approach", "Foggy stream crossing", "Corrupted shrine"], tactics: "A visibility-focused wilderness encounter with twisted cover, water crossings, graves, and a ritual site at the far end.", description: "A twisted woodland path leads through graves and black water to a ruined shrine pulsing beneath the mist." },
+    { id: "classic-sunken-temple", name: "Sunken Temple", category: "Dungeon", size: "34 x 24", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["deep-water", "shallow-water", "temple-tile", "mossy-stone"], ambience: "mist", tags: "classic sunken temple flooded ruins water", features: ["Flooded movement lanes", "Broken causeways", "Dry altar island"], tactics: "A flooded ruin where causeways control movement, side pools hide threats, and the dry central altar becomes contested ground.", description: "A half-drowned temple of broken causeways, submerged chambers, lily-covered pools, and a dry ritual island." },
+    { id: "classic-dwarven-forge", name: "Dwarven Forge Hall", category: "Dungeon", size: "36 x 22", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["flagstone", "mine-track", "obsidian", "lava"], ambience: "embers", tags: "classic dwarf forge lava mine industrial", features: ["Twin molten channels", "Working forge stations", "Ore-cart rail lane"], tactics: "An industrial battle map with hot-zone lanes, sturdy workbench cover, rail access, and a commanding central forge platform.", description: "A monumental forge hall crossed by molten channels, ore rails, anvils, bellows, and heavy stone machinery." },
+    { id: "classic-wizard-library", name: "Wizard Tower Library", category: "Arcane", size: "32 x 22", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["slate-floor", "rune-stone", "temple-tile", "rug"], ambience: "arcane", tags: "classic wizard tower library books portal", features: ["Bookshelf maze", "Portal anchors", "Central spell dais"], tactics: "A spellcaster arena with broken sightlines, flammable-looking book stacks, four magical anchors, and a central objective.", description: "A circular tower library packed with book stacks, study alcoves, unstable portals, and a rune-carved spell dais." },
+    { id: "classic-castle-siege", name: "Castle Siege Courtyard", category: "Town", size: "38 x 24", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["grass", "cobblestone", "dungeon-wall", "cracked-stone"], ambience: "storm", tags: "classic castle siege courtyard breach battle", features: ["Gatehouse approach", "Collapsed wall breach", "Defensive barricades"], tactics: "A large assault map supporting gate combat, a rubble breach, wall positions, civilian structures, and multiple reinforcement routes.", description: "A storm-lashed castle courtyard under siege, with a breached wall, fortified gatehouse, barricades, and burning supplies." },
+    { id: "classic-frost-giant-pass", name: "Frost Giant Mountain Pass", category: "Wilderness", size: "36 x 22", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["snow", "ice", "chasm", "rune-stone"], ambience: "snowfall", tags: "classic frost giant mountain pass ice bridge", features: ["Narrow ice bridge", "Cliffside ledges", "Giant rune camp"], tactics: "A dangerous mountain crossing with forced movement risk, split-height-looking ledges, a giant camp, and an icy boss circle.", description: "A frozen mountain pass spans a deep chasm between wind-cut ledges, giant runestones, and a rough hunting camp." },
+    { id: "classic-pirate-cove", name: "Pirate Cove & Docks", category: "Coastal", size: "36 x 24", pack: "classic-encounters", packName: "Classic Encounters", previewTiles: ["deep-water", "sand", "wooden-deck", "cave-floor"], ambience: "sunset", tags: "classic pirate cove docks ship treasure cave", features: ["Dockside skirmish", "Moored cutter", "Hidden treasure grotto"], tactics: "An amphibious encounter with long dock lanes, open-water danger, a playable ship deck, and a cave route around the flank.", description: "A defended pirate cove with timber docks, a moored cutter, cargo yards, sea caves, and a hidden treasure grotto." },
     { id: "dungeon-crossroads", name: "Dungeon Crossroads", category: "Dungeon", size: "30 x 20", previewTiles: ["dungeon-wall", "flagstone", "mossy-stone", "shadow"], ambience: "torchlight", tags: "vault corridors traps ritual", description: "A branching flagstone dungeon with chambers, choke points, and a shadowed vault." },
     { id: "forest-clearing", name: "Forest Clearing", category: "Wilderness", size: "30 x 20", previewTiles: ["forest", "grass", "dirt", "water"], ambience: "clear", tags: "woods stream camp ambush", description: "A woodland encounter space with a winding trail, cover, and a shallow stream." },
     { id: "tavern-floor", name: "Tavern Floor", category: "Town", size: "24 x 16", previewTiles: ["wood-planks", "rug", "dark-wood", "brick-wall"], ambience: "torchlight", tags: "inn bar brawl interior", description: "A warm timber tavern with a central rug, stone hearth, and back-room access." },
@@ -40,6 +52,7 @@
     "wood-planks", "dark-wood", "cobblestone", "marble", "checker-tile", "roof-tile", "rug", "grass", "forest", "dirt", "sand", "snow", "ice",
     "water", "deep-water", "shallow-water", "bog-water", "lava", "acid", "shadow", "wet-cobble", "sewer-stone", "temple-tile", "rune-stone",
     "slate-floor", "wooden-deck", "dead-grass", "desert-rock", "ash-ground", "volcanic-rock", "farmland", "fungal-floor", "mud", "obsidian", "sandstone", "swamp",
+    "mine-track", "gold-floor", "palisade-wall",
   ];
 
   function hashSeed(value) {
@@ -93,8 +106,18 @@
         }
       }
     };
+    const line = (startX, startY, endX, endY, tileId, width = 1) => {
+      const steps = Math.max(Math.abs(endX - startX), Math.abs(endY - startY), 1);
+      for (let step = 0; step <= steps; step += 1) {
+        const x = Math.round(startX + ((endX - startX) * step) / steps);
+        const y = Math.round(startY + ((endY - startY) * step) / steps);
+        for (let offsetY = 0; offsetY < width; offsetY += 1) {
+          for (let offsetX = 0; offsetX < width; offsetX += 1) paint(x + offsetX, y + offsetY, tileId);
+        }
+      }
+    };
     const list = () => [...cells.values()].sort((a, b) => a.y - b.y || a.x - b.x);
-    return { paint, fill, rect, frame, ellipse, list };
+    return { paint, fill, rect, frame, ellipse, line, list };
   }
 
   function scatterProps(painter, random, tileIds, count, columns, rows, margin = 1) {
@@ -103,6 +126,354 @@
       const y = margin + Math.floor(random() * Math.max(1, rows - margin * 2));
       painter.paint(x, y, tileIds[index % tileIds.length]);
     }
+  }
+
+  function scatterPropsInRect(painter, random, tileIds, count, x, y, width, height) {
+    for (let index = 0; index < count; index += 1) {
+      painter.paint(x + Math.floor(random() * Math.max(1, width)), y + Math.floor(random() * Math.max(1, height)), tileIds[index % tileIds.length]);
+    }
+  }
+
+  function buildClassicGoblinMine(seed) {
+    const columns = 34;
+    const rows = 22;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("chasm");
+    painter.ellipse(7, 18, 7, 4, "cave-floor");
+    painter.ellipse(15, 13, 7, 5, "cracked-stone");
+    painter.ellipse(26, 6, 7, 5, "mossy-stone");
+    painter.ellipse(7, 6, 5, 4, "cave-floor");
+    painter.line(6, 18, 14, 13, "cave-floor", 3);
+    painter.line(16, 12, 24, 7, "cave-floor", 2);
+    painter.line(7, 15, 7, 7, "mine-track", 2);
+    painter.line(9, 6, 19, 6, "mine-track", 1);
+    painter.rect(19, 5, 4, 3, "cracked-stone");
+    painter.ellipse(27, 6, 3, 2, "crypt-floor");
+    overlay.paint(18, 6, "mine-cart");
+    overlay.paint(11, 12, "mine-cart");
+    overlay.paint(7, 15, "mine-cart");
+    overlay.paint(21, 6, "rope-bridge");
+    overlay.paint(22, 6, "rope-bridge");
+    overlay.paint(27, 5, "treasure-chest");
+    overlay.paint(27, 7, "wooden-table");
+    overlay.paint(25, 8, "campfire");
+    overlay.paint(4, 18, "spike-trap");
+    overlay.paint(12, 14, "wooden-door");
+    scatterPropsInRect(overlay, random, ["ore-vein", "stalagmite", "boulder"], 18, 3, 3, 28, 16);
+    scatterPropsInRect(overlay, random, ["crate", "barrel", "bones"], 12, 23, 3, 8, 7);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicDragonHoard(seed) {
+    const columns = 36;
+    const rows = 24;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("volcanic-rock");
+    painter.ellipse(18, 12, 16, 10, "cave-floor");
+    painter.ellipse(18, 10, 8, 6, "obsidian");
+    painter.ellipse(18, 10, 4, 3, "gold-floor");
+    painter.line(0, 7, 14, 11, "lava", 2);
+    painter.line(22, 11, 34, 5, "lava", 2);
+    painter.line(6, 20, 14, 15, "cracked-stone", 3);
+    painter.line(28, 20, 22, 15, "cracked-stone", 2);
+    painter.rect(3, 4, 8, 4, "ash-ground");
+    painter.rect(27, 3, 6, 4, "ash-ground");
+    overlay.paint(18, 10, "gold-hoard");
+    overlay.paint(17, 9, "treasure-chest");
+    overlay.paint(19, 11, "treasure-chest");
+    overlay.paint(8, 6, "dragon-bones");
+    overlay.paint(29, 5, "dragon-bones");
+    overlay.paint(18, 6, "brazier");
+    overlay.paint(14, 10, "stone-stairs");
+    overlay.paint(22, 10, "stone-stairs");
+    [[12, 7], [24, 7], [12, 14], [24, 14], [6, 12], [30, 12]].forEach(([x, y]) => overlay.paint(x, y, "stone-pillar"));
+    scatterPropsInRect(overlay, random, ["stalagmite", "crystals", "boulder"], 24, 2, 2, 32, 20);
+    scatterPropsInRect(overlay, random, ["gold-hoard", "bones"], 10, 14, 8, 9, 7);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicVampireBallroom() {
+    const columns = 32;
+    const rows = 22;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    painter.fill("brick-wall");
+    painter.rect(1, 1, 30, 20, "marble");
+    painter.frame(0, 0, columns, rows, "brick-wall");
+    painter.rect(10, 5, 12, 12, "checker-tile");
+    painter.rect(13, 3, 6, 16, "rug");
+    painter.rect(2, 2, 6, 18, "dark-wood");
+    painter.rect(24, 2, 6, 18, "dark-wood");
+    painter.rect(11, 1, 10, 4, "slate-floor");
+    painter.rect(2, 15, 5, 5, "crypt-floor");
+    overlay.paint(16, 2, "pipe-organ");
+    overlay.paint(4, 17, "coffin");
+    overlay.paint(7, 17, "bookshelf");
+    overlay.paint(8, 10, "stone-stairs");
+    overlay.paint(23, 10, "stone-stairs");
+    [[4, 4], [4, 9], [4, 14], [27, 4], [27, 9], [27, 14]].forEach(([x, y]) => overlay.paint(x, y, "round-table"));
+    [[10, 5], [21, 5], [10, 16], [21, 16], [15, 7], [16, 14]].forEach(([x, y]) => overlay.paint(x, y, "candelabra"));
+    [[1, 1], [30, 1], [1, 20], [30, 20]].forEach(([x, y]) => overlay.paint(x, y, "statue"));
+    overlay.paint(15, 20, "wooden-door");
+    overlay.paint(16, 0, "iron-door");
+    overlay.paint(2, 15, "wooden-door");
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicLichCrypt(seed) {
+    const columns = 34;
+    const rows = 22;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("dungeon-wall");
+    painter.rect(1, 1, 32, 20, "crypt-floor");
+    painter.frame(0, 0, columns, rows, "obsidian");
+    painter.rect(11, 5, 12, 12, "rune-stone");
+    painter.ellipse(17, 11, 5, 5, "shadow");
+    painter.rect(2, 2, 7, 6, "webbed-floor");
+    painter.rect(25, 2, 7, 6, "cracked-stone");
+    painter.rect(2, 14, 7, 6, "cracked-stone");
+    painter.rect(25, 14, 7, 6, "slate-floor");
+    painter.rect(15, 1, 4, 4, "temple-tile");
+    overlay.paint(17, 11, "summoning-circle");
+    overlay.paint(17, 2, "soul-gem");
+    [[12, 6], [22, 6], [12, 16], [22, 16]].forEach(([x, y]) => overlay.paint(x, y, "arcane-rune"));
+    [[4, 4], [7, 6], [27, 4], [30, 6], [4, 16], [7, 18], [27, 16], [30, 18]].forEach(([x, y]) => overlay.paint(x, y, "sarcophagus"));
+    [[10, 4], [24, 4], [10, 18], [24, 18]].forEach(([x, y]) => overlay.paint(x, y, "brazier"));
+    overlay.paint(16, 4, "iron-door");
+    overlay.paint(16, 19, "stone-stairs");
+    scatterPropsInRect(overlay, random, ["bones", "gravestone", "book-pile"], 22, 2, 2, 30, 18);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicOrcCamp(seed) {
+    const columns = 36;
+    const rows = 24;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("forest");
+    painter.rect(3, 2, 30, 20, "dead-grass");
+    painter.frame(2, 1, 32, 22, "palisade-wall");
+    painter.rect(16, 20, 5, 4, "dirt");
+    painter.line(18, 22, 18, 7, "dirt", 3);
+    painter.line(6, 12, 29, 12, "dirt", 2);
+    painter.rect(29, 15, 4, 5, "mud");
+    painter.rect(3, 5, 3, 5, "cracked-stone");
+    overlay.paint(18, 21, "palisade-gate");
+    overlay.paint(33, 17, "rubble");
+    [[4, 3], [31, 3], [4, 20], [31, 20]].forEach(([x, y]) => overlay.paint(x, y, "watchtower"));
+    [[8, 6], [14, 5], [23, 6], [28, 9], [8, 16], [14, 18], [25, 17]].forEach(([x, y]) => overlay.paint(x, y, "tent"));
+    overlay.paint(18, 11, "campfire");
+    overlay.paint(20, 9, "wooden-table");
+    overlay.paint(23, 14, "weapon-rack");
+    overlay.paint(10, 12, "armor-rack");
+    overlay.paint(6, 12, "cart");
+    [[16, 20], [21, 20], [32, 16], [32, 18]].forEach(([x, y]) => overlay.paint(x, y, "spike-trap"));
+    scatterPropsInRect(overlay, random, ["crate", "barrel", "bones", "log"], 24, 4, 3, 28, 18);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicHauntedForest(seed) {
+    const columns = 34;
+    const rows = 22;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("forest");
+    painter.line(2, 20, 10, 14, "dead-grass", 3);
+    painter.line(10, 14, 18, 12, "mud", 2);
+    painter.line(18, 12, 28, 4, "dead-grass", 3);
+    painter.ellipse(14, 10, 5, 3, "bog-water");
+    painter.ellipse(27, 5, 6, 4, "mossy-stone");
+    painter.rect(24, 3, 7, 6, "temple-tile");
+    painter.frame(23, 2, 9, 8, "cracked-stone");
+    painter.rect(3, 3, 6, 4, "webbed-floor");
+    overlay.paint(27, 5, "summoning-circle");
+    overlay.paint(27, 3, "altar");
+    overlay.paint(23, 6, "ruined-arch");
+    overlay.paint(15, 10, "rope-bridge");
+    overlay.paint(16, 10, "rope-bridge");
+    [[7, 5], [20, 5], [7, 16], [22, 16], [29, 14]].forEach(([x, y]) => overlay.paint(x, y, "dead-tree"));
+    [[4, 18], [9, 15], [19, 13], [25, 11]].forEach(([x, y]) => overlay.paint(x, y, "gravestone"));
+    scatterPropsInRect(overlay, random, ["ancient-tree", "shrub", "mushrooms", "bones"], 30, 1, 1, 32, 20);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicSunkenTemple(seed) {
+    const columns = 34;
+    const rows = 24;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("deep-water");
+    painter.ellipse(17, 12, 15, 10, "shallow-water");
+    painter.rect(4, 9, 26, 6, "mossy-stone");
+    painter.rect(14, 3, 6, 18, "temple-tile");
+    painter.ellipse(17, 12, 5, 4, "cracked-stone");
+    painter.rect(2, 2, 8, 6, "crypt-floor");
+    painter.rect(24, 16, 8, 6, "crypt-floor");
+    painter.frame(1, 1, 10, 8, "mossy-stone");
+    painter.frame(23, 15, 10, 8, "mossy-stone");
+    painter.rect(15, 20, 4, 4, "shallow-water");
+    overlay.paint(17, 11, "altar");
+    overlay.paint(17, 13, "summoning-circle");
+    [[12, 9], [22, 9], [12, 14], [22, 14], [5, 4], [28, 19]].forEach(([x, y]) => overlay.paint(x, y, "stone-pillar"));
+    [[9, 11], [10, 11], [24, 12], [25, 12]].forEach(([x, y]) => overlay.paint(x, y, "wooden-bridge"));
+    overlay.paint(14, 20, "stone-stairs");
+    overlay.paint(19, 3, "ruined-arch");
+    scatterPropsInRect(overlay, random, ["lily-pads", "statue-broken", "rubble", "crystals"], 30, 2, 2, 30, 20);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicDwarvenForge(seed) {
+    const columns = 36;
+    const rows = 22;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("dungeon-wall");
+    painter.rect(1, 1, 34, 20, "flagstone");
+    painter.frame(0, 0, columns, rows, "obsidian");
+    painter.rect(0, 6, 36, 3, "lava");
+    painter.rect(0, 15, 36, 3, "lava");
+    painter.rect(4, 9, 28, 6, "slate-floor");
+    painter.rect(14, 4, 8, 14, "obsidian");
+    painter.rect(16, 8, 4, 8, "rune-stone");
+    painter.line(2, 3, 33, 3, "mine-track", 2);
+    painter.rect(15, 6, 6, 3, "stone-floor");
+    painter.rect(15, 15, 6, 3, "stone-floor");
+    overlay.paint(18, 11, "anvil");
+    [[7, 11], [11, 11], [25, 11], [29, 11]].forEach(([x, y]) => overlay.paint(x, y, "forge-bellows"));
+    [[5, 10], [12, 13], [24, 13], [31, 10]].forEach(([x, y]) => overlay.paint(x, y, "gearworks"));
+    [[8, 3], [18, 3], [28, 3]].forEach(([x, y]) => overlay.paint(x, y, "mine-cart"));
+    [[14, 7], [21, 7], [14, 16], [21, 16]].forEach(([x, y]) => overlay.paint(x, y, "brazier"));
+    overlay.paint(3, 19, "stone-stairs");
+    overlay.paint(32, 19, "iron-door");
+    scatterPropsInRect(overlay, random, ["ore-vein", "crate", "weapon-rack", "barrel"], 22, 2, 2, 32, 18);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicWizardLibrary(seed) {
+    const columns = 32;
+    const rows = 22;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("dungeon-wall");
+    painter.ellipse(16, 11, 15, 10, "slate-floor");
+    painter.ellipse(16, 11, 6, 5, "rune-stone");
+    painter.ellipse(16, 11, 3, 3, "temple-tile");
+    painter.rect(3, 8, 7, 6, "rug");
+    painter.rect(22, 8, 7, 6, "rug");
+    painter.rect(13, 18, 6, 4, "checker-tile");
+    overlay.paint(16, 11, "summoning-circle");
+    [[11, 6], [21, 6], [11, 16], [21, 16]].forEach(([x, y]) => overlay.paint(x, y, "arcane-rune"));
+    for (let y = 4; y <= 17; y += 3) {
+      overlay.paint(5, y, "bookshelf");
+      overlay.paint(8, y + 1, "bookshelf");
+      overlay.paint(24, y + 1, "bookshelf");
+      overlay.paint(27, y, "bookshelf");
+    }
+    overlay.paint(4, 11, "wooden-table");
+    overlay.paint(28, 11, "wooden-table");
+    overlay.paint(16, 19, "stone-stairs");
+    overlay.paint(16, 3, "soul-gem");
+    scatterPropsInRect(overlay, random, ["book-pile", "crystals", "candelabra"], 20, 3, 3, 26, 16);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicCastleSiege(seed) {
+    const columns = 38;
+    const rows = 24;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("grass");
+    painter.rect(0, 0, 38, 6, "cobblestone");
+    painter.rect(5, 5, 28, 18, "stone-floor");
+    painter.frame(4, 4, 30, 20, "dungeon-wall");
+    painter.rect(15, 0, 8, 10, "wet-cobble");
+    painter.rect(5, 18, 8, 5, "cracked-stone");
+    painter.rect(25, 18, 8, 5, "roof-tile");
+    painter.rect(4, 10, 3, 7, "cracked-stone");
+    painter.rect(30, 9, 4, 8, "dungeon-wall");
+    painter.line(19, 23, 19, 8, "cobblestone", 3);
+    overlay.paint(19, 5, "portcullis");
+    overlay.paint(5, 13, "rubble");
+    overlay.paint(6, 14, "rubble");
+    overlay.paint(7, 15, "siege-fire");
+    [[12, 10], [25, 10], [12, 16], [25, 16], [17, 19], [21, 19]].forEach(([x, y]) => overlay.paint(x, y, "barricade"));
+    [[6, 6], [31, 6], [6, 21], [31, 21]].forEach(([x, y]) => overlay.paint(x, y, "watchtower"));
+    overlay.paint(28, 20, "well");
+    overlay.paint(10, 20, "cart");
+    overlay.paint(29, 18, "wooden-door");
+    overlay.paint(18, 8, "statue");
+    scatterPropsInRect(overlay, random, ["crate", "barrel", "rubble", "siege-fire"], 24, 6, 6, 26, 16);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicFrostGiantPass(seed) {
+    const columns = 36;
+    const rows = 22;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("chasm");
+    painter.ellipse(7, 15, 8, 7, "snow");
+    painter.ellipse(29, 7, 8, 7, "snow");
+    painter.line(11, 13, 24, 9, "ice", 3);
+    painter.rect(1, 17, 9, 4, "cracked-stone");
+    painter.ellipse(29, 7, 4, 4, "rune-stone");
+    painter.rect(25, 12, 8, 5, "dead-grass");
+    painter.line(3, 19, 10, 14, "ice", 2);
+    overlay.paint(29, 7, "summoning-circle");
+    overlay.paint(28, 6, "stone-pillar");
+    overlay.paint(31, 8, "stone-pillar");
+    overlay.paint(27, 14, "tent");
+    overlay.paint(31, 14, "campfire");
+    overlay.paint(25, 15, "dragon-bones");
+    overlay.paint(6, 18, "stone-stairs");
+    [[12, 12], [16, 11], [20, 10], [24, 9]].forEach(([x, y]) => overlay.paint(x, y, "ice-spikes"));
+    scatterPropsInRect(overlay, random, ["pine-tree", "boulder", "ice-spikes"], 26, 1, 1, 34, 20);
+    scatterPropsInRect(overlay, random, ["crate", "barrel", "bones"], 10, 24, 12, 10, 7);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
+  }
+
+  function buildClassicPirateCove(seed) {
+    const columns = 36;
+    const rows = 24;
+    const painter = createPainter(columns, rows);
+    const overlay = createPainter(columns, rows);
+    const random = seededRandom(seed);
+    painter.fill("deep-water");
+    painter.ellipse(7, 12, 9, 11, "cave-floor");
+    painter.ellipse(12, 17, 9, 6, "sand");
+    painter.rect(12, 9, 16, 3, "wooden-deck");
+    painter.rect(18, 5, 3, 14, "wooden-deck");
+    painter.ellipse(29, 8, 5, 7, "wooden-deck");
+    painter.rect(25, 5, 8, 7, "wooden-deck");
+    painter.rect(2, 4, 8, 6, "cracked-stone");
+    painter.rect(3, 5, 6, 4, "gold-floor");
+    painter.ellipse(19, 17, 5, 3, "shallow-water");
+    overlay.paint(5, 6, "gold-hoard");
+    overlay.paint(7, 7, "treasure-chest");
+    overlay.paint(29, 8, "mast");
+    overlay.paint(31, 9, "ship-wheel");
+    overlay.paint(26, 8, "anchor");
+    overlay.paint(19, 7, "stone-stairs");
+    overlay.paint(15, 10, "rowboat");
+    overlay.paint(19, 17, "rowboat");
+    overlay.paint(10, 16, "campfire");
+    overlay.paint(4, 10, "ruined-arch");
+    scatterPropsInRect(overlay, random, ["crate", "barrel", "rope-coil", "barricade"], 28, 11, 8, 21, 11);
+    scatterPropsInRect(overlay, random, ["stalagmite", "bones", "boulder"], 16, 1, 2, 10, 18);
+    return { columns, rows, tiles: painter.list(), overlays: overlay.list() };
   }
 
   function buildDungeon() {
@@ -734,7 +1105,19 @@
     const template = MAP_SCENE_TEMPLATES.find((entry) => entry.id === sceneId);
     if (!template) return null;
     let scene;
-    if (sceneId === "dungeon-crossroads") scene = buildDungeon(seed);
+    if (sceneId === "classic-goblin-mine") scene = buildClassicGoblinMine(seed);
+    else if (sceneId === "classic-dragon-hoard") scene = buildClassicDragonHoard(seed);
+    else if (sceneId === "classic-vampire-ballroom") scene = buildClassicVampireBallroom();
+    else if (sceneId === "classic-lich-crypt") scene = buildClassicLichCrypt(seed);
+    else if (sceneId === "classic-orc-war-camp") scene = buildClassicOrcCamp(seed);
+    else if (sceneId === "classic-haunted-forest") scene = buildClassicHauntedForest(seed);
+    else if (sceneId === "classic-sunken-temple") scene = buildClassicSunkenTemple(seed);
+    else if (sceneId === "classic-dwarven-forge") scene = buildClassicDwarvenForge(seed);
+    else if (sceneId === "classic-wizard-library") scene = buildClassicWizardLibrary(seed);
+    else if (sceneId === "classic-castle-siege") scene = buildClassicCastleSiege(seed);
+    else if (sceneId === "classic-frost-giant-pass") scene = buildClassicFrostGiantPass(seed);
+    else if (sceneId === "classic-pirate-cove") scene = buildClassicPirateCove(seed);
+    else if (sceneId === "dungeon-crossroads") scene = buildDungeon(seed);
     else if (sceneId === "forest-clearing") scene = buildForest(seed);
     else if (sceneId === "tavern-floor") scene = buildTavern();
     else if (sceneId === "town-square") scene = buildTown();
@@ -755,7 +1138,18 @@
     else if (sceneId === "mushroom-grotto") scene = buildGrotto(seed);
     else if (sceneId === "farmstead-raid") scene = buildFarmstead(seed);
     else scene = buildSnow(seed);
-    return { ...scene, id: template.id, name: template.name, category: template.category, description: template.description, ambience: template.ambience };
+    return {
+      ...scene,
+      id: template.id,
+      name: template.name,
+      category: template.category,
+      description: template.description,
+      ambience: template.ambience,
+      pack: template.pack || "",
+      packName: template.packName || "",
+      tactics: template.tactics || "",
+      features: Array.isArray(template.features) ? [...template.features] : []
+    };
   }
 
   function paintMapDataCells(data, tool, tileId, originX, originY, brushSize = 1, assetKind = "terrain") {

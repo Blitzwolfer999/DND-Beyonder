@@ -5,6 +5,10 @@ const { MAP_SCENE_TEMPLATES, MAP_ASSET_LIBRARY, SCENE_TILE_IDS, buildMapScene, p
 
 assert.ok(MAP_SCENE_TEMPLATES.length >= 20, "expected a deep scene library");
 assert.ok(new Set(MAP_SCENE_TEMPLATES.map(scene => scene.category)).size >= 6, "expected varied scene categories");
+const classicPack = MAP_SCENE_TEMPLATES.filter(scene => scene.pack === "classic-encounters");
+assert.equal(classicPack.length, 12, "Classic Encounters should contain exactly twelve maps");
+assert.equal(new Set(classicPack.map(scene => scene.id)).size, 12, "Classic Encounters ids should be unique");
+assert.equal(new Set(classicPack.map(scene => scene.name)).size, 12, "Classic Encounters names should be unique");
 assert.ok(MAP_ASSET_LIBRARY.length >= 6, "expected a curated external asset library");
 MAP_ASSET_LIBRARY.forEach(pack => {
   assert.match(pack.sourceUrl, /^https:\/\//);
@@ -39,6 +43,20 @@ for (const template of MAP_SCENE_TEMPLATES) {
     assert.ok(overlay.y >= 0 && overlay.y < first.rows, `${template.id} overlay y should be in bounds`);
     assert.match(appSource, new RegExp(`id: ["']${overlay.tileId}["']`), `${template.id} overlay ${overlay.tileId} should be registered`);
   }
+}
+
+for (const template of classicPack) {
+  assert.equal(template.packName, "Classic Encounters", `${template.id} should identify its collection`);
+  assert.equal(template.features.length, 3, `${template.id} should identify three tactical landmarks`);
+  assert.ok(template.tactics.length >= 45, `${template.id} should include useful DM tactics`);
+  assert.ok(template.description.length >= 60, `${template.id} should include a detailed description`);
+  const scene = buildMapScene(template.id, "classic-pack-audit");
+  assert.ok(scene.columns >= 32 && scene.rows >= 22, `${template.id} should support a full encounter`);
+  assert.ok(new Set(scene.tiles.map(tile => tile.tileId)).size >= 6, `${template.id} should use varied terrain`);
+  assert.ok(scene.overlays.length >= 24, `${template.id} should include dense prop dressing`);
+  assert.ok(new Set(scene.overlays.map(tile => tile.tileId)).size >= 9, `${template.id} should use varied props`);
+  assert.deepEqual(scene.features, template.features, `${template.id} should preserve tactical landmarks`);
+  assert.equal(scene.tactics, template.tactics, `${template.id} should preserve tactical guidance`);
 }
 
 assert.equal(buildMapScene("missing-scene"), null);

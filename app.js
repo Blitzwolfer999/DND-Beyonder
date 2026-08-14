@@ -446,7 +446,30 @@ const BUILT_IN_MAP_TILES = [
   { id: "anvil", name: "Forge Anvil", category: "Props", kind: "prop", tags: "smith forge metal", style: "background-color:transparent;background-image:linear-gradient(transparent 27%,#8b9398 28% 42%,#42494e 43% 54%,transparent 55%),linear-gradient(90deg,transparent 39%,#555c61 40% 60%,transparent 61%);filter:drop-shadow(0 3px 3px #0008);" },
   { id: "mast", name: "Ship Mast", category: "Props", kind: "prop", tags: "ship sail nautical", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 50%,#b78750 0 16%,#4f3019 17% 24%,transparent 25%),linear-gradient(90deg,transparent 47%,#6f4727 48% 52%,transparent 53%);" },
   { id: "anchor", name: "Anchor", category: "Props", kind: "prop", tags: "ship ocean nautical", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 24%,transparent 0 8%,#7e878d 9% 13%,transparent 14%),linear-gradient(90deg,transparent 47%,#7e878d 48% 53%,transparent 54%),radial-gradient(ellipse at 50% 65%,transparent 0 24%,#7e878d 25% 29%,transparent 30%);" },
-  { id: "ship-wheel", name: "Ship Wheel", category: "Props", kind: "prop", tags: "helm ship pirate", style: "background-color:transparent;background-image:repeating-conic-gradient(from 0deg at 50% 50%,#8b5d33 0 3deg,transparent 4deg 42deg),radial-gradient(circle,transparent 0 25%,#9b6a3a 26% 32%,transparent 33%);" }
+  { id: "ship-wheel", name: "Ship Wheel", category: "Props", kind: "prop", tags: "helm ship pirate", style: "background-color:transparent;background-image:repeating-conic-gradient(from 0deg at 50% 50%,#8b5d33 0 3deg,transparent 4deg 42deg),radial-gradient(circle,transparent 0 25%,#9b6a3a 26% 32%,transparent 33%);" },
+  { id: "mine-track", name: "Mine Rails", category: "Dungeon", tags: "mine rail cart dwarf", style: "background:#625a4f;background-image:linear-gradient(transparent 21%,#31271f 22% 29%,transparent 30% 70%,#31271f 71% 78%,transparent 79%),repeating-linear-gradient(90deg,transparent 0 10%,#8b6843 11% 17%,transparent 18% 32%);" },
+  { id: "gold-floor", name: "Scattered Treasure", category: "Dungeon", tags: "dragon hoard coins treasure", style: "background:#6c5030;background-image:radial-gradient(circle,#d7a936 0 8%,#8e641d 9% 12%,transparent 13%),radial-gradient(circle,#edca5e 0 6%,#966d22 7% 10%,transparent 11%),radial-gradient(circle,#b88629 0 7%,transparent 8%);background-size:19px 17px,23px 21px,14px 16px;background-position:2px 3px,11px 9px,5px 13px;" },
+  { id: "palisade-wall", name: "Timber Palisade", category: "Wilderness", tags: "orc camp wall fort", style: "background:#3e2b1e;background-image:repeating-linear-gradient(90deg,#513722 0 14%,#8a5c36 15% 27%,#382519 28% 34%);box-shadow:inset 0 5px rgba(220,178,113,.12),inset 0 -6px rgba(0,0,0,.24);" },
+  { id: "mine-cart", name: "Mine Cart", category: "Props", kind: "prop", tags: "mine rail ore cover", style: "background-color:transparent;background-image:radial-gradient(circle at 31% 76%,#1f2122 0 10%,#73787b 11% 15%,transparent 16%),radial-gradient(circle at 69% 76%,#1f2122 0 10%,#73787b 11% 15%,transparent 16%),linear-gradient(transparent 28%,#4b5256 29% 40%,#747b7e 41% 64%,#303537 65% 70%,transparent 71%);" },
+  { id: "ore-vein", name: "Ore Vein", category: "Props", kind: "prop", tags: "mine crystal metal", style: "background-color:transparent;background-image:linear-gradient(145deg,transparent 30%,#75898f 31% 37%,transparent 38% 47%,#b5c4c2 48% 54%,transparent 55%),radial-gradient(ellipse at center,#4d4a45 0 35%,transparent 36%);filter:drop-shadow(0 2px 2px #0008);" },
+  { id: "rope-bridge", name: "Rope Bridge", category: "Props", kind: "prop", tags: "chasm mine crossing", style: "background-color:transparent;background-image:repeating-linear-gradient(90deg,transparent 0 8%,#93643a 9% 22%,transparent 23% 31%),linear-gradient(transparent 14%,#c0955f 15% 20%,transparent 21% 79%,#c0955f 80% 85%,transparent 86%);filter:drop-shadow(0 3px 2px #0009);" },
+  { id: "stalagmite", name: "Stalagmite", category: "Props", kind: "prop", tags: "cave rock cover", style: "background-color:transparent;background-image:conic-gradient(from 210deg at 50% 78%,transparent 0 19%,#8b8376 20% 38%,#4e4a44 39% 53%,transparent 54%);filter:drop-shadow(0 4px 3px #0009);" },
+  { id: "gold-hoard", name: "Dragon Hoard", category: "Props", kind: "prop", tags: "dragon treasure coins", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 68%,#d9aa31 0 30%,#8d5e19 31% 40%,transparent 41%),radial-gradient(circle at 35% 48%,#f0cf64 0 8%,transparent 9%),radial-gradient(circle at 67% 52%,#bd2e35 0 7%,transparent 8%);filter:drop-shadow(0 0 5px rgba(223,170,49,.5));" },
+  { id: "dragon-bones", name: "Dragon Bones", category: "Props", kind: "prop", tags: "dragon skeleton lair", style: "background-color:transparent;background-image:repeating-radial-gradient(ellipse at 50% 54%,transparent 0 8%,#d8d1be 9% 13%,transparent 14% 20%),linear-gradient(25deg,transparent 44%,#d8d1be 45% 51%,transparent 52%);filter:drop-shadow(0 2px 2px #0008);" },
+  { id: "candelabra", name: "Candelabra", category: "Props", kind: "prop", tags: "vampire manor candle light", style: "background-color:transparent;background-image:radial-gradient(circle at 30% 28%,#fff1a1 0 5%,#e89537 6% 10%,transparent 11%),radial-gradient(circle at 50% 20%,#fff1a1 0 5%,#e89537 6% 10%,transparent 11%),radial-gradient(circle at 70% 28%,#fff1a1 0 5%,#e89537 6% 10%,transparent 11%),linear-gradient(90deg,transparent 47%,#b58a42 48% 52%,transparent 53%);filter:drop-shadow(0 0 4px #e89537);" },
+  { id: "pipe-organ", name: "Pipe Organ", category: "Props", kind: "prop", tags: "vampire manor music gothic", style: "background-color:transparent;background-image:repeating-linear-gradient(90deg,#a99b7a 0 8%,#47423a 9% 14%);background-size:72% 68%;background-position:center 25%;background-repeat:no-repeat;filter:drop-shadow(0 3px 3px #0008);" },
+  { id: "coffin", name: "Coffin", category: "Props", kind: "prop", tags: "vampire crypt undead", style: "background-color:transparent;background-image:linear-gradient(112deg,transparent 24%,#4d191e 25% 31%,#7e2b32 32% 68%,#4d191e 69% 75%,transparent 76%),linear-gradient(68deg,transparent 24%,#4d191e 25% 31%,#7e2b32 32% 68%,#4d191e 69% 75%,transparent 76%);filter:drop-shadow(0 4px 3px #0009);" },
+  { id: "soul-gem", name: "Soul Gem", category: "Props", kind: "prop", tags: "lich phylactery magic", style: "background-color:transparent;background-image:conic-gradient(from 45deg at 50% 50%,transparent 0 12%,#b7fff3 13% 24%,#48c8c0 25% 37%,#674bb2 38% 49%,transparent 50%);filter:drop-shadow(0 0 8px #66e4d8);" },
+  { id: "palisade-gate", name: "Palisade Gate", category: "Props", kind: "prop", tags: "orc fort gate camp", style: "background-color:transparent;background-image:repeating-linear-gradient(90deg,transparent 0 7%,#7d512d 8% 18%,#40291a 19% 23%,transparent 24% 31%),linear-gradient(transparent 24%,#3e291c 25% 34%,transparent 35% 65%,#3e291c 66% 75%,transparent 76%);" },
+  { id: "watchtower", name: "Watchtower", category: "Props", kind: "prop", tags: "orc camp fort tower", style: "background-color:transparent;background-image:radial-gradient(circle at 50% 46%,#8e6238 0 27%,#3f2a1a 28% 36%,transparent 37%),repeating-linear-gradient(45deg,transparent 0 18%,#6e4829 19% 24%,transparent 25% 42%);filter:drop-shadow(0 5px 4px #000a);" },
+  { id: "ruined-arch", name: "Ruined Arch", category: "Props", kind: "prop", tags: "temple ruin doorway", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 58%,transparent 0 25%,#8e8a7f 26% 36%,transparent 37%),linear-gradient(90deg,transparent 18%,#6d6961 19% 29%,transparent 30% 70%,#6d6961 71% 81%,transparent 82%);filter:drop-shadow(0 3px 3px #0008);" },
+  { id: "lily-pads", name: "Lily Pads", category: "Props", kind: "prop", tags: "swamp pond water temple", style: "background-color:transparent;background-image:radial-gradient(ellipse at 32% 44%,#5c8d43 0 15%,transparent 16%),radial-gradient(ellipse at 66% 61%,#43753a 0 17%,transparent 18%),radial-gradient(circle at 70% 55%,#d7a4ce 0 5%,transparent 6%);" },
+  { id: "forge-bellows", name: "Forge Bellows", category: "Props", kind: "prop", tags: "dwarf forge smith", style: "background-color:transparent;background-image:radial-gradient(ellipse at 44% 54%,#6f2e27 0 24%,#3f1e1b 25% 31%,transparent 32%),linear-gradient(90deg,transparent 56%,#a17b4d 57% 82%,transparent 83%);filter:drop-shadow(0 3px 3px #0008);" },
+  { id: "gearworks", name: "Gearworks", category: "Props", kind: "prop", tags: "dwarf forge machine", style: "background-color:transparent;background-image:repeating-conic-gradient(from 0deg at 38% 52%,#9a8261 0 8deg,transparent 9deg 28deg),radial-gradient(circle at 38% 52%,transparent 0 18%,#706048 19% 27%,transparent 28%),repeating-conic-gradient(from 10deg at 68% 58%,#7d715f 0 9deg,transparent 10deg 32deg),radial-gradient(circle at 68% 58%,transparent 0 14%,#5d5549 15% 23%,transparent 24%);" },
+  { id: "barricade", name: "Barricade", category: "Props", kind: "prop", tags: "siege cover defense", style: "background-color:transparent;background-image:linear-gradient(25deg,transparent 38%,#76502f 39% 47%,transparent 48%),linear-gradient(-25deg,transparent 38%,#8d6139 39% 47%,transparent 48%),linear-gradient(transparent 60%,#4f3522 61% 70%,transparent 71%);filter:drop-shadow(0 3px 2px #0008);" },
+  { id: "siege-fire", name: "Burning Wreckage", category: "Props", kind: "prop", tags: "siege fire rubble", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 68%,#3c261a 0 28%,transparent 29%),radial-gradient(ellipse at 50% 49%,#ffe36b 0 10%,#ee7a2d 11% 22%,#a62f22 23% 34%,transparent 35%),linear-gradient(35deg,transparent 43%,#664126 44% 51%,transparent 52%);filter:drop-shadow(0 0 5px #e36b2d);" },
+  { id: "ice-spikes", name: "Ice Spikes", category: "Props", kind: "prop", tags: "frozen mountain hazard", style: "background-color:transparent;background-image:conic-gradient(from 205deg at 32% 78%,transparent 0 18%,#d9f4fb 19% 35%,#75b6ce 36% 48%,transparent 49%),conic-gradient(from 205deg at 62% 78%,transparent 0 20%,#c8ebf5 21% 37%,#609db8 38% 49%,transparent 50%);filter:drop-shadow(0 0 4px #8bd5ee);" },
+  { id: "rowboat", name: "Rowboat", category: "Props", kind: "prop", tags: "pirate cove water", style: "background-color:transparent;background-image:radial-gradient(ellipse at 50% 52%,transparent 0 21%,#a16c3d 22% 33%,#4d2c18 34% 39%,transparent 40%),linear-gradient(90deg,transparent 19%,#c69a62 20% 23%,transparent 24% 76%,#c69a62 77% 80%,transparent 81%);filter:drop-shadow(0 4px 3px #0009);" }
 ];
 const MAP_AMBIENCE_OPTIONS = [
   { id: "clear", name: "Clear daylight" },
@@ -1058,7 +1081,15 @@ async function applyCampaignMapScene(mapId, sceneId) {
   data.rows = scene.rows;
   data.tiles = scene.tiles;
   data.overlays = scene.overlays || [];
-  data.scene = { id: scene.id, name: scene.name, description: scene.description };
+  data.scene = {
+    id: scene.id,
+    name: scene.name,
+    description: scene.description,
+    pack: scene.pack || "",
+    packName: scene.packName || "",
+    tactics: scene.tactics || "",
+    features: Array.isArray(scene.features) ? scene.features : []
+  };
   data.display.ambience = MAP_AMBIENCE_OPTIONS.some(option => option.id === scene.ambience) ? scene.ambience : data.display.ambience;
   data.fog.cells = data.fog.cells.filter(cell => {
     const [x, y] = String(cell).split(",").map(Number);
@@ -1185,7 +1216,15 @@ async function createCampaignMap(campaignId, values) {
     tiles: scene?.tiles || [],
     overlays: scene?.overlays || [],
     display: scene?.ambience ? { ambience: scene.ambience } : undefined,
-    scene: scene ? { id: scene.id, name: scene.name, description: scene.description } : null,
+    scene: scene ? {
+      id: scene.id,
+      name: scene.name,
+      description: scene.description,
+      pack: scene.pack || "",
+      packName: scene.packName || "",
+      tactics: scene.tactics || "",
+      features: Array.isArray(scene.features) ? scene.features : []
+    } : null,
     session: { state: "draft", updatedAt: new Date().toISOString() }
   });
   const { data: inserted, error } = await cloudClient.from("campaign_maps").insert({
@@ -6713,6 +6752,8 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   const maps = mapsForCampaign(campaign.id);
   const activeMap = activeMapForCampaign(campaign.id);
   const sceneTemplates = Array.isArray(window.MAP_SCENE_TEMPLATES) ? window.MAP_SCENE_TEMPLATES : [];
+  const classicSceneTemplates = sceneTemplates.filter(scene => scene.pack === "classic-encounters");
+  const standardSceneTemplates = sceneTemplates.filter(scene => scene.pack !== "classic-encounters");
   const assetPacks = Array.isArray(window.MAP_ASSET_LIBRARY) ? window.MAP_ASSET_LIBRARY : [];
   const tokenPresets = mapTokenLibrary();
   const creatureTypes = Array.isArray(window.MAP_TOKEN_TYPES) ? window.MAP_TOKEN_TYPES : [];
@@ -6730,9 +6771,10 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
       <label>Start from a scene
         <select name="sceneTemplate">
           <option value="blank">Blank canvas or uploaded art</option>
-          ${sceneTemplates.map(scene => `<option value="${escapeHtml(scene.id)}">${escapeHtml(scene.name)} - ${escapeHtml(scene.size)}</option>`).join("")}
+          ${classicSceneTemplates.length ? `<optgroup label="Classic Encounters - 12 detailed maps">${classicSceneTemplates.map(scene => `<option value="${escapeHtml(scene.id)}">${escapeHtml(scene.name)} - ${escapeHtml(scene.size)}</option>`).join("")}</optgroup>` : ""}
+          ${standardSceneTemplates.length ? `<optgroup label="Map Studio scenes">${standardSceneTemplates.map(scene => `<option value="${escapeHtml(scene.id)}">${escapeHtml(scene.name)} - ${escapeHtml(scene.size)}</option>`).join("")}</optgroup>` : ""}
         </select>
-        <small class="field-hint">Scene templates choose sensible dimensions and remain fully editable.</small>
+        <small class="field-hint">Classic Encounters include tactical lanes, cover, objectives, detailed props, and atmosphere. Every scene remains fully editable.</small>
       </label>
       <label class="map-grid-toggle"><input name="gridEnabled" type="checkbox" checked><span><strong>Show tactical grid</strong><small>Turn this off for theater maps, city art, or free-position scenes.</small></span></label>
       <label>Image URL<input name="background" placeholder="Paste a map image URL, or upload below"></label>
@@ -6765,7 +6807,7 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   if (!allTiles.some(tile => tile.id === selectedMapTile)) selectedMapTile = allTiles[0]?.id || "stone-floor";
   const tileCategories = ["All", ...new Set(allTiles.map(tile => tile.category || "Other"))];
   if (!tileCategories.includes(selectedMapTileCategory)) selectedMapTileCategory = "All";
-  const sceneCategories = ["All", ...new Set(sceneTemplates.map(scene => scene.category || "Other"))];
+  const sceneCategories = ["All", ...(classicSceneTemplates.length ? ["Classic Pack"] : []), ...new Set(sceneTemplates.map(scene => scene.category || "Other"))];
   if (!sceneCategories.includes(selectedMapSceneCategory)) selectedMapSceneCategory = "All";
   const tileStyles = new Map(allTiles.map(tile => [tile.id, mapTileStyle(activeMap, tile.id)]));
   const boardBaseStyle = data.dungeon?.wallTile ? tileStyles.get(data.dungeon.wallTile) || mapTileStyle(activeMap, data.dungeon.wallTile) : "";
@@ -6920,17 +6962,19 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   </section>` : `<div class="map-player-tool-summary"><strong>Player map tools</strong><p>Move your own character token, pan and zoom the map, measure distance, and ping locations for the party. Monster and NPC controls remain with the DM.</p></div>`;
   const normalizedSceneSearch = mapSceneSearch.trim().toLowerCase();
   const visibleScenes = sceneTemplates.filter(scene => {
-    if (selectedMapSceneCategory !== "All" && scene.category !== selectedMapSceneCategory) return false;
-    const searchable = `${scene.name} ${scene.category} ${scene.tags || ""} ${scene.description}`.toLowerCase();
+    if (selectedMapSceneCategory === "Classic Pack" && scene.pack !== "classic-encounters") return false;
+    if (selectedMapSceneCategory !== "All" && selectedMapSceneCategory !== "Classic Pack" && scene.category !== selectedMapSceneCategory) return false;
+    const searchable = `${scene.name} ${scene.category} ${scene.packName || ""} ${scene.tags || ""} ${scene.description} ${(scene.features || []).join(" ")}`.toLowerCase();
     return !normalizedSceneSearch || searchable.includes(normalizedSceneSearch);
   });
   const sceneGallery = visibleScenes.map(scene => {
     const previewTiles = Array.isArray(scene.previewTiles) && scene.previewTiles.length ? scene.previewTiles : [scene.previewTile || "stone-floor"];
     const preview = Array.from({ length: 4 }, (_, index) => previewTiles[index % previewTiles.length]);
     const ambienceName = MAP_AMBIENCE_OPTIONS.find(option => option.id === scene.ambience)?.name || "Clear daylight";
-    return `<article class="map-scene-card">
-      <div class="map-scene-preview ambience-${escapeHtml(scene.ambience || "clear")}">${preview.map(tileId => `<span style="${mapTileStyle(activeMap, tileId)}"></span>`).join("")}<i></i></div>
-      <div class="map-scene-copy"><small>${escapeHtml(scene.category)} &middot; ${escapeHtml(scene.size)}</small><strong>${escapeHtml(scene.name)}</strong><p>${escapeHtml(scene.description)}</p><em>${escapeHtml(ambienceName)}</em></div>
+    const features = Array.isArray(scene.features) ? scene.features.slice(0, 3) : [];
+    return `<article class="map-scene-card ${scene.pack === "classic-encounters" ? "classic-scene" : ""}">
+      <div class="map-scene-preview ambience-${escapeHtml(scene.ambience || "clear")}">${scene.pack === "classic-encounters" ? `<b class="map-scene-pack-badge">Classic</b>` : ""}${preview.map(tileId => `<span style="${mapTileStyle(activeMap, tileId)}"></span>`).join("")}<i></i></div>
+      <div class="map-scene-copy"><small>${escapeHtml(scene.category)} &middot; ${escapeHtml(scene.size)}</small><strong>${escapeHtml(scene.name)}</strong><p>${escapeHtml(scene.description)}</p>${features.length ? `<div class="map-scene-features">${features.map(feature => `<span>${escapeHtml(feature)}</span>`).join("")}</div>` : ""}<em>${escapeHtml(ambienceName)}</em></div>
       <button type="button" data-map-scene="${escapeHtml(scene.id)}" data-map-id="${escapeHtml(activeMap.id)}">Use scene</button>
     </article>`;
   }).join("");
@@ -6944,8 +6988,9 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   </div>`;
   let dockContent = `${tokenBrowser}<div class="map-token-list-heading"><strong>Tokens on this map</strong><span>${data.tokens.length}</span></div><div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens or choose a quick token above." : "No tokens have been placed yet."}</p>`}</div>`;
   if (isDm && selectedMapSidebar === "tiles") dockContent = `<div class="map-dock-heading"><div><small>Asset browser</small><strong>Paint terrain and props</strong></div><label>Brush<select data-map-brush-size><option value="1" ${selectedMapBrushSize === 1 ? "selected" : ""}>1 x 1</option><option value="2" ${selectedMapBrushSize === 2 ? "selected" : ""}>2 x 2</option><option value="3" ${selectedMapBrushSize === 3 ? "selected" : ""}>3 x 3</option></select></label></div>${tilePalette}`;
-  if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">${visibleScenes.length}/${sceneTemplates.length}</span></div><div class="map-library-filter"><label><span>Find a scene</span><input type="search" value="${escapeHtml(mapSceneSearch)}" placeholder="Crypt, ship, forest, wizard..." data-map-scene-search></label></div><div class="map-library-categories" aria-label="Scene categories">${sceneCategories.map(category => `<button type="button" class="${selectedMapSceneCategory === category ? "active" : ""}" data-map-scene-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div><p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, and atmosphere. Existing tokens are kept and clamped to the new board.</p>${sceneGallery || `<p class="map-dock-note">No scenes match that search.</p>`}<div class="map-asset-library-head"><div><small>Verified free sources</small><strong>More fantasy map artwork</strong></div><button type="button" data-map-open-settings="${escapeHtml(activeMap.id)}">Import map</button></div><p class="map-dock-note">These source packs are listed as CC0 or public domain. Download from the author page, then import a finished map or individual art assets.</p><div class="map-asset-card-list">${assetPackCards}</div></div>`;
-  if (isDm && selectedMapSidebar === "layers") dockContent = `<div class="map-layer-panel"><div class="map-dock-heading"><div><small>Scene controls</small><strong>Layers and atmosphere</strong></div></div><div class="map-layer-stack">
+  const classicPackHero = classicSceneTemplates.length ? `<section class="map-classic-pack-hero"><small>PRELOADED COLLECTION</small><strong>Classic Encounters</strong><p>Twelve richly dressed battle maps for the adventures every table remembers: mines, crypts, castles, forests, temples, lairs, ships, and more.</p><div><span>12 editable maps</span><span>36 tactical landmarks</span><span>Original terrain art</span></div><button type="button" data-map-scene-category="Classic Pack">Browse the pack</button></section>` : "";
+  if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">${visibleScenes.length}/${sceneTemplates.length}</span></div>${classicPackHero}<div class="map-library-filter"><label><span>Find a scene</span><input type="search" value="${escapeHtml(mapSceneSearch)}" placeholder="Crypt, ship, forest, wizard..." data-map-scene-search></label></div><div class="map-library-categories" aria-label="Scene categories">${sceneCategories.map(category => `<button type="button" class="${selectedMapSceneCategory === category ? "active" : ""}" data-map-scene-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div><p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, atmosphere, and tactical landmarks. Existing tokens are kept and clamped to the new board.</p>${sceneGallery || `<p class="map-dock-note">No scenes match that search.</p>`}<div class="map-asset-library-head"><div><small>Verified free sources</small><strong>More fantasy map artwork</strong></div><button type="button" data-map-open-settings="${escapeHtml(activeMap.id)}">Import map</button></div><p class="map-dock-note">These source packs are listed as CC0 or public domain. Download from the author page, then import a finished map or individual art assets.</p><div class="map-asset-card-list">${assetPackCards}</div></div>`;
+  if (isDm && selectedMapSidebar === "layers") dockContent = `<div class="map-layer-panel"><div class="map-dock-heading"><div><small>Scene controls</small><strong>Layers and atmosphere</strong></div></div>${data.scene?.tactics ? `<section class="map-scene-tactical-note"><small>${escapeHtml(data.scene.packName || "Encounter notes")}</small><strong>${escapeHtml(data.scene.name || activeMap.name)}</strong><p>${escapeHtml(data.scene.tactics)}</p>${Array.isArray(data.scene.features) && data.scene.features.length ? `<div>${data.scene.features.map(feature => `<span>${escapeHtml(feature)}</span>`).join("")}</div>` : ""}</section>` : ""}<div class="map-layer-stack">
     <button type="button" data-map-display="terrain" data-map-id="${escapeHtml(activeMap.id)}" aria-pressed="${data.display.terrain}"><span class="map-layer-icon terrain"></span><span><strong>Terrain</strong><small>${data.tiles.length} painted squares</small></span><em>${data.display.terrain ? "Visible" : "Hidden"}</em></button>
     <button type="button" data-map-display="props" data-map-id="${escapeHtml(activeMap.id)}" aria-pressed="${data.display.props}"><span class="map-layer-icon props"></span><span><strong>Props</strong><small>${data.overlays.length} placed assets</small></span><em>${data.display.props ? "Visible" : "Hidden"}</em></button>
     <button type="button" data-map-display="grid" data-map-id="${escapeHtml(activeMap.id)}" aria-pressed="${data.gridEnabled}"><span class="map-layer-icon grid"></span><span><strong>Tactical grid</strong><small>${data.columns} by ${data.rows} squares</small></span><em>${data.gridEnabled ? "Visible" : "Hidden"}</em></button>
