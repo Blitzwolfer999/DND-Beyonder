@@ -6921,6 +6921,40 @@ function renderDungeonWorkshop() {
     </div>
     <div class="dungeon-theme-strip" aria-label="Available dungeon themes">${library.themes.map(theme => `<button type="button" class="${dungeonWorkshopTheme === theme.id || dungeon.themeId === theme.id ? "active" : ""}" data-dungeon-theme="${escapeHtml(theme.id)}"><span>${escapeHtml(theme.icon)}</span>${escapeHtml(theme.name)}</button>`).join("")}</div>`;
 }
+// Party dock: the shared character sheets on the side of the map, with quick
+// roll buttons (initiative, ability checks, saves, attacks) that broadcast to
+// the whole table. Players can roll their own; the DM can roll anyone's.
+function renderMapPartyPanel(campaign, partyCharacters, isDm) {
+  const characters = (partyCharacters || []).filter(Boolean);
+  if (!characters.length) {
+    return `<div class="map-dock-heading"><div><small>Party</small><strong>Character sheets</strong></div></div><p class="map-dock-note">No player character sheets have been shared to this campaign yet. Players share a sheet from their Vault.</p>`;
+  }
+  const cards = characters.map(character => {
+    const stats = derived(character);
+    const maxHp = Math.max(1, stats.hp);
+    const currentHp = Math.max(0, Math.min(maxHp, Number(character.currentHp ?? maxHp)));
+    const hpPercent = Math.round((currentHp / maxHp) * 100);
+    const canRoll = isDm || canControlCharacter(character);
+    const abil = effectiveAbilities(character);
+    const rollBtn = (label, mod, cls = "") => `<button type="button" class="party-roll ${cls}" data-map-party-roll data-campaign="${escapeHtml(campaign.id)}" data-character="${escapeHtml(character.id)}" data-label="${escapeHtml(label)}" data-modifier="${mod}" ${canRoll ? "" : "disabled"}>${escapeHtml(label.replace(`${character.name} `, "").replace(" check", "").replace(" save", ""))} <b>${signed(mod)}</b></button>`;
+    const checks = ABILITIES.map(ability => rollBtn(`${character.name} ${ability} check`, modifier(abil[ability]))).join("");
+    const saves = ABILITIES.map(ability => rollBtn(`${character.name} ${ability} save`, savingThrowModifier(character, ability))).join("");
+    const attacks = weaponAttacks(character).filter(attack => attack.name !== "Unarmed Strike" || characters.length === 1).slice(0, 5)
+      .map(attack => `<button type="button" class="party-roll attack" data-map-party-roll data-campaign="${escapeHtml(campaign.id)}" data-character="${escapeHtml(character.id)}" data-label="${escapeHtml(`${character.name} ${attack.name} attack`)}" data-modifier="${attack.toHit}" ${canRoll ? "" : "disabled"}>${escapeHtml(attack.name)} <b>${signed(attack.toHit)}</b></button>`).join("");
+    return `<article class="party-card ${canRoll ? "" : "readonly"}">
+      <div class="party-head"><span class="party-face" style="--token:${escapeHtml(tokenColor(character.name || "?"))}">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml((character.name || "?").charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(character.name || "Hero")}</strong><small>${escapeHtml(classSummary(character))}${canRoll ? "" : " · view only"}</small></div></div>
+      <div class="party-stats"><span>AC <b>${stats.ac}</b></span><span>HP <b>${currentHp}/${maxHp}</b></span><span>Init <b>${signed(stats.initiative)}</b></span><span>PP <b>${stats.passive}</b></span></div>
+      <div class="party-hpbar"><i style="width:${hpPercent}%"></i></div>
+      ${canRoll ? `<button type="button" class="party-roll init" data-map-party-roll data-campaign="${escapeHtml(campaign.id)}" data-character="${escapeHtml(character.id)}" data-label="${escapeHtml(`${character.name} initiative`)}" data-modifier="${stats.initiative}" data-mode="${stats.initiativeAdvantage ? "advantage" : "normal"}">Roll Initiative <b>${signed(stats.initiative)}${stats.initiativeAdvantage ? " ▲" : ""}</b></button>` : ""}
+      <details class="party-rolls"><summary>Checks, saves &amp; attacks</summary>
+        <div class="party-roll-group"><small>Ability checks</small><div class="party-roll-row">${checks}</div></div>
+        <div class="party-roll-group"><small>Saving throws</small><div class="party-roll-row">${saves}</div></div>
+        ${attacks ? `<div class="party-roll-group"><small>Attacks</small><div class="party-roll-row">${attacks}</div></div>` : ""}
+      </details>
+    </article>`;
+  }).join("");
+  return `<div class="map-dock-heading"><div><small>Party</small><strong>Character sheets</strong></div><span class="map-library-count">${characters.length}</span></div><p class="map-dock-note">Live sheets for the party. Every roll here posts to the campaign log so the whole table sees it.</p><div class="party-list">${cards}</div>`;
+}
 function renderMapEncounterTracker(map, data, isDm) {
   const encounter = data.encounter;
   const tokenById = new Map(data.tokens.map(token => [token.id, token]));
@@ -7208,10 +7242,12 @@ function renderCampaignMapPanel(campaign, linkedCharacters, isDm) {
   </article>`).join("");
   const dockTabs = `<div class="map-dock-tabs" role="tablist" aria-label="Map panels">
     <button type="button" class="${selectedMapSidebar === "tokens" ? "active" : ""}" data-map-sidebar="tokens">Tokens</button>
+    <button type="button" class="${selectedMapSidebar === "party" ? "active" : ""}" data-map-sidebar="party">Party</button>
     ${isDm ? `<button type="button" class="${selectedMapSidebar === "tiles" ? "active" : ""}" data-map-sidebar="tiles">Assets</button><button type="button" class="${selectedMapSidebar === "scene" ? "active" : ""}" data-map-sidebar="scene">Scenes</button><button type="button" class="${selectedMapSidebar === "layers" ? "active" : ""}" data-map-sidebar="layers">Layers</button>` : ""}
   </div>`;
   const vaultTokenSection = isDm ? `<details class="map-vault-tokens"><summary>Place a character from your vault</summary>${ownCharacters().length ? `<div class="map-vault-token-list">${ownCharacters().map(vaultChar => `<button type="button" class="map-vault-token-card" data-map-vault-token="${escapeHtml(vaultChar.id)}" data-map-id="${escapeHtml(activeMap.id)}"><span class="map-vault-token-face" style="--token:${escapeHtml(tokenColor(vaultChar.name || "?"))}">${vaultChar.portrait ? `<img src="${escapeHtml(vaultChar.portrait)}" alt="">` : escapeHtml((vaultChar.name || "?").charAt(0).toUpperCase())}</span><span class="map-vault-token-copy"><strong>${escapeHtml(vaultChar.name || "Unnamed")}</strong><small>${escapeHtml(classSummary(vaultChar))}</small></span></button>`).join("")}</div>` : `<p class="map-dock-note">No characters in your vault yet. Build one under Create, then drop it onto any map here.</p>`}</details>` : "";
   let dockContent = `${tokenBrowser}${vaultTokenSection}<div class="map-token-list-heading"><strong>Tokens on this map</strong><span>${data.tokens.length}</span></div><div class="map-token-list">${tokenCards || `<p>${isDm ? "Add party tokens, a vault character, or a quick token above." : "No tokens have been placed yet."}</p>`}</div>`;
+  if (selectedMapSidebar === "party") dockContent = renderMapPartyPanel(campaign, linkedCharacters, isDm);
   if (isDm && selectedMapSidebar === "tiles") dockContent = `<div class="map-dock-heading"><div><small>Asset browser</small><strong>Paint terrain and props</strong></div><label>Brush<select data-map-brush-size><option value="1" ${selectedMapBrushSize === 1 ? "selected" : ""}>1 x 1</option><option value="2" ${selectedMapBrushSize === 2 ? "selected" : ""}>2 x 2</option><option value="3" ${selectedMapBrushSize === 3 ? "selected" : ""}>3 x 3</option></select></label></div>${tilePalette}`;
   const classicPackHero = classicSceneTemplates.length ? `<section class="map-classic-pack-hero"><small>PRELOADED COLLECTION</small><strong>Classic Encounters</strong><p>Twelve richly dressed battle maps for the adventures every table remembers: mines, crypts, castles, forests, temples, lairs, ships, and more.</p><div><span>12 editable maps</span><span>36 tactical landmarks</span><span>Original terrain art</span></div><button type="button" data-map-scene-category="Classic Pack">Browse the pack</button></section>` : "";
   if (isDm && selectedMapSidebar === "scene") dockContent = `<div class="map-scene-library"><div class="map-dock-heading"><div><small>Scene browser</small><strong>Ready-to-run encounter maps</strong></div><span class="map-library-count">${visibleScenes.length}/${sceneTemplates.length}</span></div>${classicPackHero}<div class="map-library-filter"><label><span>Find a scene</span><input type="search" value="${escapeHtml(mapSceneSearch)}" placeholder="Crypt, ship, forest, wizard..." data-map-scene-search></label></div><div class="map-library-categories" aria-label="Scene categories">${sceneCategories.map(category => `<button type="button" class="${selectedMapSceneCategory === category ? "active" : ""}" data-map-scene-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div><p class="map-dock-note">Scenes include painted terrain, prop dressing, dimensions, atmosphere, and tactical landmarks. Existing tokens are kept and clamped to the new board.</p>${sceneGallery || `<p class="map-dock-note">No scenes match that search.</p>`}<div class="map-asset-library-head"><div><small>Verified free sources</small><strong>More fantasy map artwork</strong></div><button type="button" data-map-open-settings="${escapeHtml(activeMap.id)}">Import map</button></div><p class="map-dock-note">These source packs are listed as CC0 or public domain. Download from the author page, then import a finished map or individual art assets.</p><div class="map-asset-card-list">${assetPackCards}</div></div>`;
@@ -10013,6 +10049,11 @@ function initEvents() {
     const revealTokens = event.target.closest("[data-map-reveal-tokens]");
     if (revealTokens) {
       revealAllMapTokens(revealTokens.dataset.mapRevealTokens);
+      return;
+    }
+    const partyRollBtn = event.target.closest("[data-map-party-roll]");
+    if (partyRollBtn) {
+      rollOnSheet(partyRollBtn.dataset.label || "Roll", Number(partyRollBtn.dataset.modifier || 0), partyRollBtn.dataset.mode || "normal", { campaignId: partyRollBtn.dataset.campaign, characterId: partyRollBtn.dataset.character, source: "map" });
       return;
     }
     const tokenCategory = event.target.closest("[data-map-token-category]");

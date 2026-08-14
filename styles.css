@@ -2778,6 +2778,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-vault-token-face img { width: 100%; height: 100%; object-fit: cover; }
 .map-vault-token-copy strong { display: block; font-size: 12px; }
 .map-vault-token-copy small { color: #93a1b3; font-size: 10.5px; }
+.party-list { display: grid; gap: 8px; }
+.party-card { padding: 9px 10px; border: 1px solid #35404e; border-radius: 10px; background: #202733; color: #e7ecf3; }
+.party-card.readonly { opacity: .82; }
+.party-head { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; margin-bottom: 7px; }
+.party-face { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--token, #6f9fe0); background: #11151c; color: #fff; font: 800 15px system-ui, sans-serif; overflow: hidden; }
+.party-face img { width: 100%; height: 100%; object-fit: cover; }
+.party-head strong { display: block; font-size: 12.5px; }
+.party-head small { color: #93a1b3; font-size: 10px; }
+.party-stats { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #b7c2d0; margin-bottom: 5px; }
+.party-stats b { color: #fff; }
+.party-hpbar { height: 6px; border-radius: 999px; overflow: hidden; background: #2c3444; margin-bottom: 7px; }
+.party-hpbar i { display: block; height: 100%; background: linear-gradient(90deg, #c43e3e, #e56b4d); }
+.party-roll { padding: 4px 9px; border: 1px solid #46536a; border-radius: 7px; background: #2a3242; color: #e7ecf3; font: 700 11px system-ui, sans-serif; cursor: pointer; }
+.party-roll:hover:not(:disabled) { border-color: #6f9fe0; background: #313c50; }
+.party-roll:disabled { opacity: .45; cursor: default; }
+.party-roll b { color: #9ecbff; }
+.party-roll.init { width: 100%; margin-bottom: 6px; background: #2f6f4a; border-color: #3c8a5c; }
+.party-roll.init b { color: #d6ffe6; }
+.party-roll.attack b { color: #ffd18a; }
+.party-rolls > summary { cursor: pointer; font-weight: 800; color: #9ecbff; font-size: 11px; padding: 3px 0; }
+.party-roll-group { margin-top: 6px; }
+.party-roll-group > small { display: block; color: #8a97a8; font-size: 9.5px; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 4px; }
+.party-roll-row { display: flex; flex-wrap: wrap; gap: 5px; }
 .map-token-preset-card:hover { border-color: #59687c; background: #252e3b; }
 .map-token-preset-portrait { width: 38px; height: 38px; overflow: hidden; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--token); box-shadow: 0 3px 8px #0007; }
 .map-token-preset-portrait img { width: 100%; height: 100%; object-fit: cover; }
