@@ -6593,7 +6593,12 @@ function derived(data) {
 
 function resolvedSubclassFeatures(rulesEdition, className, subclassName) {
   if (!subclassName) return [];
-  const listed = SUBCLASS_FEATURES[rulesEdition]?.[subclassName] || [];
+  const own = SUBCLASS_FEATURES[rulesEdition]?.[subclassName];
+  // Most 2024 subclasses are "expanded 5e" reprints, so fall back to the 2014
+  // feature list when a dedicated 2024 entry isn't defined (avoids showing the
+  // generic "subclass feature gained" placeholder).
+  const listed = (own && own.length) ? own
+    : (rulesEdition !== "2014" ? (SUBCLASS_FEATURES["2014"]?.[subclassName] || []) : []);
   if (listed.length) return listed;
   return (SUBCLASS_LEVELS[rulesEdition]?.[className] || []).map(level => [level, `${subclassName}: subclass feature gained`]);
 }
