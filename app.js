@@ -5864,6 +5864,46 @@ function equippedItems(data) {
   return (data.inventory || []).filter(item => item.equipped && item.carried !== false);
 }
 
+// Passive mechanical effects granted by attuned/equipped magic items.
+const MAGIC_ITEM_EFFECTS = {
+  "Ring of Protection": { ac: 1, save: 1 },
+  "Cloak of Protection": { ac: 1, save: 1 },
+  "Bracers of Defense": { acUnarmored: 2 },
+  "Ioun Stone of Protection": { ac: 1 },
+  "Staff of Power": { ac: 2, save: 2 },
+  "Stone of Good Luck": { save: 1, check: 1 },
+  "Amulet of Health": { setCON: 19 },
+  "Gauntlets of Ogre Power": { setSTR: 19 },
+  "Headband of Intellect": { setINT: 19 },
+  "Belt of Hill Giant Strength": { setSTR: 21 },
+  "Belt of Stone Giant Strength": { setSTR: 23 },
+  "Belt of Fire Giant Strength": { setSTR: 25 },
+  "Belt of Cloud Giant Strength": { setSTR: 27 },
+  "Belt of Storm Giant Strength": { setSTR: 29 }
+};
+function activeItemEffects(data) {
+  const out = { ac: 0, acUnarmored: 0, save: 0, check: 0, setSTR: 0, setDEX: 0, setCON: 0, setINT: 0, setWIS: 0, setCHA: 0 };
+  (data.inventory || []).forEach(item => {
+    if (item.carried === false) return;
+    if (!(item.attuned || item.equipped)) return;
+    const effect = MAGIC_ITEM_EFFECTS[item.name];
+    if (!effect) return;
+    ["ac", "acUnarmored", "save", "check"].forEach(key => { if (effect[key]) out[key] += effect[key]; });
+    ["setSTR", "setDEX", "setCON", "setINT", "setWIS", "setCHA"].forEach(key => { if (effect[key]) out[key] = Math.max(out[key], effect[key]); });
+  });
+  return out;
+}
+// Ability scores after magic-item overrides ("your Strength becomes 19", etc.).
+function effectiveAbilities(data) {
+  const effects = activeItemEffects(data);
+  const clone = { ...data };
+  ABILITIES.forEach(ability => {
+    const set = effects[`set${ability}`];
+    if (set) clone[ability] = Math.max(Number(data[ability] || 10), set);
+  });
+  return clone;
+}
+
 // Best unarmored AC, accounting for class, subclass, feat, and species rules.
 function unarmoredAcOptions(data, hasShield = false) {
   const dex = modifier(data.DEX);
@@ -5892,6 +5932,8 @@ function unarmoredAcOptions(data, hasShield = false) {
 
 function armorClassDetails(data) {
   if (Number(data.acOverride)) return { value: Number(data.acOverride), source: "Manual override" };
+  const fx = activeItemEffects(data);
+  data = effectiveAbilities(data);
   const items = equippedItems(data);
   const hasShield = items.some(item => item.name === "Shield" || item.type === "Shield");
   const shieldBonus = hasShield ? 2 : 0;
@@ -5912,6 +5954,8 @@ function armorClassDetails(data) {
     : unarmoredAcOptions(data, hasShield).map(option => ({ ...option, value: option.value + shieldBonus }));
   let best = options.reduce((highest, option) => option.value > highest.value ? option : highest, options[0]);
   if (data.species === "Warforged") best = { value: best.value + 1, source: `${best.source} + Integrated Protection` };
+  if (fx.acUnarmored && !armorOptions.length && !hasShield) best = { value: best.value + fx.acUnarmored, source: `${best.source} + Bracers of Defense` };
+  if (fx.ac) best = { value: best.value + fx.ac, source: `${best.source} + magic items (+${fx.ac})` };
   return best;
 }
 
@@ -5960,14 +6004,17 @@ function halfProficiencyApplies(data, ability, alreadyProficient) {
 }
 
 function skillModifier(data, skill) {
+  const fx = activeItemEffects(data);
+  data = effectiveAbilities(data);
   const ability = SKILLS[skill];
   const prof = proficiency(characterTotalLevel(data));
   const proficient = proficientSkills(data).has(skill);
   const expertise = expertiseSkills(data).has(skill);
-  return modifier(data[ability]) + (expertise ? prof * 2 : proficient ? prof : halfProficiencyApplies(data, ability, false) ? Math.floor(prof / 2) : 0);
+  return modifier(data[ability]) + (expertise ? prof * 2 : proficient ? prof : halfProficiencyApplies(data, ability, false) ? Math.floor(prof / 2) : 0) + fx.check;
 }
 
 function initiativeDetails(data) {
+  data = effectiveAbilities(data);
   const level = characterTotalLevel(data);
   const prof = proficiency(level);
   const feats = new Set(data.feats || []);
@@ -6004,16 +6051,19 @@ function savingThrowProficiencies(data) {
 }
 
 function savingThrowModifier(data, ability) {
+  const fx = activeItemEffects(data);
+  data = effectiveAbilities(data);
   const prof = proficiency(characterTotalLevel(data));
   let value = modifier(data[ability]) + (savingThrowProficiencies(data).has(ability) ? prof : 0);
   if (hasClass(data, "Paladin", 6)) value += Math.max(1, modifier(data.CHA));
   if (hasClass(data, "Artificer", 20)) {
     value += (data.inventory || []).filter(item => item.attuned).length;
   }
-  return value;
+  return value + fx.save;
 }
 
 function derived(data) {
+  data = effectiveAbilities(data);
   const level = characterTotalLevel(data);
   const con = modifier(data.CON);
   let firstHitDie = true;
@@ -7570,6 +7620,8 @@ function renderSheet() {
   activeCharacterId = c.id;
   if (spellManagerState && spellManagerState.characterId !== c.id) spellManagerState = null;
   const d = derived(c);
+  const eff = effectiveAbilities(c);
+  const itemCheckBonus = activeItemEffects(c).check;
   const canControl = canControlCharacter(c);
   const classEntries = classBreakdown(c);
   const primaryClass = primaryClassName(c);
@@ -7677,7 +7729,7 @@ function renderSheet() {
   </nav>
   <div class="sheet-body">
     <section class="sheet-panel ${sectionClass("overview")}"><h2>Abilities${helpChip("ability")}</h2><div class="sheet-abilities">${ABILITIES.map(a =>
-      `<button class="sheet-ability" data-sheet-roll="${a} check" data-modifier="${modifier(c[a])}"><small>${a}</small><strong>${signed(modifier(c[a]))}</strong><span>${c[a]}</span></button>`
+      `<button class="sheet-ability" data-sheet-roll="${a} check" data-modifier="${modifier(eff[a]) + itemCheckBonus}"><small>${a}</small><strong>${signed(modifier(eff[a]) + itemCheckBonus)}</strong><span>${eff[a]}${eff[a] !== c[a] ? "*" : ""}</span></button>`
     ).join("")}</div>
       <h2 class="subsection-title">Saving throws${helpChip("save")}</h2>
       <div class="saving-throw-list">${ABILITIES.map(ability => {
