@@ -7818,6 +7818,32 @@ function renderSheet() {
   const currentHp = Math.max(0, Math.min(maximumHp, Number(c.currentHp ?? maximumHp)));
   const temporaryHp = Math.max(0, Number(c.temporaryHp || 0));
   const activeConditions = c.conditions || [];
+  const passiveInvestigation = 10 + skillModifier(c, "Investigation");
+  const passiveInsight = 10 + skillModifier(c, "Insight");
+  const hitDiceMap = {};
+  classEntries.forEach(entry => { const die = RULES.classes[entry.name]?.hit || 8; hitDiceMap[die] = (hitDiceMap[die] || 0) + entry.level; });
+  const hitDice = Object.entries(hitDiceMap).sort((a, b) => b[0] - a[0]).map(([die, count]) => `${count}d${die}`).join(" + ");
+  const speciesTraitNames = (typeof SPECIES_TRAIT_SUMMARIES !== "undefined" && SPECIES_TRAIT_SUMMARIES[c.species]) || [];
+  const darkvision = speciesTraitNames.some(t => /superior darkvision/i.test(t)) ? "120 ft"
+    : speciesTraitNames.some(t => /darkvision/i.test(t)) ? "60 ft" : "None";
+  const walkSpeed = Number(c.speed) || 30;
+  const defenseSet = new Set();
+  speciesTraitNames.forEach(trait => {
+    const match = trait.match(/(\w+) Resistance/i);
+    if (match) defenseSet.add(`${match[1]} resistance`);
+    if (/Dwarven Resilience/i.test(trait)) defenseSet.add("Poison resistance");
+    if (/Fey Ancestry/i.test(trait)) defenseSet.add("Adv. vs charmed");
+    if (/Relentless Endurance/i.test(trait)) defenseSet.add("Relentless Endurance");
+  });
+  (c.inventory || []).filter(item => (item.attuned || item.equipped) && item.carried !== false).forEach(item => {
+    if (item.name === "Frost Brand") defenseSet.add("Fire resistance");
+    if (item.name === "Ring of Resistance") defenseSet.add("Chosen resistance");
+    if (item.name === "Periapt of Proof against Poison") defenseSet.add("Poison immunity");
+    if (item.name === "Brooch of Shielding") defenseSet.add("Force resistance");
+    if (item.name === "Mantle of Spell Resistance") defenseSet.add("Adv. vs spells");
+    if (item.name === "Cloak of Arachnida") defenseSet.add("Poison resistance");
+  });
+  const defenses = [...defenseSet].join(", ") || "None recorded";
   $("#sheet-empty").classList.add("hidden");
   const sheet = $("#character-sheet"); sheet.classList.remove("hidden");
   sheet.innerHTML = `<div class="sheet-header">
@@ -7878,14 +7904,26 @@ function renderSheet() {
     ${renderAttacksPanel(c, sectionClass("overview"))}
     <section class="sheet-panel ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
-      <p><strong>Proficiency bonus:</strong> ${signed(d.prof)}</p><p><strong>Passive Perception:</strong> ${d.passive}</p>
-      <p><strong>Armor Class source:</strong> ${escapeHtml(d.acSource)}</p><p><strong>Initiative:</strong> ${escapeHtml(d.initiativeSource)}${d.initiativeAdvantage ? " · advantage" : ""}</p>
-      <p><strong>Saving throw proficiencies:</strong> ${[...savingThrowProficiencies(c)].join(", ")}</p><p><strong>Primary ability:</strong> ${escapeHtml(c.primaryAbility || cls.primary)}</p>
-      <p><strong>Class levels:</strong> ${escapeHtml(classSummary(c))}</p>
-      <p><strong>Skill proficiencies:</strong> ${[...proficientSkills(c)].sort().join(", ") || "None selected"}</p>
-      <p><strong>Active conditions:</strong> ${activeConditions.length ? escapeHtml(activeConditions.join(", ")) : "None"}</p>
+      <div class="combat-stat-grid">
+        <div class="combat-stat"><small>Speed</small><strong>${walkSpeed} ft</strong></div>
+        <div class="combat-stat"><small>Initiative</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></div>
+        <div class="combat-stat"><small>Proficiency</small><strong>${signed(d.prof)}</strong></div>
+        <div class="combat-stat"><small>Hit Dice</small><strong>${escapeHtml(hitDice)}</strong></div>
+        <div class="combat-stat"><small>Passive Perception</small><strong>${d.passive}</strong></div>
+        <div class="combat-stat"><small>Passive Investigation</small><strong>${passiveInvestigation}</strong></div>
+        <div class="combat-stat"><small>Passive Insight</small><strong>${passiveInsight}</strong></div>
+        <div class="combat-stat"><small>Darkvision</small><strong>${escapeHtml(darkvision)}</strong></div>
+      </div>
+      <div class="combat-detail-grid">
+        <div class="combat-detail"><small>Armor Class</small><span>${escapeHtml(d.acSource)}</span></div>
+        <div class="combat-detail"><small>Initiative bonus</small><span>${escapeHtml(d.initiativeSource)}${d.initiativeAdvantage ? " · advantage" : ""}</span></div>
+        <div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
+        <div class="combat-detail"><small>Skill proficiencies</small><span>${[...proficientSkills(c)].sort().join(", ") || "None selected"}</span></div>
+        <div class="combat-detail"><small>Defenses &amp; resistances</small><span>${escapeHtml(defenses)}</span></div>
+        <div class="combat-detail"><small>Active conditions</small><span>${activeConditions.length ? escapeHtml(activeConditions.join(", ")) : "None"}</span></div>
+      </div>
       ${renderDeathSaves(c)}
-      <h2>Background</h2><p><strong>${escapeHtml(c.background)}</strong> · ${escapeHtml(c.alignment)}</p>
+      <h2 class="subsection-title">Background</h2><p><strong>${escapeHtml(c.background)}</strong> · ${escapeHtml(c.alignment)}</p>
       <div class="sheet-notes">${escapeHtml(c.backstory || "No backstory recorded yet.")}</div>
     </section>
     ${resources.length ? `<section class="sheet-panel sheet-wide ${sectionClass("overview")}">
