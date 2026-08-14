@@ -3030,8 +3030,8 @@ html[data-theme="dark"] .sheet-tabs button.active {
 }
 html[data-theme="dark"] .sheet-ability {
   color: #ffffff;
-  background: linear-gradient(180deg, #202936, #171e29);
-  border-color: #465369;
+  background: #242c38;
+  border-color: #59677c;
   box-shadow: 0 2px 8px rgba(0, 0, 0, .24);
 }
 html[data-theme="dark"] .sheet-ability small {
@@ -3047,7 +3047,7 @@ html[data-theme="dark"] .sheet-ability span {
 }
 html[data-theme="dark"] .sheet-ability:hover {
   color: #ffffff;
-  background: linear-gradient(180deg, #2b3544, #202837);
+  background: #303a49;
   border-color: var(--gold);
 }
 html[data-theme="dark"] .death-saves {
@@ -3193,6 +3193,12 @@ html[data-theme="dark"] .level-up-summary {
   background: #151b24;
   border-color: var(--line);
 }
+html[data-theme="dark"] .saving-throw-list button,
+html[data-theme="dark"] .skill-roll {
+  color: #ffffff;
+  background: #242c38;
+  border-color: #59677c;
+}
 html[data-theme="dark"] .step-tabs button.active,
 html[data-theme="dark"] .account-modes button.active,
 html[data-theme="dark"] .class-option:hover,
@@ -3211,7 +3217,7 @@ html[data-theme="dark"] .saving-throw-list button:hover,
 html[data-theme="dark"] .skill-roll:hover,
 html[data-theme="dark"] .sheet-ability:hover {
   color: #fff6e7;
-  background: #242c38;
+  background: #303a49;
   border-color: var(--gold);
 }
 html[data-theme="dark"] .dice-mode button.active,
