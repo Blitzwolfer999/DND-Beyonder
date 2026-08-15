@@ -397,6 +397,7 @@ const EQUIPMENT_CATALOG = [
   magicItem("Giant Slayer", "Weapon (any axe or sword)", "Rare", false, "+1 weapon that deals extra damage to giants and can knock them prone.", 4),
   magicItem("Vicious Weapon", "Weapon (any)", "Rare", false, "On a natural 20, the weapon deals an extra 2d6 damage of its type.", 3),
   magicItem("Berserker Axe", "Weapon (any axe)", "Rare", true, "+1 axe that raises your maximum hit points but risks an uncontrolled rage.", 4),
+  magicItem("Bloodrage Greataxe", "Weapon (greataxe)", "Rare", true, "A rune-etched +1 greataxe that drinks the blood it spills: every hit deals an extra 1d6 necrotic damage. While you are below half your hit points the runes blaze — you deal an additional 1d6 necrotic (2d6 total) and have advantage on Strength checks made to shove or grapple. When you reduce a creature to 0 hit points with it, you gain temporary hit points equal to your proficiency bonus as the axe feeds on the kill.", 7),
   magicItem("Trident of Fish Command", "Weapon (trident)", "Uncommon", true, "Expend a charge to dominate creatures that breathe water.", 4),
   magicItem("Javelin of Lightning", "Weapon (javelin)", "Uncommon", false, "Hurl it to streak forward as a bolt of lightning that bursts on impact.", 2),
   magicItem("Mace of Smiting", "Weapon (mace)", "Rare", false, "+1 mace with extra force against constructs, which it can shatter outright.", 4),
