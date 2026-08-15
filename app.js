@@ -6345,7 +6345,13 @@ function weaponAttacks(character) {
     });
   });
   const monkLevel = classLevel(character, "Monk");
-  const monkDie = monkLevel >= 17 ? 10 : monkLevel >= 11 ? 8 : monkLevel >= 5 ? 6 : monkLevel >= 1 ? 4 : 0;
+  // Martial Arts die: 2014 goes d4/d6/d8/d10; 2024 upgrades to d6/d8/d10/d12.
+  const monkProgression = character.edition === "2024" ? [6, 8, 10, 12] : [4, 6, 8, 10];
+  const monkDie = monkLevel >= 17 ? monkProgression[3]
+    : monkLevel >= 11 ? monkProgression[2]
+    : monkLevel >= 5 ? monkProgression[1]
+    : monkLevel >= 1 ? monkProgression[0]
+    : 0;
   const unarmedDex = monkLevel && dexMod > strMod;
   const unarmedMod = unarmedDex ? dexMod : strMod;
   attacks.push({
