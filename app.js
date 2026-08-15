@@ -6269,6 +6269,47 @@ const MAGIC_WEAPON_PROFILES = {
   "Javelin of Lightning": "1d6 piercing · thrown",
   "Moon Sickle, +1": "1d4 slashing"
 };
+// Base weapon stat blocks the player can assign to a generic magic weapon
+// (e.g. a Sword of Life Stealing forged as a rapier vs. a greatsword).
+const WEAPON_BASE_PROFILES = {
+  "Longsword": "1d8 slashing · versatile (1d10)",
+  "Shortsword": "1d6 piercing · finesse",
+  "Greatsword": "2d6 slashing · two-handed",
+  "Rapier": "1d8 piercing · finesse",
+  "Scimitar": "1d6 slashing · finesse",
+  "Battleaxe": "1d8 slashing · versatile (1d10)",
+  "Handaxe": "1d6 slashing · thrown",
+  "Greataxe": "1d12 slashing · two-handed",
+  "Warhammer": "1d8 bludgeoning · versatile (1d10)",
+  "Maul": "2d6 bludgeoning · two-handed",
+  "Mace": "1d6 bludgeoning",
+  "Dagger": "1d4 piercing · finesse · thrown",
+  "Spear": "1d6 piercing · thrown · versatile (1d8)",
+  "Quarterstaff": "1d6 bludgeoning · versatile (1d8)"
+};
+const WEAPON_BASE_GROUPS = {
+  sword: ["Longsword", "Shortsword", "Greatsword", "Rapier", "Scimitar"],
+  axe: ["Battleaxe", "Handaxe", "Greataxe"],
+  bludgeon: ["Mace", "Warhammer", "Maul", "Quarterstaff"],
+  any: ["Longsword", "Shortsword", "Greatsword", "Rapier", "Scimitar", "Battleaxe", "Handaxe", "Greataxe", "Warhammer", "Maul", "Mace", "Dagger", "Spear", "Quarterstaff"]
+};
+// Magic weapons whose base form isn't fixed by the item name — the player
+// chooses which mundane weapon it's built on.
+const MAGIC_WEAPON_BASE_GROUP = {
+  "Flame Tongue": "sword", "Frost Brand": "sword", "Moon-Touched Sword": "sword",
+  "Sun Blade": "sword", "Sword of Wounding": "sword", "Sword of Life Stealing": "sword",
+  "Sword of Vengeance": "sword", "Sword of Answering": "sword", "Dragon Slayer": "sword",
+  "Dancing Sword": "sword", "Nine Lives Stealer": "sword", "Holy Avenger": "sword",
+  "Defender": "sword", "Luck Blade": "sword", "Vorpal Sword": "sword",
+  "Berserker Axe": "axe", "Giant Slayer": "any", "Vicious Weapon": "any",
+  "Sword of Sharpness": "any"
+};
+// The eligible base-weapon list for an item, or null if its form is fixed.
+function itemBaseWeaponChoices(item) {
+  const name = item.name || "";
+  const group = MAGIC_WEAPON_BASE_GROUP[name] || (/^Weapon, \+\d/.test(name) ? "any" : null);
+  return group ? WEAPON_BASE_GROUPS[group] : null;
+}
 function proficientWithWeapon(character, item) {
   const type = String(item.type || "").toLowerCase();
   const classes = classBreakdown(character).map(entry => entry.name);
@@ -6284,7 +6325,8 @@ function proficientWithWeapon(character, item) {
 // Extract dice/type/properties from a weapon's stat text.
 function parseWeaponProfile(item) {
   let text = `${item.details || ""} ${item.notes || ""}`;
-  if (!/\d+\s*d\s*\d+/i.test(text) && MAGIC_WEAPON_PROFILES[item.name]) text += ` ${MAGIC_WEAPON_PROFILES[item.name]}`;
+  if (item.baseWeapon && WEAPON_BASE_PROFILES[item.baseWeapon]) text = WEAPON_BASE_PROFILES[item.baseWeapon];
+  else if (!/\d+\s*d\s*\d+/i.test(text) && MAGIC_WEAPON_PROFILES[item.name]) text += ` ${MAGIC_WEAPON_PROFILES[item.name]}`;
   const dice = text.match(/(\d+)\s*d\s*(\d+)/i);
   if (!dice) return null;
   const versatile = text.match(/versatile\s*\((\d+)d(\d+)\)/i);
@@ -6332,7 +6374,7 @@ function weaponAttacks(character) {
     if (!wielding) noteBits.push("not equipped");
     else if (itemRequiresAttunement(item) && !item.attuned) noteBits.push("attune to activate");
     attacks.push({
-      name: item.name,
+      name: item.baseWeapon ? `${item.name} (${item.baseWeapon})` : item.name,
       note: noteBits.filter(Boolean).join(" · "),
       ability,
       toHit: abilityMod + (proficient ? prof : 0) + weaponAtk,
@@ -7872,7 +7914,7 @@ function renderInventorySection(character, extraClass = "") {
           <button type="button" class="${item.equipped ? "active" : ""}" data-item-action="equip" data-character="${character.id}" data-item-id="${item.id}" title="Equipped">E</button>
           ${itemRequiresAttunement(item) ? `<button type="button" class="item-attune-btn ${item.attuned ? "on" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${item.attuned}" title="${item.attuned ? "Attuned — click to end attunement" : "Requires attunement — click to attune"}">✦</button>` : ""}
         </div></td>
-        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}</td>
+        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
         <td>${Number(item.quantity || 1)}</td>
         <td>${Number((Number(item.weight || 0) * Number(item.quantity || 1)).toFixed(2))} lb.</td>
         <td>${escapeHtml(item.cost || "—")}</td>
@@ -10371,6 +10413,15 @@ function initEvents() {
     else renderPrebuildSummary();
   });
   document.addEventListener("change", event => {
+    const baseSelect = event.target.closest("[data-item-base]");
+    if (baseSelect) {
+      const character = characters.find(item => item.id === baseSelect.dataset.character);
+      const item = character?.inventory?.find(entry => entry.id === baseSelect.dataset.itemId);
+      if (!character || !item) return;
+      item.baseWeapon = baseSelect.value || undefined;
+      saveInventoryCharacter(character);
+      return;
+    }
     const target = event.target.closest("#theme-subclass, #theme-species, #theme-background, #theme-level");
     if (!target) return;
     if (target.id === "theme-subclass") selectedThemeSubclass = target.value;
