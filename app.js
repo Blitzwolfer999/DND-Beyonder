@@ -262,6 +262,9 @@ let selectedDie = 20;
 let selectedRollMode = "normal";
 let selectedSpellLevel = 0;
 let selectedFeatNames = new Set();
+let selectedInvocations = new Set();
+let selectedMetamagic = new Set();
+let selectedPactBoon = "";
 let selectedFeatAbilities = {};
 let selectedAsi = {};
 let selectedSpellNames = new Set();
@@ -5848,8 +5851,53 @@ function spellSelectionIssue(data) {
   return "";
 }
 
+// Cumulative count of a LEVEL_CHOICE_RULES group (invocations, metamagic, ...)
+// earned by a given class level.
+function levelChoiceTotal(rulesEdition, className, group, level) {
+  return Object.entries(LEVEL_CHOICE_RULES[rulesEdition]?.[className]?.[group] || {})
+    .reduce((total, [unlock, amount]) => total + (Number(level) >= Number(unlock) ? Number(amount) : 0), 0);
+}
+// Class choices that used to be reachable only through guided level-up, so a
+// character built directly at a high level (or edited later) could never pick
+// them. Rendered into the builder's Talents step for the character's level.
+function renderClassOptionChoices() {
+  const section = $("#class-options-section");
+  const host = $("#class-options-list");
+  if (!section || !host) return;
+  const level = Number(form.elements.level?.value || 1);
+  const context = {
+    edition,
+    className: selectedClass,
+    level,
+    pactBoon: form.elements.pactBoon?.value || selectedPactBoon,
+    invocations: [...selectedInvocations],
+    classes: [{ name: selectedClass, level }]
+  };
+  const blocks = [];
+  if (selectedClass === "Warlock" && edition === "2014" && level >= 3) {
+    blocks.push(`<div class="progression-choice"><strong>Pact Boon</strong>${
+      optionRadios("pactBoon", PROGRESSION_OPTIONS.pactBoons2014, context.pactBoon, false, option =>
+        progressionDescription("pactBoons", option, edition))
+    }</div>`);
+  }
+  [["invocations", "Eldritch Invocation"], ["metamagic", "Metamagic option"]].forEach(([group, label]) => {
+    const total = levelChoiceTotal(edition, selectedClass, group, level);
+    if (!total) return;
+    const chosen = group === "invocations" ? [...selectedInvocations] : [...selectedMetamagic];
+    const options = (PROGRESSION_OPTIONS[group][edition] || []).filter(option =>
+      group !== "invocations" || chosen.includes(option) || invocationEligible(context, option, level, edition)
+    );
+    blocks.push(`<div class="progression-choice"><strong>${label}s <small>(${chosen.length}/${total} chosen)</small></strong>${
+      optionChecks(group, options, chosen, total, option =>
+        progressionDescription(group, option, edition))
+    }</div>`);
+  });
+  section.classList.toggle("hidden", !blocks.length);
+  host.innerHTML = blocks.join("");
+}
 function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!$("#feat-list")) return;
+  renderClassOptionChoices();
   $$("select[data-asi-mode]").forEach(select => {
     selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
     selectedAsi[select.dataset.asiMode].mode = select.value;
@@ -6154,6 +6202,15 @@ function formData() {
   data.backgroundSkills = selectedValues("backgroundSkills", form);
   data.expertise = selectedValues("expertise", form);
   data.weaponMastery = selectedValues("weaponMastery", form);
+  // Class options chosen in the Talents step. Only overwrite when this class
+  // actually has that choice, so editing a non-warlock never clears them.
+  const characterLevel = Number(data.level || 1);
+  if (levelChoiceTotal(edition, selectedClass, "invocations", characterLevel)) {
+    data.invocations = selectedValues("invocations", form);
+  }
+  if (levelChoiceTotal(edition, selectedClass, "metamagic", characterLevel)) {
+    data.metamagic = selectedValues("metamagic", form);
+  }
   data.subclassChoices = {};
   $$("[data-subclass-choice], select[name^='subclassChoice_']", form).forEach(input => {
     const key = input.dataset.subclassChoice || input.name.replace("subclassChoice_", "");
@@ -7082,6 +7139,9 @@ function startNewCharacter() {
   selectedFeatAbilities = {};
   selectedAsi = {};
   selectedSpellNames.clear();
+  selectedInvocations.clear();
+  selectedMetamagic.clear();
+  selectedPactBoon = "";
   abilityMethod = "standard";
   form.reset();
   buildAbilities({ keepScores: false });
@@ -8861,6 +8921,9 @@ function editCharacter(id) {
   activeCharacterId = id; edition = c.edition || "2014"; selectedClass = c.className || "Fighter";
   abilityMethod = c.abilityMethod || "manual";
   currentOriginFeat = c.originFeat || "";
+  selectedInvocations = new Set(c.invocations || []);
+  selectedMetamagic = new Set(c.metamagic || []);
+  selectedPactBoon = c.pactBoon || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
   selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
   showCreationMethod("standard");
@@ -10780,6 +10843,22 @@ function initEvents() {
   form.addEventListener("change", event => {
     if (event.target.name === "abilityMethod") {
       setAbilityMethod(event.target.value);
+      return;
+    }
+    // Keep class-option picks in module state so re-rendering the step (and
+    // switching between steps) doesn't drop them.
+    if (["invocations", "metamagic"].includes(event.target.name)) {
+      const store = event.target.name === "invocations" ? selectedInvocations : selectedMetamagic;
+      if (event.target.checked) store.add(event.target.value);
+      else store.delete(event.target.value);
+      renderClassOptionChoices();
+      updatePreview();
+      return;
+    }
+    if (event.target.name === "pactBoon") {
+      selectedPactBoon = event.target.value;
+      renderClassOptionChoices();
+      updatePreview();
       return;
     }
     if (event.target.name === "startingEquipmentMode") {

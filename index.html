@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=invocation-rules-36">
+  <link rel="stylesheet" href="styles.css?v=class-options-37">
 </head>
 <body>
   <div class="app-shell">
@@ -361,6 +361,10 @@
                 <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
                 <div class="option-list" id="feat-list"></div>
                 <label>Homebrew feats<input name="customFeats" placeholder="Comma-separated homebrew feats"></label>
+              </section>
+              <section class="choice-section hidden" id="class-options-section">
+                <div class="choice-heading"><div><h3>Class options</h3><p id="class-options-guidance">Pact Boon, Eldritch Invocations, and Metamagic for your current level.</p></div></div>
+                <div id="class-options-list"></div>
               </section>
               <section class="choice-section" id="spell-choice-section">
                 <div class="choice-heading">
@@ -738,6 +742,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=invocation-rules-36"></script>
+  <script src="app.js?v=class-options-37"></script>
 </body>
 </html>
