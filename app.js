@@ -2926,10 +2926,55 @@ function renderSpellDiceFact(value, spell, character) {
   return `<span class="spell-fact spell-dice-fact"><small>Dice <em>Click to roll</em></small><span class="spell-roll-list">${buttons}</span></span>`;
 }
 
+// The class whose spellcasting stat governs this spell, and the numbers that
+// come from it: ability modifier, proficiency, save DC, and attack bonus.
+function spellCastingNumbers(character, spell) {
+  const className = spell.className && spell.className !== "Character" ? spell.className : primaryClassName(character);
+  const context = withClassContext(character, className, classLevel(character, className) || characterTotalLevel(character));
+  const ability = spellcastingAbility(context);
+  const abilityMod = modifier(effectiveAbilities(character)[ability]);
+  const prof = derived(character).prof;
+  const fx = activeItemEffects(character);
+  return {
+    ability,
+    abilityMod,
+    prof,
+    attack: prof + abilityMod + fx.spellAttack,
+    dc: 8 + prof + abilityMod + fx.spellDc,
+    itemAttack: fx.spellAttack,
+    itemDc: fx.spellDc
+  };
+}
 function renderSpellHitSaveFact(value, spell, character) {
-  if (!value || !/spell attack/i.test(value)) return renderSpellFact("Hit / Save", value);
-  const attackModifier = derived(character).prof + spellcastingModifierForSpell(character, spell) + activeItemEffects(character).spellAttack;
-  return `<span class="spell-fact spell-attack-fact"><small>Hit / Save</small><button type="button" class="spell-attack-roll" data-sheet-roll="${escapeHtml(`${spell.name} spell attack`)}" data-modifier="${attackModifier}">${escapeHtml(value)} <strong>${signed(attackModifier)}</strong></button></span>`;
+  if (Number(spell.level || 0) === 0 && (!value || /^none$/i.test(String(value).trim()))) {
+    return renderSpellFact("Hit / Save", value);
+  }
+  const numbers = spellCastingNumbers(character, spell);
+  if (value && /spell attack/i.test(value)) {
+    return `<span class="spell-fact spell-attack-fact"><small>Hit / Save</small><button type="button" class="spell-attack-roll" data-sheet-roll="${escapeHtml(`${spell.name} spell attack`)}" data-modifier="${numbers.attack}">${escapeHtml(value)} <strong>${signed(numbers.attack)}</strong></button></span>`;
+  }
+  // A saving-throw spell: show the DC the target has to beat.
+  if (value && /save/i.test(value)) {
+    return `<span class="spell-fact spell-save-fact"><small>Hit / Save</small><strong>${escapeHtml(value)} <b>DC ${numbers.dc}</b></strong></span>`;
+  }
+  return renderSpellFact("Hit / Save", value);
+}
+// Shows exactly which stat the spell keys off and how the bonus is built, so a
+// player can see where the +X comes from.
+function renderSpellAbilityFact(spell, character, saveAttack = "", dice = "") {
+  if (spell.level === "Custom") return "";
+  // Only meaningful when the spell actually keys off the casting stat.
+  const usesStat = /save|spell attack/i.test(String(saveAttack || ""))
+    || /spellcasting ability|ability modifier/i.test(String(dice || ""));
+  if (!usesStat) return "";
+  const numbers = spellCastingNumbers(character, spell);
+  const parts = [
+    `${numbers.ability} ${signed(numbers.abilityMod)}`,
+    `prof ${signed(numbers.prof)}`
+  ];
+  if (numbers.itemAttack || numbers.itemDc) parts.push(`items ${signed(Math.max(numbers.itemAttack, numbers.itemDc))}`);
+  const detail = `${parts.join(" · ")} → save DC ${numbers.dc}, ${signed(numbers.attack)} to hit`;
+  return `<span class="spell-fact spell-ability-fact"><small>Uses ability</small><strong title="${escapeHtml(detail)}">${escapeHtml(detail)}</strong></span>`;
 }
 
 function spellRuleDetails(description) {
@@ -2981,6 +3026,7 @@ function renderSpellCard(spell, character) {
     renderSpellFact("Range", data.range),
     renderSpellFact("Duration", data.duration),
     renderSpellHitSaveFact(data.saveAttack, spell, character),
+    renderSpellAbilityFact(spell, character, data.saveAttack, data.dice),
     renderSpellDiceFact(data.dice, spell, character),
     renderSpellFact("Damage / Effect", data.damageEffect),
     renderSpellFact("Area", data.area),
@@ -2999,6 +3045,40 @@ function renderSpellCard(spell, character) {
   </article>`;
 }
 
+// Spell-slot pools paired with the spell level they cast, so the spellbook can
+// show tick boxes next to each level's spells.
+function spellSlotTrackers(character) {
+  return resourceDefinitions(character)
+    .filter(resource => resource.group === "spell")
+    .map(resource => {
+      const slotMatch = /spell-slot-(\d+)$/.exec(resource.id);
+      const pactMatch = /level\s*(\d+)/i.exec(resource.name);
+      const slotLevel = slotMatch ? Number(slotMatch[1]) : pactMatch ? Number(pactMatch[1]) : 0;
+      return { ...resource, slotLevel };
+    })
+    .filter(resource => resource.slotLevel > 0 && resource.max > 0);
+}
+// Checkbox row for one slot pool. Reuses the resource-pip data attributes so
+// clicking a box expends or restores the slot through the existing handler.
+function renderSlotBoxes(character, resource) {
+  const used = resourceUsed(character, resource);
+  return `<span class="slot-boxes" role="group" aria-label="${escapeHtml(resource.name)}">${
+    Array.from({ length: resource.max }, (_, index) =>
+      `<button type="button" class="slot-box ${index < used ? "spent" : ""}" data-resource-pip="${index}" data-character="${character.id}" data-resource="${resource.id}" aria-pressed="${index < used}" aria-label="${index < used ? "Restore" : "Expend"} ${escapeHtml(resource.name)} slot ${index + 1}"></button>`
+    ).join("")
+  }<small>${resource.max - used}/${resource.max}</small></span>`;
+}
+function renderSpellSlotTracker(character) {
+  const trackers = spellSlotTrackers(character);
+  if (!trackers.length) return "";
+  return `<div class="spell-slot-tracker">
+    <span class="slot-tracker-title">Spell slots</span>
+    ${trackers.map(resource => `<span class="slot-track">
+      <small>${escapeHtml(resource.name.replace(/\s*spell slots$/i, ""))}</small>
+      ${renderSlotBoxes(character, resource)}
+    </span>`).join("")}
+  </div>`;
+}
 function renderSpellBook(spells, character) {
   const sorted = [...spells].sort((a,b) => spellLevelSortValue(a) - spellLevelSortValue(b) || a.name.localeCompare(b.name));
   if (!sorted.length) return `<div class="spellbook-empty"><p>No spells are ready to cast.</p></div>`;
@@ -3008,11 +3088,16 @@ function renderSpellBook(spells, character) {
     if (!groups.has(level)) groups.set(level, []);
     groups.get(level).push(spell);
   });
+  const trackers = spellSlotTrackers(character);
   return `<div class="spellbook">
-    ${[...groups.entries()].map(([level, entries]) => `<section class="spellbook-level">
-      <header class="spellbook-level-head"><h3>${escapeHtml(spellGroupLabel(level))}</h3><span>${entries.length} ready</span></header>
-      <div class="sheet-spells polished-spells">${entries.map(spell => renderSpellCard(spell, character)).join("")}</div>
-    </section>`).join("")}
+    ${[...groups.entries()].map(([level, entries]) => {
+      const pools = trackers.filter(resource => resource.slotLevel === level);
+      const boxes = pools.map(resource => renderSlotBoxes(character, resource)).join("");
+      return `<section class="spellbook-level">
+        <header class="spellbook-level-head"><h3>${escapeHtml(spellGroupLabel(level))}</h3>${boxes ? `<span class="level-slots">${boxes}</span>` : ""}<span>${entries.length} ready</span></header>
+        <div class="sheet-spells polished-spells">${entries.map(spell => renderSpellCard(spell, character)).join("")}</div>
+      </section>`;
+    }).join("")}
   </div>`;
 }
 
@@ -8682,6 +8767,7 @@ function renderSheet() {
         const dc = 8 + baseMod + spellFx.spellDc;
         return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${dc} · ${signed(attack)} attack</span>`;
       }).join("")}<span><strong>Ready to cast:</strong> ${castableSpells.length}</span></div>
+      ${renderSpellSlotTracker(c)}
       ${renderSpellPreparationControls(c, spellcastingClasses, canControl)}
       ${renderSpellManagerPanel(c)}
       ${renderSpellBook(castableSpells, c)}

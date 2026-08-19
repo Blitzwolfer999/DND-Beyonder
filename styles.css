@@ -759,6 +759,30 @@ textarea { resize: vertical; }
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.spellbook-level-head { flex-wrap: wrap; }
+/* Spell slot tick boxes */
+.slot-boxes { display: inline-flex; align-items: center; gap: 4px; }
+.slot-boxes small { margin-left: 4px; color: var(--muted); font: 800 10px/1 system-ui, sans-serif; }
+.slot-box {
+  width: 15px; height: 15px; padding: 0; cursor: pointer;
+  border: 2px solid var(--gold-dark, #a4552a); border-radius: 3px;
+  background: transparent; transition: background .12s ease, transform .12s ease;
+}
+.slot-box:hover { transform: scale(1.12); }
+.slot-box.spent { background: var(--gold-dark, #a4552a); box-shadow: inset 0 0 0 2px var(--panel, #fff); }
+.spellbook-level-head .level-slots { display: inline-flex; gap: 8px; }
+.spell-slot-tracker {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  margin: 10px 0 4px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,.03);
+}
+html[data-theme="dark"] .spell-slot-tracker { background: rgba(255,255,255,.05); }
+.slot-tracker-title { font: 800 10px/1 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.slot-track { display: inline-flex; align-items: center; gap: 6px; }
+.slot-track > small { font: 800 10px/1 system-ui, sans-serif; color: var(--muted); white-space: nowrap; }
+/* Spell stat facts */
+.spell-save-fact strong b { color: var(--gold-dark, #a4552a); font-weight: 900; }
+.spell-ability-fact strong { font-size: 11px; line-height: 1.35; font-weight: 700; }
 .polished-spells { padding: 10px; grid-template-columns: 1fr; gap: 9px; }
 .sheet-spell-card {
   display: grid;
