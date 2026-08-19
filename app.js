@@ -5699,9 +5699,16 @@ function characterSpellRecords(character) {
   })];
 }
 
-function classSpellRecords(character, className, leveledOnly = false) {
+// Spells the character actually chose for a class. Subclass-granted spells
+// (domain/oath/patron) are excluded by default: they are always prepared, never
+// occupy a prepared slot, and are not scribed into a spellbook. Pass
+// includeGranted when the question is "which spells does this character already
+// have" — e.g. so the level-up picker doesn't offer one they get for free.
+function classSpellRecords(character, className, leveledOnly = false, includeGranted = false) {
   return characterSpellRecords(character).filter(spell =>
-    spell.className === className && (!leveledOnly || Number(spell.level || 0) > 0)
+    spell.className === className
+    && (includeGranted || !spell.alwaysPrepared)
+    && (!leveledOnly || Number(spell.level || 0) > 0)
   );
 }
 
@@ -8996,7 +9003,9 @@ function levelSpellChoices(character, targetLevel) {
     const after = preparedSpellLimitFor(character.className, targetLevel, character.edition, subclassName(character), { ...character, level: targetLevel });
     count = Math.max(0, after - before);
   }
-  const existingRecords = classSpellRecords(character, character.className, true);
+  // Include granted spells here so the picker never offers one the character
+  // already receives free from their subclass.
+  const existingRecords = classSpellRecords(character, character.className, true, true);
   const existing = new Set(existingRecords.map(spell => spell.name));
   const available = Object.entries(lists)
     .filter(([level]) => Number(level) > 0 && Number(level) <= newMax)
