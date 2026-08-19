@@ -5427,12 +5427,21 @@ function maxSpellLevel(className, level, rulesEdition, subclass = "") {
     return (THIRD_CASTER_SLOTS[level - 1] || []).length;
   }
   if (subclass === "Order of the Profane Soul") return Math.min(4, Math.floor((level + 5) / 6));
-  if (className === "Artificer") return Math.min(5, Math.ceil(level / 2));
+  // Artificer is a half caster on the same slot table as Paladin/Ranger, so its
+  // highest spell level follows the half-caster curve (1st at 1, 2nd at 5, 3rd
+  // at 9, 4th at 13, 5th at 17) — not ceil(level/2).
+  if (className === "Artificer") return Math.min(5, Math.floor((level + 3) / 4));
   if (className === "Paladin" || className === "Ranger") {
     if (rulesEdition === "2014" && level < 2) return 0;
     return Math.min(5, Math.floor((level + 3) / 4));
   }
-  if (className === "Warlock") return Math.min(5, Math.ceil(level / 2));
+  if (className === "Warlock") {
+    // Pact Magic tops out at 5th level, but Mystic Arcanum grants one spell of
+    // levels 6-9 at levels 11/13/15/17, so those must be selectable.
+    const pact = Math.min(5, Math.ceil(level / 2));
+    const arcanum = level >= 17 ? 9 : level >= 15 ? 8 : level >= 13 ? 7 : level >= 11 ? 6 : 0;
+    return Math.max(pact, arcanum);
+  }
   return Math.min(9, Math.ceil(level / 2));
 }
 
@@ -6413,6 +6422,30 @@ function weaponAttacks(character) {
   });
   return attacks;
 }
+// How many attacks the Attack action grants. Extra Attack never stacks across
+// classes, so take the best single source.
+function attacksPerAction(character) {
+  let attacks = 1;
+  const bump = count => { attacks = Math.max(attacks, count); };
+  const fighter = classLevel(character, "Fighter");
+  if (fighter >= 20) bump(4);
+  else if (fighter >= 11) bump(3);
+  else if (fighter >= 5) bump(2);
+  ["Barbarian", "Monk", "Paladin", "Ranger"].forEach(name => {
+    if (classLevel(character, name) >= 5) bump(2);
+  });
+  const bardSubclass = classSubclassName(character, "Bard") || "";
+  if (classLevel(character, "Bard") >= 6 && /Valor|Swords/i.test(bardSubclass)) bump(2);
+  if (classLevel(character, "Artificer") >= 5 && /Battle Smith/i.test(classSubclassName(character, "Artificer") || "")) bump(2);
+  if ((character.invocations || []).includes("Thirsting Blade")) bump(2);
+  if (classLevel(character, "Blood Hunter") >= 5) bump(2);
+  return attacks;
+}
+// Rogue Sneak Attack damage dice (1d6 at level 1, +1d6 every odd level).
+function sneakAttackDice(character) {
+  const rogue = classLevel(character, "Rogue");
+  return rogue ? Math.ceil(rogue / 2) : 0;
+}
 function renderSpellAttackRow(spell, character) {
   const data = spellDisplayData(spell, character);
   const isAttack = /spell attack/i.test(data.saveAttack || "");
@@ -6459,7 +6492,19 @@ function renderAttacksPanel(character, sectionClassName) {
     const chips = known.map(spell => `<button type="button" class="spell-pin-chip ${pinned.has(spell.name) ? "active" : ""}" data-pin-spell="${escapeHtml(spell.name)}" data-character="${escapeHtml(character.id)}">${escapeHtml(spell.name)}</button>`).join("");
     spellBlock = `${pinnedRows}<details class="spell-attack-picker"><summary>Add spells to your attacks</summary>${chips ? `<div class="spell-pin-list">${chips}</div>` : `<p class="attack-hint">Learn or prepare spells to add them here.</p>`}</details>`;
   }
-  return `<section class="sheet-panel ${sectionClassName}"><h2>Attacks${helpChip("ac")}</h2><div class="attack-list">${rows}${spellBlock}</div><p class="attack-hint">All carried weapons appear here; magic bonuses (+X, Flame Tongue, etc.) apply when the weapon is equipped and attuned. Casters can pin spells above.</p></section>`;
+  const perAction = attacksPerAction(character);
+  const sneak = sneakAttackDice(character);
+  const attackBadge = perAction > 1
+    ? `<span class="attack-count-badge" title="Extra Attack — your Attack action makes ${perAction} attacks">&times;${perAction} attacks</span>`
+    : "";
+  const sneakRow = sneak
+    ? `<article class="attack-row sneak-attack-row">
+        <div class="attack-name"><strong>Sneak Attack</strong><small title="Once per turn, when you have advantage or an ally is next to the target">once per turn</small></div>
+        <span class="attack-save">extra damage</span>
+        <div class="attack-damage-group"><button type="button" class="attack-damage" data-attack-damage data-sides="6" data-count="${sneak}" data-modifier="0" data-roll-label="Sneak Attack damage">${sneak}d6</button></div>
+      </article>`
+    : "";
+  return `<section class="sheet-panel ${sectionClassName}"><h2>Attacks${helpChip("ac")}${attackBadge}</h2><div class="attack-list">${rows}${sneakRow}${spellBlock}</div><p class="attack-hint">All carried weapons appear here; magic bonuses (+X, Flame Tongue, etc.) apply when the weapon is equipped and attuned. Casters can pin spells above.</p></section>`;
 }
 
 // Best unarmored AC, accounting for class, subclass, feat, and species rules.
@@ -6479,6 +6524,13 @@ function unarmoredAcOptions(data, hasShield = false) {
   }
   if (sorcererSubclass === "Draconic Bloodline" && classLevel(data, "Sorcerer") >= 1) {
     options.push({ value: 13 + dex, source: "Draconic Resilience (13 + DEX)" });
+  }
+  // Bladesong adds your Intelligence modifier to AC while it's active (no
+  // medium/heavy armor and no shield).
+  const wizardSubclass = classSubclassName(data, "Wizard");
+  if (["Bladesinging", "Bladesinger"].includes(wizardSubclass) && !hasShield
+    && classLevel(data, "Wizard") >= (data.edition === "2024" ? 3 : 2)) {
+    options.push({ value: 10 + dex + Math.max(0, modifier(data.INT)), source: "Bladesong (10 + DEX + INT)" });
   }
   if (feats.has("Dragon Hide")) options.push({ value: 13 + dex, source: "Dragon Hide natural armor" });
   if (data.species === "Tortle") options.push({ value: 17, source: "Tortle natural armor" });
@@ -7835,6 +7887,42 @@ function singleClassResourceDefinitions(character) {
   if (subclass === "Circle of the Land" && level >= (revised ? 6 : 2)) add("natural-recovery", "Natural Recovery", 1);
   if ((subclass === "Way of the Open Hand" || subclass === "Warrior of the Open Hand") && level >= 6) add("wholeness-of-body", "Wholeness of Body", revised ? abilityUses("WIS") : 1);
   if ((subclass === "School of Evocation" || subclass === "Evoker") && level >= 14) add("overchannel", "Overchannel · safe use", 1);
+  // --- Additional subclass pools tracked on the D&D Beyond sheet ---
+  if (subclass === "The Hexblade" && level >= 1) {
+    add("hexblades-curse", "Hexblade's Curse", 1, "short", { shortRecovery: "all" });
+    if (level >= 6) add("accursed-specter", "Accursed Specter", 1);
+  }
+  if (subclass === "The Archfey" && level >= 1) add("fey-presence", "Fey Presence", 1, "short", { shortRecovery: "all" });
+  if (subclass === "Archfey Patron" && level >= 3) add("steps-of-the-fey", "Steps of the Fey", proficiency(level));
+  if (subclass === "The Great Old One" && level >= 6) add("entropic-ward", "Entropic Ward", 1, "short", { shortRecovery: "all" });
+  if (subclass === "Great Old One Patron" && level >= 3) add("psychic-spells", "Clairvoyant Combatant", proficiency(level));
+  if (subclass === "The Fathomless" && level >= 1) add("tentacle-of-the-deep", "Tentacle of the Deep", proficiency(level));
+  if (subclass === "The Genie" && level >= 1) add("genies-vessel", "Genie's Vessel", 1);
+  if (subclass === "Cavalier" && level >= 3) add("unwavering-mark", "Unwavering Mark", proficiency(level));
+  if (subclass === "Purple Dragon Knight" && level >= 3) add("rallying-cry", "Rallying Cry", 1, "short", { shortRecovery: "all" });
+  if (subclass === "Peace Domain" && level >= 1) add("emboldening-bond", "Emboldening Bond", proficiency(level));
+  if (subclass === "Grave Domain" && level >= 6) add("eyes-of-the-grave", "Eyes of the Grave", abilityUses("WIS"));
+  if (subclass === "Forge Domain" && level >= 1) add("blessing-of-the-forge", "Blessing of the Forge", 1);
+  if (subclass === "Order Domain" && level >= 1) add("voice-of-authority", "Voice of Authority", 1);
+  if (subclass === "Twilight Domain" && level >= 6) add("steps-of-night", "Steps of Night", proficiency(level));
+  if (subclass === "Circle of Dreams" && level >= 2) add("balm-of-the-summer-court", "Balm of the Summer Court · d6 pool", level, "long", { type: "pool" });
+  if (subclass === "Circle of the Shepherd" && level >= 2) add("spirit-totem", "Spirit Totem", proficiency(level));
+  if (subclass === "Circle of Stars" && level >= 6) add("cosmic-omen", "Cosmic Omen", proficiency(level));
+  if (subclass === "Phantom" && level >= 9) add("wails-from-the-grave", "Wails from the Grave", proficiency(level));
+  if (subclass === "Divine Soul" && level >= 1) add("favored-by-the-gods", "Favored by the Gods", 1, "short", { shortRecovery: "all" });
+  if (subclass === "Storm Sorcery" && level >= 6) add("heart-of-the-storm", "Storm Guide", 1);
+  if (subclass === "War Magic" && level >= 2) add("arcane-deflection", "Arcane Deflection", 1, "short", { shortRecovery: "all" });
+  if (subclass === "Order of Scribes" && level >= 2) add("manifest-mind", "Manifest Mind", proficiency(level));
+  if (subclass === "Graviturgy Magic" && level >= 6) add("violent-attraction", "Violent Attraction", proficiency(level));
+  if (subclass === "Oath of the Watchers" && level >= 15) add("vigilant-rebuke", "Vigilant Rebuke", abilityUses("CHA"));
+  if (subclass === "Way of Mercy" && level >= 3) add("hand-of-harm", "Hand of Harm", abilityUses("WIS"), "short", { shortRecovery: "all" });
+  if (subclass === "Way of the Ascendant Dragon" && level >= 3) add("breath-of-the-dragon", "Breath of the Dragon", proficiency(level));
+  if (subclass === "Path of Wild Magic" && level >= 6) add("bolstering-magic", "Bolstering Magic", proficiency(level));
+  if (subclass === "Path of the Giant" && level >= 6) add("elemental-cleaver", "Elemental Cleaver", 1);
+  if (subclass === "Fey Wanderer" && level >= 3) add("otherworldly-glamour", "Beguiling Twist", 1, "short", { shortRecovery: "all" });
+  if (subclass === "Gloom Stalker" && level >= 3) add("dread-ambusher", "Umbral Sight · Dread Ambusher", revised ? abilityUses("WIS") : 0);
+  if (subclass === "Monster Slayer" && level >= 3) add("slayers-prey", "Slayer's Prey", 1, "short", { shortRecovery: "all" });
+  if (subclass === "Horizon Walker" && level >= 3) add("planar-warrior", "Planar Warrior", 1, "short", { shortRecovery: "all" });
   return resources;
 }
 

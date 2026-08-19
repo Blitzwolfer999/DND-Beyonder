@@ -675,6 +675,8 @@ textarea { resize: vertical; }
 .attack-hint { margin: 8px 0 0; color: var(--muted); font-size: 10.5px; }
 .dark .attack-row, [data-theme="dark"] .attack-row { background: rgba(255,255,255,.04); }
 .spell-attack-row { border-left: 3px solid #6f57c4; }
+.sneak-attack-row { border-left: 3px solid #b0392e; }
+.attack-count-badge { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: linear-gradient(180deg,#c2703a,#a4552a); color: #fff; font: 800 10px/1.7 system-ui, sans-serif; letter-spacing: .3px; vertical-align: middle; white-space: nowrap; }
 .spell-attack-row .attack-name { position: relative; padding-right: 20px; }
 .spell-unpin { position: absolute; top: -2px; right: 0; width: 18px; height: 18px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--muted); font: 700 12px/1 system-ui; cursor: pointer; }
 .spell-unpin:hover { border-color: #b0392e; color: #b0392e; }
