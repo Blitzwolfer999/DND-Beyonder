@@ -2989,7 +2989,7 @@ function renderSpellCard(spell, character) {
   return `<article class="sheet-spell-card spellbook-row">
     <div class="spellbook-main">
       <div class="spell-card-head">
-        <div><small>${escapeHtml(spellLevelLabel(spell))}${data.school ? ` · ${escapeHtml(data.school)}` : ""}</small><strong>${escapeHtml(spell.name)}</strong></div>
+        <div><small>${escapeHtml(spellLevelLabel(spell))}${data.school ? ` · ${escapeHtml(data.school)}` : ""}</small><strong>${escapeHtml(spell.name)}</strong>${spell.alwaysPrepared ? `<span class="granted-badge" title="Granted by ${escapeHtml(spell.grantedBy || "your subclass")} — always prepared">Always prepared</span>` : ""}</div>
         <span>${escapeHtml(data.classText)}</span>
       </div>
       <p class="spell-effect"><strong>Effect.</strong> ${escapeHtml(data.effect)}</p>
@@ -5543,8 +5543,54 @@ function spellRecordClass(spell, character) {
   return typeof spell === "string" ? primaryClassName(character) : spell.className || primaryClassName(character);
 }
 
+// Look up a spell's own level by searching every class list in that edition.
+// Subclass-granted spells are often off the base class list (a Hexblade's
+// Shield, an Oathbreaker's Animate Dead), so a class-scoped lookup isn't enough.
+function lookupSpellLevel(rulesEdition, name) {
+  // Spell names vary between data sets by apostrophe style and casing
+  // ("Hunter's Mark" vs "Hunter’s Mark"), so compare on a normalized key.
+  const key = text => String(text).toLowerCase().replace(/[’']/g, "").replace(/\s+/g, " ").trim();
+  const target = key(name);
+  const editions = [rulesEdition, rulesEdition === "2024" ? "2014" : "2024"];
+  for (const edition of editions) {
+    const lists = SPELL_LISTS[edition] || {};
+    for (const className of Object.keys(lists)) {
+      for (const level of Object.keys(lists[className] || {})) {
+        if ((lists[className][level] || []).some(entry => key(entry) === target)) return Number(level);
+      }
+    }
+  }
+  return null;
+}
+// Spells a subclass grants automatically (domain/oath/patron/circle spells).
+// These are always prepared and never count against a prepared-spell limit.
+function subclassGrantedSpells(character) {
+  if (typeof SUBCLASS_SPELL_LISTS === "undefined") return [];
+  const edition = character.edition || "2014";
+  const records = [];
+  classBreakdown(character).forEach(entry => {
+    const subclass = classSubclassName(character, entry.name);
+    const table = SUBCLASS_SPELL_LISTS[edition]?.[subclass]
+      || (edition === "2024" ? SUBCLASS_SPELL_LISTS["2014"]?.[subclass] : null);
+    if (!table) return;
+    Object.entries(table).forEach(([unlock, names]) => {
+      if (entry.level < Number(unlock)) return;
+      names.forEach(name => {
+        const level = lookupSpellLevel(edition, name);
+        records.push({
+          name,
+          level: level === null ? 1 : level,
+          className: entry.name,
+          grantedBy: subclass,
+          alwaysPrepared: true
+        });
+      });
+    });
+  });
+  return records;
+}
 function characterSpellRecords(character) {
-  return (character.spells || []).map(spell => {
+  const chosen = (character.spells || []).map(spell => {
     if (typeof spell !== "string") return { ...spell, className: spell.className || primaryClassName(character) };
     // Spell stored as a bare name (theme/quick builds): look up its real level
     // from the class spell lists so cantrips vs leveled spells group correctly.
@@ -5554,6 +5600,18 @@ function characterSpellRecords(character) {
     const listedLevel = Object.entries(lists).find(([, names]) => names.includes(spell))?.[0];
     return { name: spell, level: listedLevel === undefined ? 0 : Number(listedLevel), className };
   });
+  // Subclass-granted spells append after the chosen ones, skipping any the
+  // character already picked so nothing shows up twice.
+  const taken = new Set(chosen.map(spell => `${spell.className}:${spell.name}`));
+  const granted = subclassGrantedSpells(character)
+    .filter(spell => !taken.has(`${spell.className}:${spell.name}`));
+  const seen = new Set();
+  return [...chosen, ...granted.filter(spell => {
+    const key = `${spell.className}:${spell.name}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  })];
 }
 
 function classSpellRecords(character, className, leveledOnly = false) {
@@ -8383,6 +8441,9 @@ function spellsReadyToCast(character, allSpells) {
     .map(entry => [entry.name, preparedNamesForClass(character, entry.name)]));
   return allSpells.filter(spell => {
     if (spell.level === "Custom" || Number(spell.level || 0) === 0) return true;
+    // Domain/oath/patron spells are always prepared, so they never need to be
+    // in the spellbook selection to be castable.
+    if (spell.alwaysPrepared) return true;
     const className = spell.className || primaryClassName(character);
     return !wizardPrepared.has(className) || wizardPrepared.get(className).has(spell.name);
   });
