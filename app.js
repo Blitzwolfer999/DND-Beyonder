@@ -2916,6 +2916,18 @@ function spellRollOptions(value, spell, character) {
       if (!options.some(option => option.key === key)) options.push({ key, count, sides, modifier: rollModifier, label });
     }
   });
+  // Agonizing Blast adds your Charisma modifier to each beam of Eldritch Blast.
+  if (/^eldritch blast$/i.test(String(spell.name || ""))
+    && (character.invocations || []).includes("Agonizing Blast")) {
+    const charisma = modifier(effectiveAbilities(character).CHA);
+    if (charisma > 0) {
+      return options.map(option => ({
+        ...option,
+        modifier: option.modifier + charisma,
+        label: `${option.count}d${option.sides}${signed(option.modifier + charisma)} per beam`
+      }));
+    }
+  }
   return options;
 }
 
@@ -6529,9 +6541,19 @@ function weaponAttacks(character) {
     const own = MAGIC_ITEM_EFFECTS[item.name] || {};
     const wielding = Boolean(item.equipped);
     const magicLive = wielding && (!itemRequiresAttunement(item) || Boolean(item.attuned));
-    const weaponAtk = Math.max(wielding ? genericAtk : 0, magicLive ? (own.weaponAttack || 0) : 0);
-    const weaponDmg = Math.max(wielding ? genericDmg : 0, magicLive ? (own.weaponDamage || 0) : 0);
-    const noteBits = [profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient"];
+    let weaponAtk = Math.max(wielding ? genericAtk : 0, magicLive ? (own.weaponAttack || 0) : 0);
+    let weaponDmg = Math.max(wielding ? genericDmg : 0, magicLive ? (own.weaponDamage || 0) : 0);
+    // Pact weapon invocations apply to the weapon flagged as the pact weapon.
+    const invocations = character.invocations || [];
+    const isPactWeapon = Boolean(item.pactWeapon) && hasPactBoon(character, "Pact of the Blade");
+    if (isPactWeapon && wielding && invocations.includes("Improved Pact Weapon")) {
+      weaponAtk = Math.max(weaponAtk, 1);
+      weaponDmg = Math.max(weaponDmg, 1);
+    }
+    if (isPactWeapon && wielding && invocations.includes("Lifedrinker")) {
+      weaponDmg += Math.max(character.edition === "2024" ? 1 : 0, modifier(abil.CHA));
+    }
+    const noteBits = [isPactWeapon ? "pact weapon" : "", profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient"];
     if (!wielding) noteBits.push("not equipped");
     else if (itemRequiresAttunement(item) && !item.attuned) noteBits.push("attune to activate");
     attacks.push({
@@ -6572,6 +6594,47 @@ function weaponAttacks(character) {
   });
   return attacks;
 }
+// ---- Eldritch Invocation prerequisites ----
+function invocationPrerequisite(rulesEdition, name) {
+  if (typeof INVOCATION_PREREQUISITES === "undefined") return null;
+  return INVOCATION_PREREQUISITES[rulesEdition]?.[name] || null;
+}
+// A warlock counts as having a pact boon either from the 2014 Pact Boon choice
+// or, in 2024, from taking the matching invocation.
+function hasPactBoon(character, boon) {
+  if (!boon) return true;
+  if (character.pactBoon === boon) return true;
+  return (character.invocations || []).includes(boon);
+}
+function invocationEligible(character, name, warlockLevel, rulesEdition) {
+  const rule = invocationPrerequisite(rulesEdition, name);
+  if (!rule) return true;
+  if (rule.level && Number(warlockLevel || 0) < rule.level) return false;
+  if (rule.pact && !hasPactBoon(character, rule.pact)) return false;
+  if (rule.invocation && !(character.invocations || []).includes(rule.invocation)) return false;
+  // Cantrip and feature prerequisites are narrative in this app's data model:
+  // Eldritch Blast is universal to warlocks, so those are treated as met.
+  return true;
+}
+function invocationPrerequisiteText(rulesEdition, name) {
+  const rule = invocationPrerequisite(rulesEdition, name);
+  if (!rule) return "";
+  return [
+    rule.level ? `Level ${rule.level}+` : "",
+    rule.pact || "",
+    rule.invocation ? `${rule.invocation} invocation` : "",
+    rule.cantrip || "",
+    rule.feature || ""
+  ].filter(Boolean).join(", ");
+}
+// Invocations a character holds that they no longer (or never did) qualify for.
+function invalidInvocations(character) {
+  const rulesEdition = character.edition || "2014";
+  const warlockLevel = classLevel(character, "Warlock") || Number(character.level || 0);
+  return (character.invocations || []).filter(name =>
+    !invocationEligible(character, name, warlockLevel, rulesEdition)
+  );
+}
 // How many attacks the Attack action grants. Extra Attack never stacks across
 // classes, so take the best single source.
 function attacksPerAction(character) {
@@ -6587,7 +6650,9 @@ function attacksPerAction(character) {
   const bardSubclass = classSubclassName(character, "Bard") || "";
   if (classLevel(character, "Bard") >= 6 && /Valor|Swords/i.test(bardSubclass)) bump(2);
   if (classLevel(character, "Artificer") >= 5 && /Battle Smith/i.test(classSubclassName(character, "Artificer") || "")) bump(2);
-  if ((character.invocations || []).includes("Thirsting Blade")) bump(2);
+  const invocations = character.invocations || [];
+  if (invocations.includes("Thirsting Blade")) bump(2);
+  if (invocations.includes("Devouring Blade")) bump(3);
   if (classLevel(character, "Blood Hunter") >= 5) bump(2);
   return attacks;
 }
@@ -8153,6 +8218,7 @@ function renderInventorySection(character, extraClass = "") {
           <button type="button" class="${item.carried === false ? "" : "active"}" data-item-action="carry" data-character="${character.id}" data-item-id="${item.id}" title="Carried">C</button>
           <button type="button" class="${item.equipped ? "active" : ""}" data-item-action="equip" data-character="${character.id}" data-item-id="${item.id}" title="Equipped">E</button>
           ${itemRequiresAttunement(item) ? `<button type="button" class="item-attune-btn ${item.attuned ? "on" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${item.attuned}" title="${item.attuned ? "Attuned — click to end attunement" : "Requires attunement — click to attune"}">✦</button>` : ""}
+          ${hasPactBoon(character, "Pact of the Blade") && parseWeaponProfile(item) ? `<button type="button" class="item-pact-btn ${item.pactWeapon ? "on" : ""}" data-item-action="pact" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${Boolean(item.pactWeapon)}" title="${item.pactWeapon ? "Your pact weapon — click to unset" : "Set as your pact weapon"}">P</button>` : ""}
         </div></td>
         <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
         <td>${Number(item.quantity || 1)}</td>
@@ -8591,15 +8657,21 @@ function renderSheet() {
   const castableSpells = spellsReadyToCast(c, allSpells);
   const speciesTraits = speciesTraitCards(c);
   const characterChoices = [];
-  const addChoice = (name, source, description = "") => {
-    if (name) characterChoices.push({ name, source, description });
+  const addChoice = (name, source, description = "", warning = "") => {
+    if (name) characterChoices.push({ name, source, description, warning });
   };
   [...new Set([c.fightingStyle, ...(c.fightingStyles || [])].filter(Boolean))].forEach(name =>
     addChoice(name, "Fighting Style", fightingStyleDescription(name, c.edition))
   );
   addChoice(c.pactBoon, "Pact Boon", progressionDescription("pactBoons", c.pactBoon, c.edition));
   (c.metamagic || []).forEach(name => addChoice(name, "Metamagic", progressionDescription("metamagic", name, c.edition)));
-  (c.invocations || []).forEach(name => addChoice(name, "Eldritch Invocation", progressionDescription("invocations", name, c.edition)));
+  const unmetInvocations = new Set(invalidInvocations(c));
+  (c.invocations || []).forEach(name => addChoice(
+    name,
+    "Eldritch Invocation",
+    progressionDescription("invocations", name, c.edition),
+    unmetInvocations.has(name) ? `Prerequisite not met: ${invocationPrerequisiteText(c.edition, name)}` : ""
+  ));
   (c.expertise || []).forEach(name => addChoice(name, "Expertise", `Your proficiency bonus is doubled for checks you make with ${name}.`));
   (c.weaponMastery || []).forEach(name => addChoice(name, "Weapon Mastery", `${WEAPON_MASTERY_PROPERTIES[name] || "Mastery"} property · usable when the weapon's requirements are met.`));
   addChoice(c.divineOrder, "Divine Order", classChoiceDescription(c.divineOrder));
@@ -8753,7 +8825,7 @@ function renderSheet() {
     ${characterChoices.length ? `<section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Chosen class options</h2>
       <div class="feature-grid">${characterChoices.map(choice =>
-        `<article class="feature-card"><small>${escapeHtml(choice.source)}</small><strong>${escapeHtml(choice.name)}</strong>${ruleDetails(choice.description)}</article>`
+        `<article class="feature-card${choice.warning ? " choice-warning" : ""}"><small>${escapeHtml(choice.source)}</small><strong>${escapeHtml(choice.name)}</strong>${choice.warning ? `<span class="choice-warning-note">${escapeHtml(choice.warning)}</span>` : ""}${ruleDetails(choice.description)}</article>`
       ).join("")}</div>
     </section>` : ""}
     <section class="sheet-panel sheet-wide ${sectionClass("features")}">
@@ -8919,7 +8991,10 @@ function progressionChoiceBlocks(character, targetLevel, features, targetClass =
   }
   const invocationCount = Number(levelRules.invocations?.[targetClassLevel] || 0);
   if (invocationCount) {
-    const options = PROGRESSION_OPTIONS.invocations[character.edition].filter(option => !(character.invocations || []).includes(option));
+    // Only offer invocations whose prerequisites the character meets at this level.
+    const options = PROGRESSION_OPTIONS.invocations[character.edition]
+      .filter(option => !(character.invocations || []).includes(option))
+      .filter(option => invocationEligible(context, option, targetClassLevel, character.edition));
     blocks.push(`<div class="progression-choice" data-min-choices="${invocationCount}" data-choice-name="invocations"><strong>Choose ${invocationCount} Eldritch Invocation${invocationCount > 1 ? "s" : ""}</strong>${optionChecks("invocations", options, [], invocationCount, option =>
       progressionDescription("invocations", option, character.edition)
     )}</div>`);
@@ -10140,6 +10215,12 @@ function initEvents() {
       }
       if (action === "carry") item.carried = item.carried === false;
       if (action === "equip") item.equipped = !item.equipped;
+      if (action === "pact") {
+        // Only one weapon can be the pact weapon.
+        const turningOn = !item.pactWeapon;
+        character.inventory.forEach(entry => { entry.pactWeapon = false; });
+        item.pactWeapon = turningOn;
+      }
       if (action === "attune") {
         if (!item.attuned && !itemRequiresAttunement(item)) { toast(`${item.name} does not require attunement`); return; }
         const attunedCount = character.inventory.filter(entry => entry.attuned).length;

@@ -36,6 +36,86 @@ const EXTRA_INVOCATIONS_2014 = {
   "Undying Servitude": "Prerequisite: Level 5+. Once per long rest, cast animate dead without spending a spell slot."
 };
 
+// Prerequisites for every invocation, so the picker only offers ones the
+// character actually qualifies for (D&D Beyond gates them the same way).
+//   level      - minimum warlock level
+//   pact       - required Pact Boon (a boon in 2014; itself an invocation in 2024)
+//   invocation - another invocation that must already be taken
+//   cantrip    - required cantrip
+//   feature    - required class feature, described in prose
+// An invocation with no entry has no prerequisite.
+const INVOCATION_PREREQUISITES = {
+  "2014": {
+    "Agonizing Blast": { cantrip: "Eldritch Blast" },
+    "Ascendant Step": { level: 9 },
+    "Aspect of the Moon": { pact: "Pact of the Tome" },
+    "Bewitching Whispers": { level: 7 },
+    "Bond of the Talisman": { level: 12, pact: "Pact of the Talisman" },
+    "Book of Ancient Secrets": { pact: "Pact of the Tome" },
+    "Chains of Carceri": { level: 15, pact: "Pact of the Chain" },
+    "Cloak of Flies": { level: 5 },
+    "Dreadful Word": { level: 7 },
+    "Eldritch Smite": { level: 5, pact: "Pact of the Blade" },
+    "Eldritch Spear": { cantrip: "Eldritch Blast" },
+    "Far Scribe": { level: 5, pact: "Pact of the Tome" },
+    "Ghostly Gaze": { level: 7 },
+    "Gift of the Depths": { level: 5 },
+    "Gift of the Ever-Living Ones": { pact: "Pact of the Chain" },
+    "Gift of the Protectors": { level: 9, pact: "Pact of the Tome" },
+    "Grasp of Hadar": { cantrip: "Eldritch Blast" },
+    "Improved Pact Weapon": { pact: "Pact of the Blade" },
+    "Investment of the Chain Master": { pact: "Pact of the Chain" },
+    "Lance of Lethargy": { cantrip: "Eldritch Blast" },
+    "Lifedrinker": { level: 12, pact: "Pact of the Blade" },
+    "Maddening Hex": { level: 5, feature: "the hex spell or a warlock curse feature" },
+    "Master of Myriad Forms": { level: 15 },
+    "Minions of Chaos": { level: 9 },
+    "Mire the Mind": { level: 5 },
+    "One with Shadows": { level: 5 },
+    "Otherworldly Leap": { level: 9 },
+    "Protection of the Talisman": { level: 7, pact: "Pact of the Talisman" },
+    "Rebuke of the Talisman": { pact: "Pact of the Talisman" },
+    "Relentless Hex": { level: 7, feature: "the hex spell or a warlock curse feature" },
+    "Repelling Blast": { cantrip: "Eldritch Blast" },
+    "Sculptor of Flesh": { level: 7 },
+    "Shroud of Shadow": { level: 15 },
+    "Sign of Ill Omen": { level: 5 },
+    "Thirsting Blade": { level: 5, pact: "Pact of the Blade" },
+    "Tomb of Levistus": { level: 5 },
+    "Trickster's Escape": { level: 7 },
+    "Undying Servitude": { level: 5 },
+    "Visions of Distant Realms": { level: 15 },
+    "Voice of the Chain Master": { pact: "Pact of the Chain" },
+    "Whispers of the Grave": { level: 9 },
+    "Witch Sight": { level: 15 }
+  },
+  "2024": {
+    "Agonizing Blast": { level: 2, cantrip: "a warlock cantrip that deals damage" },
+    "Ascendant Step": { level: 5 },
+    "Devil's Sight": { level: 2 },
+    "Devouring Blade": { level: 12, invocation: "Thirsting Blade" },
+    "Eldritch Smite": { level: 5, pact: "Pact of the Blade" },
+    "Eldritch Spear": { level: 2, cantrip: "a warlock cantrip that deals damage" },
+    "Fiendish Vigor": { level: 2 },
+    "Gaze of Two Minds": { level: 5 },
+    "Gift of the Depths": { level: 5 },
+    "Gift of the Protectors": { level: 9, pact: "Pact of the Tome" },
+    "Investment of the Chain Master": { level: 5, pact: "Pact of the Chain" },
+    "Lessons of the First Ones": { level: 2 },
+    "Lifedrinker": { level: 12, pact: "Pact of the Blade" },
+    "Mask of Many Faces": { level: 2 },
+    "Master of Myriad Forms": { level: 5 },
+    "Misty Visions": { level: 2 },
+    "One with Shadows": { level: 5 },
+    "Otherworldly Leap": { level: 2 },
+    "Repelling Blast": { level: 2, cantrip: "a warlock cantrip that makes an attack roll" },
+    "Thirsting Blade": { level: 5, pact: "Pact of the Blade" },
+    "Visions of Distant Realms": { level: 9 },
+    "Whispers of the Grave": { level: 7 },
+    "Witch Sight": { level: 15 }
+  }
+};
+
 const EXTRA_PACT_BOONS_2014 = {
   "Pact of the Talisman": "Your patron gifts you an amulet; whoever wears it can add a bonus die to a failed ability check, a number of times per long rest equal to your proficiency bonus."
 };

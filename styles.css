@@ -922,6 +922,10 @@ html[data-theme="dark"] .spell-slot-tracker { background: rgba(255,255,255,.05);
 .item-state button.active { color: white; border-color: var(--green); background: var(--green); }
 .item-attune-btn { color: #7c5cc4; border-color: #c9bbe8 !important; background: #f4f0fc !important; font-size: 13px !important; line-height: 1; }
 .item-attune-btn.on { color: #fff !important; border-color: #6f4fc0 !important; background: linear-gradient(180deg,#8a67d8,#6f4fc0) !important; box-shadow: 0 0 0 2px rgba(124,92,196,.25); }
+.feature-card.choice-warning { border-color: #c98b3a; box-shadow: inset 3px 0 0 #c98b3a; }
+.choice-warning-note { display: block; margin: 3px 0 2px; color: #a4552a; font: 700 10px/1.4 system-ui, sans-serif; }
+.item-pact-btn { color: #a4552a; border-color: #e2c3a8 !important; background: #fbf2e9 !important; font: 800 11px/1 system-ui, sans-serif !important; }
+.item-pact-btn.on { color: #fff !important; border-color: #a4552a !important; background: linear-gradient(180deg,#c2703a,#a4552a) !important; box-shadow: 0 0 0 2px rgba(164,85,42,.25); }
 .attune-badge { display: inline-block; margin: 2px 0 2px 6px; padding: 1px 8px; border-radius: 999px; font: 800 9px/1.7 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .4px; vertical-align: middle; }
 .attune-badge.on { color: #fff; background: linear-gradient(180deg,#8a67d8,#6f4fc0); }
 .attune-badge.req { color: #6f4fc0; background: #efe9fb; border: 1px solid #d6c9f2; }
