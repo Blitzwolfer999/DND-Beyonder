@@ -229,6 +229,290 @@ const SW5E_CHARACTER_THEMES = [
   }
 ];
 
+// ---- Legends-era themes ----
+// Drawn from the Expanded Universe: the Old Republic and Rise of the Empire on
+// one side, the Rebellion through the Legacy era on the other. Every archetype,
+// species, background and power referenced below exists in the SW5E data.
+const SW5E_LEGENDS_THEMES = [
+  // ===== Before the films =====
+  {
+    id: "sw-jedi-shadow", name: "Jedi Shadow", icon: "SHD", setting: "starwars", era: "Old Republic",
+    description: "Hunt Sith relics and dark-side cults in the quiet places the Order won't go.",
+    aliases: ["shadow", "jedi covert", "relic hunter", "dark side hunter", "sentinel"],
+    branches: [
+      { className: "Sentinel", subclasses: { sw5e: "Path of Shadows" }, title: "Order Shadow",
+        playstyle: "A stealthy saber user who erases traces and strikes from concealment.",
+        abilities: ["DEX", "WIS", "CON", "CHA", "INT", "STR"],
+        skills: ["Stealth", "Perception", "Lore", "Investigation"],
+        equipment: ["Lightsaber", "Combat suit", "Security kit"],
+        spells: ["Cloud Mind", "Force Camouflage", "Affect Mind", "Burst of Speed", "Sense Force"] },
+      { className: "Operative", subclasses: { sw5e: "Shadow Killer Practice" }, title: "Covert Operative",
+        playstyle: "An infiltrator who removes a target before anyone knows they were there.",
+        abilities: ["DEX", "INT", "CON", "WIS", "CHA", "STR"],
+        skills: ["Stealth", "Deception", "Investigation", "Perception"],
+        equipment: ["Vibroblade", "Blaster pistol", "Combat suit", "Security kit"] }
+    ]
+  },
+  {
+    id: "sw-inquisitor", name: "Sith Inquisitor", icon: "INQ", setting: "starwars", era: "Old Republic",
+    description: "Tear secrets from the unwilling and bend the weak to your will.",
+    aliases: ["inquisitor", "sith sorcerer", "interrogator", "dark council", "lightning"],
+    branches: [
+      { className: "Consular", subclasses: { sw5e: "Way of Manipulation" }, title: "Sith Sorcerer",
+        playstyle: "A dark-side caster who dominates minds and burns foes with lightning.",
+        abilities: ["CHA", "CON", "DEX", "WIS", "INT", "STR"],
+        skills: ["Intimidation", "Deception", "Lore", "Persuasion"],
+        equipment: ["Lightsaber", "Combat suit", "Backpack"],
+        spells: ["Affect Mind", "Enfeeble", "Force Lightning", "Curse", "Dark Aura", "Drain Life"] },
+      { className: "Scout", subclasses: { sw5e: "Inquisitor Technique" }, title: "Sith Interrogator",
+        playstyle: "A relentless hunter who marks a quarry and breaks it down.",
+        abilities: ["DEX", "WIS", "CON", "CHA", "INT", "STR"],
+        skills: ["Intimidation", "Perception", "Investigation", "Survival"],
+        equipment: ["Blaster rifle", "Vibroblade", "Combat suit"] }
+    ]
+  },
+  {
+    id: "sw-mandalorian", name: "Mandalorian Crusader", icon: "MND", setting: "starwars", era: "Old Republic",
+    description: "Armor, honour, and a war worth fighting — the creed of the Neo-Crusaders.",
+    aliases: ["mandalore", "neo-crusader", "beskar", "clan warrior", "heavy armor"],
+    branches: [
+      { className: "Fighter", subclasses: { sw5e: "Heavy Weapons Specialist" }, title: "Crusader Heavy",
+        playstyle: "A walking weapons platform in sealed armour.",
+        abilities: ["STR", "CON", "DEX", "WIS", "INT", "CHA"],
+        skills: ["Athletics", "Intimidation", "Perception", "Piloting"],
+        equipment: ["Assault cannon", "Battle armor", "Backpack"] },
+      { className: "Berserker", subclasses: { sw5e: "Warchief Approach" }, title: "Clan Warchief",
+        playstyle: "A front-line leader who drags the whole squad forward.",
+        abilities: ["STR", "CON", "CHA", "DEX", "WIS", "INT"],
+        skills: ["Athletics", "Intimidation", "Survival", "Perception"],
+        equipment: ["Vibroaxe", "Battle armor", "Backpack"] }
+    ]
+  },
+  {
+    id: "sw-nightsister", name: "Nightsister", icon: "NSR", setting: "starwars", era: "Rise of the Empire",
+    description: "Dathomiri witchcraft — spirit magic, rancor lore, and old grudges.",
+    aliases: ["dathomir", "witch", "spirit magic", "clan mother", "nightsisters"],
+    branches: [
+      { className: "Sentinel", subclasses: { sw5e: "Path of Witchcraft" }, title: "Dathomiri Witch",
+        playstyle: "A spellblade who binds spirits and fights alongside them.",
+        abilities: ["DEX", "WIS", "CON", "CHA", "INT", "STR"],
+        skills: ["Nature", "Survival", "Lore", "Intimidation"],
+        equipment: ["Vibroblade", "Combat suit", "Backpack"],
+        spells: ["Curse", "Enfeeble", "Dark Aura", "Affect Mind", "Force Camouflage"] },
+      { className: "Monk", subclasses: { sw5e: "Nightsister Order" }, title: "Nightsister Initiate",
+        playstyle: "A fast, unarmoured warrior channelling Dathomiri rites.",
+        abilities: ["DEX", "WIS", "CON", "CHA", "STR", "INT"],
+        skills: ["Acrobatics", "Nature", "Stealth", "Survival"],
+        equipment: ["Vibroblade", "Combat suit", "Backpack"] }
+    ]
+  },
+  {
+    id: "sw-teras-kasi", name: "Teräs Käsi Adept", icon: "TKA", setting: "starwars", era: "Old Republic",
+    description: "The steel hand — an unarmed art built to kill Force users.",
+    aliases: ["teras kasi", "echani", "martial artist", "unarmed", "steel hand", "duelist"],
+    branches: [
+      { className: "Monk", subclasses: { sw5e: "Teras Kasi Order" }, title: "Steel Hand",
+        playstyle: "An unarmed specialist trained to close with and disrupt casters.",
+        abilities: ["DEX", "WIS", "CON", "STR", "CHA", "INT"],
+        skills: ["Acrobatics", "Athletics", "Insight", "Perception"],
+        equipment: ["Vibroblade", "Combat suit", "Backpack"] },
+      { className: "Monk", subclasses: { sw5e: "Echani Order" }, title: "Echani Duelist",
+        playstyle: "A dueling tradition that reads an opponent through combat itself.",
+        abilities: ["DEX", "WIS", "CON", "STR", "INT", "CHA"],
+        skills: ["Acrobatics", "Insight", "Perception", "Athletics"],
+        equipment: ["Vibrosword", "Combat suit", "Backpack"] }
+    ]
+  },
+  {
+    id: "sw-baran-do", name: "Baran Do Sage", icon: "BDO", setting: "starwars", era: "Old Republic",
+    description: "Kel Dor seers who read the future in storms and warn of what is coming.",
+    aliases: ["baran do", "seer", "oracle", "kel dor", "precognition", "prophet"],
+    branches: [
+      { className: "Consular", subclasses: { sw5e: "Way of the Seer" }, title: "Storm Sage",
+        playstyle: "A caster who sees danger coming and positions the party around it.",
+        abilities: ["WIS", "CON", "DEX", "CHA", "INT", "STR"],
+        skills: ["Insight", "Perception", "Lore", "Nature"],
+        equipment: ["Lightsaber", "Combat suit", "Medpac"],
+        spells: ["Battle Precognition", "Sense Force", "Guidance", "Affect Mind", "Cloud Mind"] },
+      { className: "Scholar", subclasses: { sw5e: "Occultist Pursuit" }, title: "Keeper of Omens",
+        playstyle: "A scholar of portents who turns knowledge into an edge for the party.",
+        abilities: ["INT", "WIS", "CON", "DEX", "CHA", "STR"],
+        skills: ["Lore", "Insight", "Investigation", "Medicine"],
+        equipment: ["Blaster pistol", "Combat suit", "Medpac"] }
+    ]
+  },
+  {
+    id: "sw-aing-tii", name: "Aing-Tii Monk", icon: "ATI", setting: "starwars", era: "Old Republic",
+    description: "Fringe mystics who step between places and refuse both sides of the Force.",
+    aliases: ["aing-tii", "flow walking", "kathol", "grey", "teleport", "monk"],
+    branches: [
+      { className: "Monk", subclasses: { sw5e: "Aing-Tii Order" }, title: "Flow Walker",
+        playstyle: "A mobile martial artist who slips through space to reach any target.",
+        abilities: ["DEX", "WIS", "CON", "INT", "CHA", "STR"],
+        skills: ["Acrobatics", "Lore", "Perception", "Stealth"],
+        equipment: ["Vibroblade", "Combat suit", "Backpack"] },
+      { className: "Sentinel", subclasses: { sw5e: "Path of Ethereality" }, title: "Between Places",
+        playstyle: "A saber user who phases out of danger and reappears behind it.",
+        abilities: ["DEX", "WIS", "CON", "CHA", "INT", "STR"],
+        skills: ["Stealth", "Lore", "Perception", "Insight"],
+        equipment: ["Lightsaber", "Combat suit", "Backpack"],
+        spells: ["Burst of Speed", "Force Camouflage", "Cloud Mind", "Sense Force"] }
+    ]
+  },
+  {
+    id: "sw-matukai", name: "Matukai Adept", icon: "MTK", setting: "starwars", era: "Old Republic",
+    description: "Force through the body — a tradition that trains muscle as the conduit.",
+    aliases: ["matukai", "body", "physical", "adept", "iron", "warrior monk"],
+    branches: [
+      { className: "Monk", subclasses: { sw5e: "Matukai Order" }, title: "Matukai Warrior",
+        playstyle: "A physical adept who channels the Force through raw conditioning.",
+        abilities: ["DEX", "WIS", "CON", "STR", "INT", "CHA"],
+        skills: ["Athletics", "Acrobatics", "Survival", "Insight"],
+        equipment: ["Echostaff", "Combat suit", "Backpack"] },
+      { className: "Sentinel", subclasses: { sw5e: "Path of Iron" }, title: "Iron Adept",
+        playstyle: "A durable blade who keeps standing long after they should not.",
+        abilities: ["STR", "CON", "WIS", "DEX", "CHA", "INT"],
+        skills: ["Athletics", "Survival", "Insight", "Perception"],
+        equipment: ["Lightsaber", "Battle armor", "Backpack"],
+        spells: ["Force Body", "Saber Ward", "Burst of Speed", "Battle Precognition"] }
+    ]
+  },
+  {
+    id: "sw-sith-alchemist", name: "Sith Alchemist", icon: "ALC", setting: "starwars", era: "Old Republic",
+    description: "Twist flesh and metal with the old sorceries of Korriban.",
+    aliases: ["alchemy", "sith sorcery", "korriban", "leviathan", "artificer", "necromancer"],
+    branches: [
+      { className: "Scholar", subclasses: { sw5e: "Occultist Pursuit" }, title: "Korriban Occultist",
+        playstyle: "A scholar of forbidden lore who unnerves and unravels enemies.",
+        abilities: ["INT", "CON", "DEX", "WIS", "CHA", "STR"],
+        skills: ["Lore", "Investigation", "Medicine", "Intimidation"],
+        equipment: ["Blaster pistol", "Combat suit", "Medpac"] },
+      { className: "Engineer", subclasses: { sw5e: "Biotech Engineering" }, title: "Flesh Shaper",
+        playstyle: "A tech caster who rebuilds bodies — allies' and enemies'.",
+        abilities: ["INT", "CON", "DEX", "WIS", "CHA", "STR"],
+        skills: ["Technology", "Medicine", "Lore", "Investigation"],
+        equipment: ["Blaster pistol", "Combat suit", "Medpac"],
+        spells: ["Bacta Pack", "Analyze", "Adrenaline", "Absorb Energy"] }
+    ]
+  },
+  {
+    id: "sw-saber-master", name: "Lightsaber Form Master", icon: "FRM", setting: "starwars", era: "Rise of the Empire",
+    description: "Commit to one classical form and master it above all others.",
+    aliases: ["makashi", "soresu", "juyo", "vaapad", "duelist", "form", "ataru", "djem so"],
+    branches: [
+      { className: "Guardian", subclasses: { sw5e: "Makashi Form" }, title: "Makashi Duelist",
+        playstyle: "A precise one-on-one duelist built to beat other saber users.",
+        abilities: ["DEX", "CON", "WIS", "STR", "CHA", "INT"],
+        skills: ["Insight", "Perception", "Acrobatics", "Lore"],
+        equipment: ["Lightsaber", "Combat suit", "Backpack"],
+        spells: ["Saber Ward", "Battle Precognition", "Force Disarm", "Burst of Speed"] },
+      { className: "Guardian", subclasses: { sw5e: "Soresu Form" }, title: "Soresu Defender",
+        playstyle: "A defensive wall who outlasts blaster fire and duels alike.",
+        abilities: ["CON", "DEX", "WIS", "STR", "CHA", "INT"],
+        skills: ["Insight", "Perception", "Athletics", "Lore"],
+        equipment: ["Lightsaber", "Combat suit", "Backpack"],
+        spells: ["Saber Ward", "Saber Reflect", "Force Body", "Battle Precognition"] },
+      { className: "Guardian", subclasses: { sw5e: "Juyo/Vaapad Form" }, title: "Vaapad Aggressor",
+        playstyle: "A ferocious attacker who turns an opponent's fury back on them.",
+        abilities: ["STR", "CON", "WIS", "DEX", "CHA", "INT"],
+        skills: ["Athletics", "Intimidation", "Insight", "Perception"],
+        equipment: ["Lightsaber", "Combat suit", "Backpack"],
+        spells: ["Saber Ward", "Burst of Speed", "Force Push/Pull", "Saber Throw"] }
+    ]
+  },
+
+  // ===== After the films =====
+  {
+    id: "sw-emperors-hand", name: "Emperor's Hand", icon: "EMH", setting: "starwars", era: "Rebellion Era",
+    description: "A hidden agent answering to one master, sent where armies cannot go.",
+    aliases: ["mara jade", "assassin", "imperial agent", "hand", "spy", "infiltrator"],
+    branches: [
+      { className: "Operative", subclasses: { sw5e: "Shadow Killer Practice" }, title: "Imperial Assassin",
+        playstyle: "A lethal infiltrator who ends fights before they begin.",
+        abilities: ["DEX", "INT", "CON", "CHA", "WIS", "STR"],
+        skills: ["Stealth", "Deception", "Perception", "Sleight of Hand"],
+        equipment: ["Vibroblade", "Blaster pistol", "Combat suit", "Security kit"] },
+      { className: "Sentinel", subclasses: { sw5e: "Path of Shadows" }, title: "Hand of the Emperor",
+        playstyle: "A Force-trained agent hiding a saber under a civilian cover.",
+        abilities: ["DEX", "WIS", "CON", "CHA", "INT", "STR"],
+        skills: ["Stealth", "Deception", "Insight", "Perception"],
+        equipment: ["Lightsaber", "Combat suit", "Security kit"],
+        spells: ["Cloud Mind", "Force Camouflage", "Affect Mind", "Burst of Speed"] }
+    ]
+  },
+  {
+    id: "sw-grand-admiral", name: "Grand Admiral", icon: "ADM", setting: "starwars", era: "Rebellion Era",
+    description: "Win the battle in the briefing room, then watch it play out.",
+    aliases: ["thrawn", "tactician", "commander", "strategist", "officer", "fleet"],
+    branches: [
+      { className: "Scholar", subclasses: { sw5e: "Tactician Pursuit" }, title: "Fleet Tactician",
+        playstyle: "A support commander who hands allies openings and reads the enemy.",
+        abilities: ["INT", "CON", "DEX", "WIS", "CHA", "STR"],
+        skills: ["Lore", "Investigation", "Insight", "Piloting"],
+        equipment: ["Blaster pistol", "Combat suit", "Backpack"] },
+      { className: "Fighter", subclasses: { sw5e: "Tactical Specialist" }, title: "Line Officer",
+        playstyle: "A front-line leader who directs the squad while holding the line.",
+        abilities: ["STR", "CON", "INT", "DEX", "WIS", "CHA"],
+        skills: ["Athletics", "Perception", "Intimidation", "Piloting"],
+        equipment: ["Blaster rifle", "Battle armor", "Backpack"] }
+    ]
+  },
+  {
+    id: "sw-jensaarai", name: "Jensaarai Defender", icon: "JSA", setting: "starwars", era: "Rebellion Era",
+    description: "Armoured Force users who took the Sith's lessons and turned defensive.",
+    aliases: ["jensaarai", "armor", "defender", "susevfi", "grey jedi", "hidden order"],
+    branches: [
+      { className: "Sentinel", subclasses: { sw5e: "Path of Iron" }, title: "Saarai Defender",
+        playstyle: "An armoured Force blade built to absorb punishment.",
+        abilities: ["CON", "DEX", "WIS", "STR", "CHA", "INT"],
+        skills: ["Athletics", "Insight", "Perception", "Lore"],
+        equipment: ["Lightsaber", "Battle armor", "Backpack"],
+        spells: ["Force Body", "Saber Ward", "Battle Precognition", "Burst of Speed"] },
+      { className: "Guardian", subclasses: { sw5e: "Soresu Form" }, title: "Armoured Guardian",
+        playstyle: "A defensive duelist who protects the people behind them.",
+        abilities: ["CON", "STR", "WIS", "DEX", "CHA", "INT"],
+        skills: ["Athletics", "Insight", "Perception", "Lore"],
+        equipment: ["Lightsaber", "Battle armor", "Backpack"],
+        spells: ["Saber Ward", "Saber Reflect", "Force Body"] }
+    ]
+  },
+  {
+    id: "sw-rogue-ace", name: "Rogue Squadron Ace", icon: "ACE", setting: "starwars", era: "Rebellion Era",
+    description: "Best pilot in the fleet, and just as dangerous once the boots hit dirt.",
+    aliases: ["pilot", "rogue squadron", "ace", "starfighter", "wedge", "x-wing"],
+    branches: [
+      { className: "Operative", subclasses: { sw5e: "Maverick Practice" }, title: "Hotshot Pilot",
+        playstyle: "A daring skirmisher who improvises out of every bad situation.",
+        abilities: ["DEX", "CHA", "CON", "INT", "WIS", "STR"],
+        skills: ["Piloting", "Perception", "Technology", "Deception"],
+        equipment: ["Blaster pistol", "Vibroblade", "Combat suit"] },
+      { className: "Scout", subclasses: { sw5e: "Artillerist Technique" }, title: "Gunnery Ace",
+        playstyle: "A ranged specialist who lays down overwhelming fire.",
+        abilities: ["DEX", "WIS", "CON", "INT", "CHA", "STR"],
+        skills: ["Piloting", "Perception", "Technology", "Survival"],
+        equipment: ["Blaster rifle", "Combat suit", "Backpack"],
+        spells: ["Analyze", "Alarm", "Adrenaline"] }
+    ]
+  },
+  {
+    id: "sw-vong-veteran", name: "Vong War Veteran", icon: "VNG", setting: "starwars", era: "New Jedi Order",
+    description: "You fought an enemy the Force could not touch, and you came back.",
+    aliases: ["yuuzhan vong", "new jedi order", "invasion", "veteran", "survivor", "war"],
+    branches: [
+      { className: "Berserker", subclasses: { sw5e: "Frenzied Approach" }, title: "Frenzied Survivor",
+        playstyle: "A furious melee fighter who fights hardest when it is worst.",
+        abilities: ["STR", "CON", "DEX", "WIS", "CHA", "INT"],
+        skills: ["Athletics", "Survival", "Intimidation", "Perception"],
+        equipment: ["Vibroaxe", "Battle armor", "Backpack"] },
+      { className: "Fighter", subclasses: { sw5e: "Praetorian Specialist" }, title: "Praetorian Guard",
+        playstyle: "A bodyguard who plants themselves in front of the people who matter.",
+        abilities: ["STR", "CON", "DEX", "WIS", "INT", "CHA"],
+        skills: ["Athletics", "Perception", "Insight", "Intimidation"],
+        equipment: ["Vibrosword", "Battle armor", "Backpack"] }
+    ]
+  }
+];
+
 (function registerSw5eCreation() {
   const ED = "sw5e";
   if (typeof QUICK_BUILD_PROFILES !== "undefined") {
@@ -245,7 +529,7 @@ const SW5E_CHARACTER_THEMES = [
   }
   if (typeof CHARACTER_THEMES !== "undefined") {
     CHARACTER_THEMES.forEach(theme => { if (!theme.setting) theme.setting = "dnd"; });
-    SW5E_CHARACTER_THEMES.forEach(theme => {
+    [...SW5E_CHARACTER_THEMES, ...SW5E_LEGENDS_THEMES].forEach(theme => {
       if (!CHARACTER_THEMES.some(existing => existing.id === theme.id)) CHARACTER_THEMES.push(theme);
     });
   }
@@ -258,5 +542,5 @@ function sw5eQuickProfile(className) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { SW5E_QUICK_BUILD_PROFILES, SW5E_PREMADE_HEROES, SW5E_CHARACTER_THEMES };
+  module.exports = { SW5E_QUICK_BUILD_PROFILES, SW5E_PREMADE_HEROES, SW5E_CHARACTER_THEMES, SW5E_LEGENDS_THEMES };
 }

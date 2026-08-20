@@ -4683,7 +4683,13 @@ function buildQuickCharacter(preview = false, overrides = null) {
   const asiPlan = autoAsiPlan(buildClassName, level, baseAbilities, origin.originBonuses);
   const asiBonuses = asiPlan.bonuses;
   const skills = quickSkillChoices(buildClassName, background, level);
-  const subclass = defaultSubclassFor(buildClassName, level);
+  // Honour an explicitly requested subclass (theme branch, premade hero) and
+  // only fall back to the class default when none was supplied.
+  const requestedSubclass = overrides?.subclass || "";
+  const subclassOptions = subclassEntries(buildClassName, edition).map(entry => entry.name);
+  const subclass = requestedSubclass && subclassOptions.includes(requestedSubclass)
+    ? requestedSubclass
+    : defaultSubclassFor(buildClassName, level);
   const subclassChoices = prebuildSubclassChoices(subclass, level);
   const finalAbilities = Object.fromEntries(ABILITIES.map(ability => [
     ability,
