@@ -7085,6 +7085,37 @@ function renderStatBreakdown(character, stat) {
     ${data.note ? `<footer>${escapeHtml(data.note)}</footer>` : ""}
   </div>`;
 }
+// Wielding a separate melee weapon in each hand: two or more equipped melee
+// weapons, neither of which is two-handed.
+function isDualWielding(data) {
+  const melee = (data.inventory || []).filter(item => {
+    if (!item.equipped || item.carried === false) return false;
+    const profile = parseWeaponProfile(item);
+    return profile && !profile.ranged && !profile.twoHanded;
+  });
+  return melee.length >= 2;
+}
+// AC granted only while dual wielding: the 2014 Dual Wielder feat, and Blade
+// Dance from Solasta's Swift Blade ranger. (The 2024 Dual Wielder feat has no
+// AC benefit, so it is deliberately not included.)
+function dualWieldAcBonuses(data) {
+  if (!isDualWielding(data)) return [];
+  const bonuses = [];
+  if (data.edition === "2014" && (data.feats || []).includes("Dual Wielder")) {
+    bonuses.push({ label: "Dual Wielder (two weapons)", value: 1 });
+  }
+  if (classSubclassName(data, "Ranger") === "Swift Blade" && classLevel(data, "Ranger") >= 3) {
+    bonuses.push({ label: "Blade Dance (two weapons)", value: 2 });
+  }
+  return bonuses;
+}
+// Armour bases offered for a magic armour, limited to the character's ruleset
+// so SW5E plating is not suggested for a D&D character.
+function armorRuleNamesForEdition(rulesEdition) {
+  const sw5eNames = new Set(Object.keys((typeof SW5E_DATA !== "undefined" && SW5E_DATA.armorRules) || {}));
+  return Object.keys(ARMOR_RULES).filter(name =>
+    rulesEdition === "sw5e" ? sw5eNames.has(name) : !sw5eNames.has(name));
+}
 // A shield is anything named or typed as one, so "Shield, +1" still counts.
 function isShieldItem(item) {
   return /(^|[\s,])shield([\s,]|$)/i.test(String(item.name || ""))
@@ -7136,18 +7167,19 @@ function armorRuleFromType(item) {
   return key ? ARMOR_RULES[key] : null;
 }
 // Generic magic armor the player picks a base for, mirroring base weapons.
-function itemBaseArmorChoices(item) {
+function itemBaseArmorChoices(item, rulesEdition = edition) {
   const name = String(item.name || "");
   const type = String(item.type || "");
   const generic = /^Armor, \+\d/.test(name) || /^(Adamantine|Mithral) Armor$/.test(name);
   // e.g. "Armor (light, medium, or heavy)" - the base is the wearer's choice.
   const multi = /^Armou?r\s*\(/i.test(type) && /,| or /.test(type);
   if (!generic && !multi) return null;
-  if (!multi) return Object.keys(ARMOR_RULES);
+  const pool = armorRuleNamesForEdition(rulesEdition);
+  if (!multi) return pool;
   const wanted = type.replace(/^Armou?r\s*\(/i, "").replace(/\)$/, "").toLowerCase();
   const tiers = ["light", "medium", "heavy"].filter(tier => wanted.includes(tier));
-  if (!tiers.length) return Object.keys(ARMOR_RULES);
-  return Object.keys(ARMOR_RULES).filter(key =>
+  if (!tiers.length) return pool;
+  return pool.filter(key =>
     tiers.some(tier => ARMOR_RULES[key].type.toLowerCase().startsWith(tier)));
 }
 // Which equipped items are contributing the flat AC bonus in activeItemEffects.
@@ -7208,6 +7240,10 @@ function armorClassDetails(data) {
     best = { value: best.value + fx.acUnarmored, source: `${best.source} + Bracers of Defense` };
     breakdown.push({ label: "Bracers of Defense", value: fx.acUnarmored });
   }
+  dualWieldAcBonuses(data).forEach(bonus => {
+    best = { value: best.value + bonus.value, source: `${best.source} + ${bonus.label}` };
+    breakdown.push(bonus);
+  });
   if (fx.ac) {
     best = { value: best.value + fx.ac, source: `${best.source} + magic items (+${fx.ac})` };
     acItemContributors(data).forEach(entry => breakdown.push(entry));
@@ -8663,7 +8699,7 @@ function renderInventorySection(character, extraClass = "") {
           ${itemRequiresAttunement(item) ? `<button type="button" class="item-attune-btn ${item.attuned ? "on" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${item.attuned}" title="${item.attuned ? "Attuned — click to end attunement" : "Requires attunement — click to attune"}">✦</button>` : ""}
           ${hasPactBoon(character, "Pact of the Blade") && parseWeaponProfile(item) ? `<button type="button" class="item-pact-btn ${item.pactWeapon ? "on" : ""}" data-item-action="pact" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${Boolean(item.pactWeapon)}" title="${item.pactWeapon ? "Your pact weapon — click to unset" : "Set as your pact weapon"}">P</button>` : ""}
         </div></td>
-        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const armor = itemBaseArmorChoices(item); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
+        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const armor = itemBaseArmorChoices(item, character.edition); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
         <td>${Number(item.quantity || 1)}</td>
         <td>${Number((Number(item.weight || 0) * Number(item.quantity || 1)).toFixed(2))} lb.</td>
         <td>${escapeHtml(item.cost || "—")}</td>
