@@ -8506,6 +8506,64 @@ function spellSlotResources(character) {
   return resources;
 }
 
+// Limited-use abilities that come from a species or a feat rather than a class.
+// max: a number, or "prof" for proficiency bonus, or an ability abbreviation.
+const SPECIES_TRAIT_RESOURCES = {
+  Dragonborn: [{ id: "breath-weapon", name: "Breath Weapon", max: "prof", recovery: "long", editions: ["2024"] },
+               { id: "breath-weapon", name: "Breath Weapon", max: 1, recovery: "short", shortRecovery: "all", editions: ["2014"] }],
+  "Half-Orc": [{ id: "relentless-endurance", name: "Relentless Endurance", max: 1, recovery: "long" }],
+  Orc: [{ id: "relentless-endurance", name: "Relentless Endurance", max: 1, recovery: "long" },
+        { id: "adrenaline-rush", name: "Adrenaline Rush", max: "prof", recovery: "short", shortRecovery: "all" }],
+  Goliath: [{ id: "stones-endurance", name: "Stone's Endurance", max: "prof", recovery: "long" },
+            { id: "giant-ancestry", name: "Giant Ancestry", max: "prof", recovery: "long", editions: ["2024"] }],
+  Aasimar: [{ id: "healing-hands", name: "Healing Hands", max: 1, recovery: "long" },
+            { id: "celestial-revelation", name: "Celestial Revelation", max: 1, recovery: "long" }],
+  Tiefling: [{ id: "infernal-legacy", name: "Infernal Legacy · free casting", max: 1, recovery: "long" }],
+  Firbolg: [{ id: "hidden-step", name: "Hidden Step", max: "prof", recovery: "long" }],
+  Triton: [{ id: "control-air-and-water", name: "Control Air and Water", max: 1, recovery: "long" }],
+  "Yuan-ti Pureblood": [{ id: "innate-spellcasting", name: "Innate Spellcasting", max: 1, recovery: "long" }],
+  Tabaxi: [{ id: "feline-agility", name: "Feline Agility", max: 1, recovery: "short", shortRecovery: "all" }],
+  Harengon: [{ id: "rabbit-hop", name: "Rabbit Hop", max: "prof", recovery: "long" }],
+  Fairy: [{ id: "fairy-magic", name: "Fairy Magic · free casting", max: 1, recovery: "long" }],
+  Centaur: [{ id: "charge", name: "Charge", max: 1, recovery: "short", shortRecovery: "all" }],
+  Satyr: [{ id: "mirthful-leaps", name: "Mirthful Leaps", max: "prof", recovery: "long" }]
+};
+const FEAT_RESOURCES = {
+  Lucky: [{ id: "feat-lucky", name: "Lucky", max: 3, recovery: "long", editions: ["2014"] },
+          { id: "feat-lucky", name: "Lucky", max: "prof", recovery: "long", editions: ["2024"] }],
+  "Fey Touched": [{ id: "feat-fey-touched", name: "Fey Touched · free casting", max: 1, recovery: "long" }],
+  "Shadow Touched": [{ id: "feat-shadow-touched", name: "Shadow Touched · free casting", max: 1, recovery: "long" }],
+  "Mythal Touched": [{ id: "feat-mythal-touched", name: "Mythal Touched · free casting", max: 1, recovery: "long" }],
+  "Vampire Touched": [{ id: "feat-vampire-touched", name: "Vampire Touched · free casting", max: 1, recovery: "long" }],
+  "Magic Initiate": [{ id: "feat-magic-initiate", name: "Magic Initiate · free casting", max: 1, recovery: "long" }],
+  "Martial Adept": [{ id: "feat-martial-adept", name: "Martial Adept · superiority die", max: 1, recovery: "short", shortRecovery: "all" }],
+  Chef: [{ id: "feat-chef", name: "Chef · treats", max: "prof", recovery: "long" }],
+  Healer: [{ id: "feat-healer", name: "Healer · healing use", max: "prof", recovery: "long" }],
+  Poisoner: [{ id: "feat-poisoner", name: "Poisoner · doses", max: "prof", recovery: "long" }],
+  "Gift of the Chromatic Dragon": [{ id: "feat-chromatic", name: "Chromatic Infusion", max: "prof", recovery: "long" }],
+  "Gift of the Metallic Dragon": [{ id: "feat-metallic", name: "Protective Wings", max: "prof", recovery: "long" }],
+  "Gift of the Gem Dragon": [{ id: "feat-gem", name: "Telekinetic Reprisal", max: "prof", recovery: "long" }],
+  "Rune Shaper": [{ id: "feat-rune-shaper", name: "Rune Shaper · free casting", max: 1, recovery: "long" }],
+  Telekinetic: [{ id: "feat-telekinetic", name: "Telekinetic shove", max: "prof", recovery: "long", editions: ["2024"] }]
+};
+// Resolve a resource max that may be a number, "prof", or an ability score.
+function traitResourceMax(character, max) {
+  if (typeof max === "number") return max;
+  if (max === "prof") return proficiency(characterTotalLevel(character));
+  if (ABILITIES.includes(max)) return Math.max(1, modifier(character[max]));
+  return 0;
+}
+function traitResourceDefinitions(character) {
+  const rulesEdition = character.edition || "2014";
+  const entries = [
+    ...(SPECIES_TRAIT_RESOURCES[character.species] || []),
+    ...(character.feats || []).flatMap(feat => FEAT_RESOURCES[feat] || [])
+  ];
+  return entries
+    .filter(entry => !entry.editions || entry.editions.includes(rulesEdition))
+    .map(entry => ({ ...entry, max: traitResourceMax(character, entry.max) }))
+    .filter(entry => entry.max > 0);
+}
 function singleClassResourceDefinitions(character) {
   const level = Number(character.level);
   const revised = character.edition === "2024";
@@ -8581,7 +8639,13 @@ function singleClassResourceDefinitions(character) {
         points, "long", { type: "pool" });
     }
   }
-  if (character.className === "Wizard") add("arcane-recovery", "Arcane Recovery", 1);
+  if (character.className === "Wizard") {
+    add("arcane-recovery", "Arcane Recovery", 1);
+    if (level >= 20) add("signature-spells", "Signature Spells · free castings", 2, "short", { shortRecovery: "all" });
+  }
+  if (character.className === "Warlock" && level >= 20) {
+    add("eldritch-master", "Eldritch Master · regain pact slots", 1);
+  }
   if (character.className === "Artificer" && level >= 7) add("flash-of-genius", "Flash of Genius", abilityUses("INT"));
   if (character.className === "Blood Hunter") add("blood-maledict", "Blood Maledict", valueByLevel(level, [[1,1],[6,2],[13,3],[17,4]]), "short", { shortRecovery: "all" });
 
@@ -8653,10 +8717,10 @@ function resourceDefinitions(character) {
       id: `${resourcePrefix(entry.name)}-${resource.id}`,
       name: `${entry.name} · ${resource.name}`
     })));
-    const merged = [...classResources, ...spellSlotResources(character)];
+    const merged = [...classResources, ...traitResourceDefinitions(character), ...spellSlotResources(character)];
     return [...new Map(merged.map(resource => [resource.id, resource])).values()];
   }
-  const merged = [...singleClassResourceDefinitions(character), ...spellSlotResources(character)];
+  const merged = [...singleClassResourceDefinitions(character), ...traitResourceDefinitions(character), ...spellSlotResources(character)];
   return [...new Map(merged.map(resource => [resource.id, resource])).values()];
 }
 
