@@ -3520,8 +3520,11 @@ function classSkillsFor(className, rulesEdition) {
   return CLASS_SKILLS[className];
 }
 function populateRules(savedCharacter = null) {
-  $("#species-select").innerHTML = groupedSelectOptions(customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]));
-  $("#background-select").innerHTML = groupedSelectOptions(customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]));
+  const originFallback = edition === "sw5e" ? [] : null;
+  $("#species-select").innerHTML = groupedSelectOptions(customizationEntries(
+    edition === "sw5e" ? [] : SPECIES_CATALOG, RULES.species[edition], originFallback ?? RULES.species[2014]));
+  $("#background-select").innerHTML = groupedSelectOptions(customizationEntries(
+    edition === "sw5e" ? [] : BACKGROUND_CATALOG, RULES.backgrounds[edition], originFallback ?? RULES.backgrounds[2014]));
   const availableClasses = classesForEdition(edition);
   if (!availableClasses.includes(selectedClass)) selectedClass = availableClasses[0] || selectedClass;
   $("#class-grid").innerHTML = availableClasses.map(name => {
@@ -5540,6 +5543,8 @@ function normalizeCharacterData(character, options = {}) {
 
 function maxSpellLevel(className, level, rulesEdition, subclass = "") {
   if (!spellListsFor(rulesEdition, className, subclass)) return -1;
+  // SW5E casters use their class's Max Power Level column.
+  if (rulesEdition === "sw5e") return typeof sw5eMaxPowerLevel === "function" ? sw5eMaxPowerLevel(className, level) : 0;
   if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) {
     return (THIRD_CASTER_SLOTS[level - 1] || []).length;
   }
@@ -6557,10 +6562,28 @@ function itemBaseWeaponChoices(item) {
   const group = MAGIC_WEAPON_BASE_GROUP[name] || (/^Weapon, \+\d/.test(name) ? "any" : null);
   return group ? WEAPON_BASE_GROUPS[group] : null;
 }
+// SW5E weapon proficiency is granted per class as phrases like "Simple
+// lightweapons" or "All blasters", matched against the item's classification.
+function sw5eProficientWithWeapon(character, item) {
+  if (typeof SW5E_DATA === "undefined") return true;
+  const type = String(item.type || "").toLowerCase();
+  const tier = type.includes("martial") ? "martial" : "simple";
+  const category = ["lightweapon", "vibroweapon", "blaster"].find(word => type.includes(word));
+  return classBreakdown(character).some(entry => {
+    const granted = SW5E_DATA.proficiencies?.[entry.name]?.weapons || [];
+    return granted.some(phrase => {
+      const text = String(phrase).toLowerCase();
+      if (!category) return true;
+      if (!text.includes(category)) return false;
+      return text.includes("all") || text.includes(tier);
+    });
+  });
+}
 function proficientWithWeapon(character, item) {
   const type = String(item.type || "").toLowerCase();
   const classes = classBreakdown(character).map(entry => entry.name);
   if ((character.weaponMastery || []).includes(item.name)) return true;
+  if (character.edition === "sw5e") return sw5eProficientWithWeapon(character, item);
   if (type.includes("simple")) return true;
   if (type.includes("martial")) {
     if (classes.some(name => MARTIAL_WEAPON_CLASSES.has(name))) return true;
@@ -6577,14 +6600,16 @@ function parseWeaponProfile(item) {
   const dice = text.match(/(\d+)\s*d\s*(\d+)/i);
   if (!dice) return null;
   const versatile = text.match(/versatile\s*\((\d+)d(\d+)\)/i);
-  const typeMatch = text.match(/\b(slashing|piercing|bludgeoning)\b/i);
+  // SW5E adds energy/ion/kinetic and lets weapons deal elemental types directly.
+  const typeMatch = text.match(/\b(slashing|piercing|bludgeoning|energy|ion|kinetic|acid|cold|fire|lightning|necrotic|psychic|sonic|force|poison)\b/i);
   return {
     count: Number(dice[1]),
     sides: Number(dice[2]),
     versatile: versatile ? { count: Number(versatile[1]), sides: Number(versatile[2]) } : null,
     damageType: typeMatch ? typeMatch[1].toLowerCase() : "",
     finesse: /finesse/i.test(text),
-    ranged: /ranged/i.test(item.type || "") || /ammunition/i.test(text),
+    // SW5E blasters are ranged and feed from power cells rather than ammunition.
+    ranged: /ranged|blaster/i.test(item.type || "") || /ammunition|power cell/i.test(text),
     thrown: /thrown/i.test(text),
     twoHanded: /two-handed/i.test(text)
   };
@@ -8154,6 +8179,15 @@ function singleClassResourceDefinitions(character) {
       if (level >= unlock) add(`mystic-arcanum-${index + 6}`, `Mystic Arcanum · level ${index + 6}`, 1);
     });
   }
+  // SW5E casters spend force/tech points instead of spell slots.
+  if (character.edition === "sw5e" && typeof sw5ePowerPoints === "function") {
+    const points = sw5ePowerPoints(character.className, level);
+    if (points) {
+      const tech = sw5eIsTechCaster(character.className);
+      add(tech ? "tech-points" : "force-points", tech ? "Tech Points" : "Force Points",
+        points, "long", { type: "pool" });
+    }
+  }
   if (character.className === "Wizard") add("arcane-recovery", "Arcane Recovery", 1);
   if (character.className === "Artificer" && level >= 7) add("flash-of-genius", "Flash of Genius", abilityUses("INT"));
   if (character.className === "Blood Hunter") add("blood-maledict", "Blood Maledict", valueByLevel(level, [[1,1],[6,2],[13,3],[17,4]]), "short", { shortRecovery: "all" });
@@ -8370,6 +8404,8 @@ function renderItemBrowser() {
     `<button type="button" class="rarity-filter ${rarity === "All" || rarity === "Mundane" ? "" : `rarity-${rarity.toLowerCase().replace(/\s+/g, "-")}`} ${browserRarity === rarity ? "active" : ""}" data-browser-rarity="${escapeHtml(rarity)}">${escapeHtml(rarity)}</button>`).join("");
   const query = browserSearch.trim().toLowerCase();
   const matches = EQUIPMENT_CATALOG.map((item, index) => ({ item, index })).filter(({ item }) => {
+    if (item.editions && !item.editions.includes(edition)) return false;
+    if (!item.editions && edition === "sw5e") return false;
     if (browserCategory !== "All" && itemBroadCategory(item) !== browserCategory) return false;
     if (browserRarity === "Mundane") { if (item.rarity) return false; }
     else if (browserRarity !== "All" && item.rarity !== browserRarity) return false;

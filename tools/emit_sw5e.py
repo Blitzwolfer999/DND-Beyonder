@@ -44,6 +44,12 @@ payload = {
     "species": d["species"],
     "backgrounds": d["backgrounds"],
     "summaries": d["summaries"],
+    "levelTables": d.get("levelTables", {}),
+    "proficiencies": d.get("proficiencies", {}),
+    "startingEquipment": d.get("startingEquipment", {}),
+    "startingWealth": d.get("startingWealth", {}),
+    "equipment": d.get("equipment", []),
+    "armorRules": d.get("armorRules", {}),
 }
 
 header = '''// Star Wars 5e (SW5E) content — a third rules edition alongside 2014 and 2024.
@@ -80,23 +86,26 @@ function skillsForEdition(rulesEdition) {
 function isSw5eClass(className) {
   return Boolean(SW5E_DATA.chassis[className]);
 }
-// Force/tech points replace spell slots; these are the SW5E point tables.
+// Force/tech points, powers known and max power level all come from each
+// class's own level table in the SW5E data.
+function sw5eLevelRow(className, level) {
+  const table = SW5E_DATA.levelTables[className];
+  if (!table) return null;
+  return table[String(Math.max(1, Math.min(20, Number(level || 1))))] || null;
+}
 function sw5ePowerPoints(className, level) {
-  const rate = SW5E_DATA.castRate[className];
-  if (!rate) return 0;
-  const factor = rate === "full" ? 4 : rate === "3/4" ? 3 : rate === "half" ? 2 : 0;
-  return factor ? factor * Number(level || 1) : 0;
+  return Number(sw5eLevelRow(className, level)?.powerPoints || 0);
+}
+function sw5ePowersKnown(className, level) {
+  return Number(sw5eLevelRow(className, level)?.powersKnown || 0);
+}
+function sw5eIsTechCaster(className) {
+  return (SW5E_DATA.powercasting?.[className]?.tech || "none") !== "none";
 }
 // Caps come from each class's Max Power Level column: full casters reach 9th,
 // 3/4 casters (Sentinel) 7th, half casters (Guardian, Scout) 5th.
 function sw5eMaxPowerLevel(className, level) {
-  const rate = SW5E_DATA.castRate[className];
-  if (!rate) return 0;
-  const lvl = Number(level || 1);
-  if (rate === "full") return Math.min(9, Math.ceil(lvl / 2));
-  if (rate === "3/4") return Math.min(7, Math.ceil(lvl / 3));
-  if (rate === "half") return Math.min(5, Math.floor((lvl + 3) / 4));
-  return 0;
+  return Number(sw5eLevelRow(className, level)?.maxPowerLevel || 0);
 }
 
 // RULES, SKILLS and CLASS_SKILLS live in app.js, which loads after this file,
@@ -130,6 +139,11 @@ function registerSw5eRuntime() {
   });
   RULES.species[ED] = SW5E_DATA.species;
   RULES.backgrounds[ED] = SW5E_DATA.backgrounds;
+  if (typeof ARMOR_RULES !== "undefined") {
+    Object.entries(SW5E_DATA.armorRules).forEach(([name, rule]) => {
+      if (!ARMOR_RULES[name]) ARMOR_RULES[name] = { ...rule, dex: rule.dex >= 99 ? Infinity : rule.dex };
+    });
+  }
 }
 
 (function registerSw5eContent() {
@@ -158,9 +172,23 @@ function registerSw5eRuntime() {
       if (!SPELL_METADATA[name]) SPELL_METADATA[name] = meta;
     });
   }
-  // --- progression ---
+  // --- progression: powers known come straight from the class tables ---
   SPELL_PROGRESSION[ED] = {};
+  Object.entries(SW5E_DATA.levelTables).forEach(([cls, table]) => {
+    const totals = [];
+    for (let lvl = 1; lvl <= 20; lvl += 1) totals.push(Number(table[String(lvl)]?.powersKnown || 0));
+    if (totals.some(Boolean)) SPELL_PROGRESSION[ED][cls] = { mode: "known", totals };
+  });
+  // At-will powers are part of the powers-known total in SW5E, so there is no
+  // separate cantrip allowance.
   CANTRIP_PROGRESSION[ED] = {};
+  // --- equipment ---
+  SW5E_DATA.equipment.forEach(item => {
+    if (!EQUIPMENT_CATALOG.some(existing => existing.name === item.name && existing.editions)) {
+      EQUIPMENT_CATALOG.push({ ...item, editions: [ED] });
+    }
+  });
+
   PROGRESSION_OPTIONS.invocations[ED] = [];
   PROGRESSION_OPTIONS.metamagic[ED] = [];
   PROGRESSION_OPTIONS.fightingStyles[ED] = PROGRESSION_OPTIONS.fightingStyles["2014"];
