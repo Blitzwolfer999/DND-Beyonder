@@ -1682,7 +1682,11 @@ async function updateCampaignMapSettings(mapId, values) {
     ...map.data,
     columns: values.columns,
     rows: settingsRows,
-    backgroundFit: values.backgroundFit || map.data?.backgroundFit || "fill",
+    // A freshly uploaded image sizes the grid to its own aspect ratio, so map
+    // it 1:1 rather than leaving a crop-or-letterbox fit in place.
+    backgroundFit: (campaignMapImageDraft && campaignMapImageAspect)
+      ? "fill"
+      : (values.backgroundFit || map.data?.backgroundFit || "fill"),
     gridSize: values.gridSize,
     gridEnabled: values.gridEnabled === "on",
     display: {

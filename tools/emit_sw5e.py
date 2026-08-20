@@ -6,6 +6,17 @@ OUT = r"C:\Users\mcdbz\OneDrive\Documents\Claude\DND-Beyonder\sw5e-content.js"
 
 d = json.load(open(os.path.join(HERE, "sw5e-build.json"), encoding="utf-8"))
 
+# The Foundry set carries internal entries that are not player-selectable:
+# "(Companion)" halves hold the pet/droid statblock for a companion archetype,
+# and "(Depreciated)"/"(Old)" are superseded versions. Drop both.
+_INTERNAL_SUFFIXES = ("(companion)", "(depreciated)", "(old)")
+def _is_internal(name):
+    return str(name).strip().lower().endswith(_INTERNAL_SUFFIXES)
+d["archetypes"] = {cls: [a for a in names if not _is_internal(a)]
+                   for cls, names in d["archetypes"].items()}
+d["archetypeFeatures"] = {a: rows for a, rows in d["archetypeFeatures"].items()
+                          if not _is_internal(a)}
+
 # Force/tech caster progression -> which power list a class draws from.
 FORCE = {c for c, p in d["powercasting"].items() if p["force"] != "none"}
 TECH = {c for c, p in d["powercasting"].items() if p["tech"] != "none"}
