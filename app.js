@@ -5483,7 +5483,7 @@ function levelSubclassChoiceMarkup(character, subclass, targetLevel) {
   );
   if (subclass === "College of Lore" && targetLevel >= 3 && Number(character.level || 1) < 3) {
     const trained = proficientSkills(character);
-    const options = skillsForEdition(edition).filter(skill => !trained.has(skill));
+    const options = skillsForEdition(character.edition || edition).filter(skill => !trained.has(skill));
     markup += `<div data-min-choices="3" data-choice-name="skillProficiencies"><strong>Choose three bonus skill proficiencies</strong>${optionChecks("skillProficiencies", options, [], 3)}</div>`;
   }
   return markup;
@@ -5520,7 +5520,7 @@ function renderStartingClassOptions(savedCharacter = null) {
   }
   const expertiseCount = expertiseCountAtLevel(selectedClass, level, edition);
   if (expertiseCount) {
-    blocks.push(choiceChecks("expertise", skillsForEdition(character.edition), currentExpertise, expertiseCount, "Expertise"));
+    blocks.push(choiceChecks("expertise", skillsForEdition(edition), currentExpertise, expertiseCount, "Expertise"));
   }
   const masteryCount = weaponMasteryCount(selectedClass, level, edition);
   if (masteryCount) {
@@ -6084,7 +6084,8 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (currentOriginFeat && !feats.some(feat => feat.name === currentOriginFeat) && (!featQuery || currentOriginFeat.toLowerCase().includes(featQuery))) {
     feats.unshift({ name: currentOriginFeat, category: "Origin", source: edition === "2024" ? "Background" : "Species" });
   }
-  $("#feat-guidance").textContent = `${FEATS[edition].length} ${edition === "2014" ? "5e" : "5.5e and expanded"} feat options, grouped by source.`;
+  const featPool = FEATS[edition] || [];
+  $("#feat-guidance").textContent = `${featPool.length} ${edition === "2014" ? "5e" : edition === "sw5e" ? "Star Wars 5e" : "5.5e and expanded"} feat options, grouped by source.`;
   const renderFeat = feat => {
     const isOriginFeat = feat.name === currentOriginFeat;
     const eligible = isOriginFeat || featEligible(feat, level, selectedClass, edition);

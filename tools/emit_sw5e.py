@@ -61,6 +61,7 @@ payload = {
     "startingWealth": d.get("startingWealth", {}),
     "equipment": d.get("equipment", []),
     "armorRules": d.get("armorRules", {}),
+    "feats": d.get("feats", []),
 }
 
 header = '''// Star Wars 5e (SW5E) content — a third rules edition alongside 2014 and 2024.
@@ -182,6 +183,10 @@ function registerSw5eRuntime() {
     Object.entries(SW5E_DATA.powerMeta).forEach(([name, meta]) => {
       if (!SPELL_METADATA[name]) SPELL_METADATA[name] = meta;
     });
+  }
+  // --- feats ---
+  if (typeof FEATS !== "undefined" && SW5E_DATA.feats && SW5E_DATA.feats.length) {
+    FEATS[ED] = SW5E_DATA.feats;
   }
   // --- progression: powers known come straight from the class tables ---
   SPELL_PROGRESSION[ED] = {};
