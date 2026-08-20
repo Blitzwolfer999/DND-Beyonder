@@ -3720,3 +3720,16 @@ html[data-theme="dark"] .dungeon-theme-strip button.active { color: #fff; border
   .theme-create-bar { align-items: stretch; flex-direction: column; }
   .theme-create-bar .button { width: 100%; }
 }
+
+/* Setting picker: game system first, then D&D edition */
+.ruleset-picker { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.setting-toggle { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+.setting-toggle button {
+  padding: 5px 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--muted);
+  font: 800 11px/1.4 system-ui, sans-serif; letter-spacing: .02em; white-space: nowrap;
+}
+.setting-toggle button.active { color: #fff; background: linear-gradient(180deg,#3f6d52,#2f5540); }
+.setting-toggle button[data-setting="starwars"].active { background: linear-gradient(180deg,#2f5f86,#1f4462); }
+.edition-toggle button[hidden] { display: none; }
+.edition-toggle.single { opacity: .85; }

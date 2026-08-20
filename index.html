@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=sw5e-40">
+  <link rel="stylesheet" href="styles.css?v=setting-43">
 </head>
 <body>
   <div class="app-shell">
@@ -97,10 +97,16 @@
       <section class="view" id="builder-view">
         <div class="page-head">
           <div><span class="eyebrow" id="builder-eyebrow">CHARACTER CREATOR</span><h1 id="builder-title">Build your adventurer</h1><p id="builder-description">Every choice updates your sheet as you go.</p></div>
-          <div class="edition-toggle" aria-label="Rules edition">
-            <button class="active" data-edition="2014">5e · 2014</button>
-            <button data-edition="2024">5.5e · 2024</button>
-            <button data-edition="sw5e">SW5E</button>
+          <div class="ruleset-picker">
+            <div class="setting-toggle" aria-label="Game setting">
+              <button class="active" data-setting="dnd">Dungeons &amp; Dragons</button>
+              <button data-setting="starwars">Star Wars</button>
+            </div>
+            <div class="edition-toggle" aria-label="Rules edition">
+              <button class="active" data-edition="2014">5e · 2014</button>
+              <button data-edition="2024">5.5e · 2024</button>
+              <button data-edition="sw5e" hidden>SW5E</button>
+            </div>
           </div>
         </div>
 
@@ -730,6 +736,7 @@
   <script src="sw5e-content.js?v=sw5e-3"></script>
   <script src="name-data.js?v=names-1"></script>
   <script src="theme-data.js?v=themes-3"></script>
+  <script src="sw5e-creation.js?v=sw5e-create-2"></script>
   <script src="dungeon-data.js?v=dungeon-challenge-1"></script>
   <script src="map-library.js?v=classic-map-pack-1"></script>
   <script src="map-token-library.js?v=creature-vault-1"></script>
@@ -744,6 +751,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=sw5e-42"></script>
+  <script src="app.js?v=setting-45"></script>
 </body>
 </html>

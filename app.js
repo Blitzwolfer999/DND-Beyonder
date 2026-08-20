@@ -226,6 +226,11 @@ const PREMADE_HEROES = [
   { key: "embersong", name: "Kael Embersong", className: "Bard", species: "Tiefling", background: "Entertainer", role: "Face", pitch: "A silver-tongued performer with support magic and social skills.", level: 1 },
   { key: "ashtrail", name: "Rowan Ashtrail", className: "Ranger", species: "Human", background: "Outlander", role: "Wilderness striker", pitch: "A tracker with ranged combat, survival skills, and practical magic.", level: 1 }
 ];
+// Premades for the active setting: Star Wars characters in SW5E, D&D otherwise.
+function premadeHeroesForEdition() {
+  if (edition === "sw5e" && typeof SW5E_PREMADE_HEROES !== "undefined") return SW5E_PREMADE_HEROES;
+  return PREMADE_HEROES;
+}
 const CONDITIONS = ["Blinded", "Charmed", "Deafened", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Exhaustion"];
 const CONDITION_BADGES = {
   Blinded: { a: "BLI", c: "#5b6bb5" }, Charmed: { a: "CHM", c: "#c85fb0" }, Deafened: { a: "DEA", c: "#6b7280" },
@@ -265,6 +270,7 @@ let selectedFeatNames = new Set();
 let selectedInvocations = new Set();
 let selectedMetamagic = new Set();
 let selectedPactBoon = "";
+let lastDndEdition = "2014";
 let selectedFeatAbilities = {};
 let selectedAsi = {};
 let selectedSpellNames = new Set();
@@ -3538,14 +3544,14 @@ function populateRules(savedCharacter = null) {
 }
 
 function quickAbilityScores(className, abilityOrder = null) {
-  const order = abilityOrder?.length ? abilityOrder : QUICK_BUILD_PROFILES[className]?.abilities || ABILITIES;
+  const order = abilityOrder?.length ? abilityOrder : quickBuildProfileFor(className)?.abilities || ABILITIES;
   const scores = {};
   [15, 14, 13, 12, 10, 8].forEach((score, index) => { scores[order[index]] = score; });
   return Object.fromEntries(ABILITIES.map(ability => [ability, scores[ability] || 10]));
 }
 
 function quickOrigin(className, species, background, abilityOrder = null) {
-  const profile = QUICK_BUILD_PROFILES[className];
+  const profile = quickBuildProfileFor(className);
   const priorities = abilityOrder?.length ? abilityOrder : profile.abilities;
   const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
   if (edition === "2014") {
@@ -3591,7 +3597,7 @@ function quickOrigin(className, species, background, abilityOrder = null) {
 }
 
 function quickSkillChoices(className, background, level = 1, themeSkills = []) {
-  const profile = QUICK_BUILD_PROFILES[className];
+  const profile = quickBuildProfileFor(className);
   const backgroundSkills = [...new Set(BACKGROUND_SKILLS[background] || profile.skills.slice(-2))].slice(0, 2);
   while (backgroundSkills.length < 2) {
     const fallback = Object.keys(SKILLS).find(skill => !backgroundSkills.includes(skill));
@@ -3613,7 +3619,7 @@ function quickSkillChoices(className, background, level = 1, themeSkills = []) {
 
 function quickSpellChoices(className) {
   const lists = spellListsFor(edition, className) || {};
-  const profile = QUICK_BUILD_PROFILES[className];
+  const profile = quickBuildProfileFor(className);
   const counts = { ...(QUICK_SPELL_COUNTS[className] || {}) };
   if (edition === "2014" && ["Paladin", "Ranger"].includes(className)) counts[1] = 0;
   const chosen = [];
@@ -3628,7 +3634,8 @@ function quickSpellChoices(className) {
 }
 
 function quickInventory(className, themeEquipment = null) {
-  const names = [...(themeEquipment?.length ? themeEquipment : QUICK_BUILD_PROFILES[className]?.equipment || []), "Bedroll", "Rations, 1 day"];
+  const fallbackGear = edition === "sw5e" ? ["Bedroll"] : ["Bedroll", "Rations, 1 day"];
+  const names = [...(themeEquipment?.length ? themeEquipment : quickBuildProfileFor(className)?.equipment || []), ...fallbackGear];
   const entries = new Map();
   names.forEach(name => {
     const catalog = EQUIPMENT_CATALOG.find(item => item.name === name)
@@ -3734,6 +3741,56 @@ function defaultSubclassFor(className, level = 1, rulesEdition = edition) {
   return Number(level || 1) >= subclassLevel(className, rulesEdition) ? chosen : chosen;
 }
 
+// Fighter and Monk exist in both systems, so the SW5E profile wins while the
+// Star Wars setting is active.
+// The setting picks the ruleset family: D&D offers 2014/2024, Star Wars has a
+// single ruleset so its edition toggle is hidden.
+function gameSettingFor(rulesEdition) {
+  return rulesEdition === "sw5e" ? "starwars" : "dnd";
+}
+function setGameSetting(setting, options = {}) {
+  const target = setting === "starwars" ? "sw5e" : (lastDndEdition || "2014");
+  if (edition !== "sw5e") lastDndEdition = edition;
+  edition = target;
+  selectedSpellLevel = 0;
+  currentOriginFeat = "";
+  selectedSpellNames.clear();
+  selectedFeatNames.clear();
+  selectedFeatAbilities = {};
+  selectedAsi = {};
+  selectedInvocations.clear();
+  selectedMetamagic.clear();
+  selectedPactBoon = "";
+  const fields = $("#class-choice-fields");
+  if (fields) fields.innerHTML = "";
+  syncRulesetToggles();
+  populateRules();
+  updatePreview();
+  if (options.silent) return;
+  if (!$("#quick-builder")?.classList.contains("hidden")) initializeQuickBuilder();
+  if (!$("#prebuild-builder")?.classList.contains("hidden")) initializePrebuildBuilder();
+  if (!$("#theme-builder")?.classList.contains("hidden")) initializeThemeBuilder();
+}
+// Keep both toggles reflecting the active edition, and hide the D&D edition
+// choice while Star Wars is selected.
+function syncRulesetToggles() {
+  const setting = gameSettingFor(edition);
+  $$(".setting-toggle button").forEach(button =>
+    button.classList.toggle("active", button.dataset.setting === setting));
+  $$(".edition-toggle button").forEach(button => {
+    const isSw5e = button.dataset.edition === "sw5e";
+    button.hidden = setting === "starwars" ? !isSw5e : isSw5e;
+    button.classList.toggle("active", button.dataset.edition === edition);
+  });
+  const editionToggle = $(".edition-toggle");
+  if (editionToggle) editionToggle.classList.toggle("single", setting === "starwars");
+}
+function quickBuildProfileFor(className, rulesEdition = edition) {
+  if (rulesEdition === "sw5e" && typeof sw5eQuickProfile === "function") {
+    return sw5eQuickProfile(className) || QUICK_BUILD_PROFILES[className];
+  }
+  return QUICK_BUILD_PROFILES[className];
+}
 function prebuildAsiCount(className, level) {
   const baseLevels = [4, 8, 12, 16, 19];
   let count = baseLevels.filter(unlock => level >= unlock).length;
@@ -3743,7 +3800,7 @@ function prebuildAsiCount(className, level) {
 }
 
 function prebuildAsiBonuses(className, level, baseAbilities, originBonuses) {
-  const profile = QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter;
+  const profile = quickBuildProfileFor(className) || QUICK_BUILD_PROFILES.Fighter;
   const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
   let points = prebuildAsiCount(className, Number(level || 1)) * 2;
   const order = [...profile.abilities, ...ABILITIES].filter((ability, index, list) => list.indexOf(ability) === index);
@@ -3804,7 +3861,7 @@ function prebuildClassChoices(className, level, profile) {
 }
 
 function preferredAbilityOrder(className) {
-  const profile = QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter || {};
+  const profile = quickBuildProfileFor(className) || QUICK_BUILD_PROFILES.Fighter || {};
   return [...(profile.abilities || []), ...ABILITIES].filter((ability, index, list) => list.indexOf(ability) === index);
 }
 
@@ -3875,7 +3932,7 @@ function applyAutoAdvancement(character, className, classLevelValue, choices) {
 function autoSpellChoicesForClass(character, className, classLevelValue) {
   const subclass = classSubclassName(character, className);
   const lists = spellListsFor(character.edition, className, subclass) || {};
-  const profile = QUICK_BUILD_PROFILES[className] || {};
+  const profile = quickBuildProfileFor(className) || {};
   const additions = [];
   const existingNames = new Set((character.spells || []).map(spell => typeof spell === "string" ? spell : spell.name));
   const addUnique = (name, spellLevel) => {
@@ -4028,7 +4085,7 @@ function wizardSpellChoices(lists, level, rulesEdition, profileSpells = []) {
 
 function prebuildSpellChoices(className, level, subclass, characterData, rulesEdition = edition, themeSpells = []) {
   const lists = spellListsFor(rulesEdition, className, subclass) || {};
-  const profile = QUICK_BUILD_PROFILES[className] || {};
+  const profile = quickBuildProfileFor(className) || {};
   const preferences = [...themeSpells, ...(profile.spells || [])]
     .filter((name, index, names) => names.indexOf(name) === index);
   const allowed = maxSpellLevel(className, level, rulesEdition, subclass);
@@ -4085,7 +4142,7 @@ function spellLevelCoverage(spells) {
 }
 
 function quickSelections() {
-  const profile = QUICK_BUILD_PROFILES[quickClass];
+  const profile = quickBuildProfileFor(quickClass);
   const species = $("#quick-species")?.value || (edition === "2024" ? "Human" : "Human");
   const background = $("#quick-background")?.value || profile.backgrounds[edition];
   const level = Math.max(1, Math.min(20, Number($("#quick-level")?.value || 1)));
@@ -4095,7 +4152,7 @@ function quickSelections() {
 
 function prebuildSelections() {
   const className = $("#prebuild-class")?.value || prebuildClass || "Fighter";
-  const profile = QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter;
+  const profile = quickBuildProfileFor(className) || QUICK_BUILD_PROFILES.Fighter;
   const level = Math.max(1, Math.min(20, Number($("#prebuild-level")?.value || 1)));
   const subclass = $("#prebuild-subclass")?.value || prebuildSubclass || defaultSubclassFor(className, level);
   const species = $("#prebuild-species")?.value || "Human";
@@ -4208,7 +4265,7 @@ function renderPrebuildOptions(resetBackground = false) {
   const species = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]);
   speciesSelect.innerHTML = species.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
   speciesSelect.value = species.some(item => item.name === speciesValue) ? speciesValue : "Human";
-  const profile = QUICK_BUILD_PROFILES[prebuildClass] || QUICK_BUILD_PROFILES.Fighter;
+  const profile = quickBuildProfileFor(prebuildClass) || QUICK_BUILD_PROFILES.Fighter;
   const preferredBackground = profile.backgrounds[edition] || "Soldier";
   const backgroundValue = resetBackground ? preferredBackground : backgroundSelect.value || preferredBackground;
   const backgrounds = customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]);
@@ -4224,7 +4281,7 @@ function renderPrebuildSummary() {
   if (!summary || !$("#prebuild-class")?.value) return;
   const character = buildPrebuiltCharacter(true);
   const stats = derived(character);
-  const primary = QUICK_BUILD_PROFILES[character.className]?.abilities?.[0] || "STR";
+  const primary = quickBuildProfileFor(character.className)?.abilities?.[0] || "STR";
   const spellNames = character.spells.map(spell => spell.name);
   const spellCoverage = spellLevelCoverage(character.spells);
   const featureCount = (CLASS_FEATURES[edition]?.[character.className] || []).filter(([level]) => level <= character.level).length
@@ -4251,7 +4308,9 @@ function renderPrebuildSummary() {
 }
 
 function themeCatalog() {
-  return typeof CHARACTER_THEMES !== "undefined" ? CHARACTER_THEMES : [];
+  const all = typeof CHARACTER_THEMES !== "undefined" ? CHARACTER_THEMES : [];
+  const setting = edition === "sw5e" ? "starwars" : "dnd";
+  return all.filter(theme => (theme.setting || "dnd") === setting);
 }
 
 function currentTheme() {
@@ -4306,10 +4365,10 @@ function themeBackgroundRecommendation(themeId, className, rulesEdition = editio
     infernal: { 2014: "Haunted One", 2024: "Acolyte" }
   };
   const thematic = recommendations[themeId]?.[rulesEdition];
-  const classDefault = QUICK_BUILD_PROFILES[className]?.backgrounds?.[rulesEdition];
+  const classDefault = quickBuildProfileFor(className)?.backgrounds?.[rulesEdition];
   if (rulesEdition !== "2024") return thematic || classDefault || "Soldier";
-  const primary = abilityOrder[0] || QUICK_BUILD_PROFILES[className]?.abilities?.[0];
-  const secondary = abilityOrder[1] || QUICK_BUILD_PROFILES[className]?.abilities?.[1];
+  const primary = abilityOrder[0] || quickBuildProfileFor(className)?.abilities?.[0];
+  const secondary = abilityOrder[1] || quickBuildProfileFor(className)?.abilities?.[1];
   const supports = name => BACKGROUND_RULES_2024[name]?.abilities?.includes(primary);
   if (supports(thematic)) return thematic;
   if (supports(classDefault)) return classDefault;
@@ -4448,7 +4507,7 @@ function themeSelections() {
   const theme = currentTheme();
   const branch = currentThemeBranch();
   const className = branch?.className || "Fighter";
-  const profile = { ...(QUICK_BUILD_PROFILES[className] || QUICK_BUILD_PROFILES.Fighter), ...branch };
+  const profile = { ...(quickBuildProfileFor(className) || QUICK_BUILD_PROFILES.Fighter), ...branch };
   const level = Math.max(1, Math.min(20, Number($("#theme-level")?.value || 3)));
   const subclass = $("#theme-subclass")?.value || selectedThemeSubclass || recommendedThemeSubclass(branch);
   const species = $("#theme-species")?.value || "Human";
@@ -4614,7 +4673,7 @@ function surpriseThemeBuild() {
 
 function buildQuickCharacter(preview = false, overrides = null) {
   const buildClassName = overrides?.className || quickClass;
-  const profile = QUICK_BUILD_PROFILES[buildClassName] || QUICK_BUILD_PROFILES.Fighter;
+  const profile = quickBuildProfileFor(buildClassName) || QUICK_BUILD_PROFILES.Fighter;
   const selections = overrides || quickSelections();
   const species = selections.species || "Human";
   const background = selections.background || profile.backgrounds[edition] || "Soldier";
@@ -4702,7 +4761,7 @@ function renderQuickClasses() {
   const container = $("#quick-class-grid");
   if (!container) return;
   container.innerHTML = Object.entries(RULES.classes).map(([name, data]) => {
-    const profile = QUICK_BUILD_PROFILES[name];
+    const profile = quickBuildProfileFor(name);
     return `<button type="button" class="quick-class-card ${name === quickClass ? "selected" : ""}" data-quick-class="${escapeHtml(name)}">
       <span class="quick-class-icon">${data.icon}</span>
       <span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(profile.role)}</small><em>${escapeHtml(profile.tagline)}</em></span>
@@ -4716,7 +4775,7 @@ function renderQuickOrigin(resetBackground = false) {
   const backgroundSelect = $("#quick-background");
   if (!speciesSelect || !backgroundSelect) return;
   const speciesValue = speciesSelect.value || "Human";
-  const preferredBackground = QUICK_BUILD_PROFILES[quickClass].backgrounds[edition];
+  const preferredBackground = quickBuildProfileFor(quickClass).backgrounds[edition];
   const backgroundValue = resetBackground ? preferredBackground : backgroundSelect.value || preferredBackground;
   const species = customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]);
   const backgrounds = customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]);
@@ -4745,7 +4804,7 @@ function renderQuickSummary() {
     <div class="quick-summary-stats">
       <span><small>AC</small><strong>${stats.ac}</strong></span>
       <span><small>HP</small><strong>${stats.hp}</strong></span>
-      <span><small>Best ability</small><strong>${QUICK_BUILD_PROFILES[quickClass].abilities[0]} ${character[QUICK_BUILD_PROFILES[quickClass].abilities[0]]}</strong></span>
+      <span><small>Best ability</small><strong>${quickBuildProfileFor(quickClass).abilities[0]} ${character[quickBuildProfileFor(quickClass).abilities[0]]}</strong></span>
     </div>
     <div class="quick-summary-section"><strong>Automatic ability scores</strong><p>${ABILITIES.map(ability => `${ability} ${character[ability]}`).join(" · ")}</p></div>
     <div class="quick-summary-section"><strong>Trained skills</strong><p>${[...new Set([...character.skillProficiencies, ...character.backgroundSkills])].join(", ")}</p></div>
@@ -5007,7 +5066,7 @@ function buildPremadeCharacter(hero, preview = false) {
 function renderPremadeHeroes() {
   const target = $("#premade-grid");
   if (!target) return;
-  target.innerHTML = PREMADE_HEROES.map(hero => {
+  target.innerHTML = premadeHeroesForEdition().map(hero => {
     const preview = buildPremadeCharacter(hero, true);
     const stats = preview ? derived(preview) : { ac: "-", hp: "-", prof: "" };
     return `<article class="premade-card">
@@ -5022,7 +5081,7 @@ function renderPremadeHeroes() {
 }
 
 function createPremadeCharacter(key) {
-  const hero = PREMADE_HEROES.find(item => item.key === key);
+  const hero = premadeHeroesForEdition().find(item => item.key === key);
   const character = buildPremadeCharacter(hero);
   if (!character) return;
   clearCharacterDeletion(character.id);
@@ -8983,7 +9042,7 @@ function editCharacter(id) {
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
   $("#builder-title").textContent = `Edit ${c.name}`;
   $("#builder-description").textContent = "Adjust any saved detail directly. Use Level Up for guided progression.";
-  $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b.dataset.edition === edition));
+  syncRulesetToggles();
   populateRules();
   buildAbilities({ keepScores: false });
   $$("[name='abilityMethod']").forEach(input => {
@@ -9434,7 +9493,7 @@ function autoLevelCharacter(id, targetClass = "") {
     if (levelClass === updated.className) updated.subclassChoices = subclassChoices;
     choices.subclassChoices = { ...subclassChoices };
   }
-  const profile = QUICK_BUILD_PROFILES[levelClass] || QUICK_BUILD_PROFILES.Fighter;
+  const profile = quickBuildProfileFor(levelClass) || QUICK_BUILD_PROFILES.Fighter;
   const classChoices = prebuildClassChoices(levelClass, targetClassLevel, profile);
   const masteryTarget = weaponMasteryCount(levelClass, targetClassLevel, updated.edition);
   const masteryPool = [...(profile.masteries || []), ...weaponMasteryOptions(levelClass)];
@@ -11381,8 +11440,11 @@ function initEvents() {
     else if (state.state === "ready") setDiceRendererStatus("Cinematic dice are ready.");
     else if (state.state === "error") setDiceRendererStatus(`Cinematic renderer unavailable: ${state.message || "unknown error"}.`, true);
   });
+  $$(".setting-toggle button").forEach(button => button.addEventListener("click", () => {
+    setGameSetting(button.dataset.setting);
+  }));
   $$(".edition-toggle button").forEach(button => button.addEventListener("click", () => {
-    edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; $$(".edition-toggle button").forEach(b => b.classList.toggle("active", b === button)); populateRules(); updatePreview();
+    edition = button.dataset.edition; selectedSpellLevel = 0; currentOriginFeat = ""; selectedSpellNames.clear(); selectedFeatNames.clear(); selectedFeatAbilities = {}; selectedAsi = {}; $("#class-choice-fields").innerHTML = ""; if (button.dataset.edition !== "sw5e") lastDndEdition = button.dataset.edition; syncRulesetToggles(); populateRules(); updatePreview();
     if (!$("#quick-builder").classList.contains("hidden")) initializeQuickBuilder();
     if (!$("#prebuild-builder")?.classList.contains("hidden")) initializePrebuildBuilder();
     if (!$("#theme-builder")?.classList.contains("hidden")) initializeThemeBuilder();
