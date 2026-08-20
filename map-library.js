@@ -1187,6 +1187,10 @@
     return changed;
   }
 
+  // Exposed so add-on packs can paint scenes with the same primitives.
+  root.createMapPainter = createPainter;
+  root.scatterMapProps = scatterProps;
+  root.scatterMapPropsInRect = scatterPropsInRect;
   root.MAP_SCENE_TEMPLATES = MAP_SCENE_TEMPLATES;
   root.MAP_ASSET_LIBRARY = MAP_ASSET_LIBRARY;
   root.MAP_SCENE_TILE_IDS = SCENE_TILE_IDS;
