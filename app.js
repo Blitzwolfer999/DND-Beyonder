@@ -6966,12 +6966,17 @@ function unarmoredAcOptions(data, hasShield = false) {
   const dex = modifier(data.DEX);
   const sorcererSubclass = classSubclassName(data, "Sorcerer");
   const feats = new Set(data.feats || []);
-  const options = [{ value: 10 + dex, source: "Unarmored (10 + DEX)" }];
+  const base = ability => [{ label: "Unarmoured base", value: 10 },
+    { label: "Dexterity", value: dex },
+    ...(ability ? [{ label: ability.label, value: ability.value }] : [])];
+  const options = [{ value: 10 + dex, source: "Unarmored (10 + DEX)", parts: base(null) }];
   if (hasClass(data, "Barbarian")) {
-    options.push({ value: 10 + dex + modifier(data.CON), source: "Barbarian Unarmored Defense" });
+    options.push({ value: 10 + dex + modifier(data.CON), source: "Barbarian Unarmored Defense",
+      parts: base({ label: "Constitution (Unarmored Defense)", value: modifier(data.CON) }) });
   }
   if (hasClass(data, "Monk") && !hasShield) {
-    options.push({ value: 10 + dex + modifier(data.WIS), source: "Monk Unarmored Defense" });
+    options.push({ value: 10 + dex + modifier(data.WIS), source: "Monk Unarmored Defense",
+      parts: base({ label: "Wisdom (Unarmored Defense)", value: modifier(data.WIS) }) });
   }
   if (sorcererSubclass === "Draconic Sorcery" && classLevel(data, "Sorcerer") >= 3) {
     options.push({ value: 10 + dex + modifier(data.CHA), source: "Draconic Resilience (10 + DEX + CHA)" });
@@ -6984,7 +6989,8 @@ function unarmoredAcOptions(data, hasShield = false) {
   const wizardSubclass = classSubclassName(data, "Wizard");
   if (["Bladesinging", "Bladesinger"].includes(wizardSubclass) && !hasShield
     && classLevel(data, "Wizard") >= (data.edition === "2024" ? 3 : 2)) {
-    options.push({ value: 10 + dex + Math.max(0, modifier(data.INT)), source: "Bladesong (10 + DEX + INT)" });
+    options.push({ value: 10 + dex + Math.max(0, modifier(data.INT)), source: "Bladesong (10 + DEX + INT)",
+      parts: base({ label: "Intelligence (Bladesong)", value: Math.max(0, modifier(data.INT)) }) });
   }
   if (feats.has("Dragon Hide")) options.push({ value: 13 + dex, source: "Dragon Hide natural armor" });
   if (data.species === "Tortle") options.push({ value: 17, source: "Tortle natural armor" });
@@ -6994,33 +7000,181 @@ function unarmoredAcOptions(data, hasShield = false) {
   return options;
 }
 
+// Structured "where does this number come from" data for the sheet's core
+// stats, so a player can click a value and see every contribution.
+function statBreakdown(character, stat) {
+  const d = derived(character);
+  const eff = effectiveAbilities(character);
+  const fx = activeItemEffects(character);
+  if (stat === "ac") {
+    const ac = armorClassDetails(character);
+    return { title: "Armor Class", total: ac.value, parts: ac.breakdown || [], note: ac.source };
+  }
+  if (stat === "initiative") {
+    const details = typeof initiativeDetails === "function" ? initiativeDetails(character) : null;
+    const dexterity = modifier(eff.DEX);
+    const parts = [{ label: "Dexterity", value: dexterity }];
+    // Everything else initiativeDetails folded in (Alert, proficiency, subclass
+    // abilities) is reported as one line named by its own source list.
+    const remainder = d.initiative - dexterity;
+    if (remainder) {
+      const extras = String(details?.source || "").split(" + ").filter(part => part && part !== "DEX");
+      parts.push({ label: extras.length ? extras.join(", ") : "Other bonuses", value: remainder });
+    }
+    return { title: "Initiative", total: d.initiative, parts,
+      note: d.initiativeAdvantage ? "Rolled with advantage" : "" };
+  }
+  if (stat === "hp") {
+    const level = characterTotalLevel(character);
+    const conPerLevel = modifier(eff.CON) * level;
+    const bonus = typeof bonusMaxHp === "function" ? bonusMaxHp(character) : 0;
+    return { title: "Hit Points", total: d.hp, note: `Level ${level}`, parts: [
+      { label: "Class hit dice", value: d.hp - conPerLevel - bonus },
+      { label: `Constitution x ${level} levels`, value: conPerLevel },
+      ...(bonus ? [{ label: "Feats & traits", value: bonus }] : [])
+    ] };
+  }
+  if (stat === "proficiency") {
+    return { title: "Proficiency Bonus", total: d.prof, note: `Level ${characterTotalLevel(character)}`,
+      parts: [{ label: "By character level", value: d.prof }] };
+  }
+  if (stat === "passive") {
+    const perception = skillModifier(character, "Perception");
+    return { title: "Passive Perception", total: d.passive, note: "10 + Perception",
+      parts: [{ label: "Base", value: 10 }, { label: "Perception modifier", value: perception }] };
+  }
+  return null;
+}
+// Anchored popover showing a stat's contributions, dismissed on the next click
+// or Escape.
+function showStatBreakdown(trigger) {
+  const character = characters.find(item => item.id === trigger.dataset.character);
+  if (!character) return;
+  document.querySelector(".stat-breakdown-pop")?.remove();
+  const markup = renderStatBreakdown(character, trigger.dataset.statBreakdown);
+  if (!markup) return;
+  const pop = document.createElement("div");
+  pop.className = "stat-breakdown-pop";
+  pop.innerHTML = markup;
+  document.body.appendChild(pop);
+  const rect = trigger.getBoundingClientRect();
+  const width = pop.offsetWidth;
+  pop.style.top = `${window.scrollY + rect.bottom + 8}px`;
+  pop.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, window.scrollX + rect.left))}px`;
+  const dismiss = event => {
+    if (pop.contains(event.target)) return;
+    pop.remove();
+    document.removeEventListener("click", dismiss, true);
+  };
+  setTimeout(() => document.addEventListener("click", dismiss, true), 0);
+  document.addEventListener("keydown", function escape(event) {
+    if (event.key !== "Escape") return;
+    pop.remove();
+    document.removeEventListener("keydown", escape);
+  });
+}
+function renderStatBreakdown(character, stat) {
+  const data = statBreakdown(character, stat);
+  if (!data) return "";
+  const rows = data.parts.map(part =>
+    `<li><span>${escapeHtml(part.label)}</span><b>${part.value >= 0 ? "+" : ""}${part.value}</b></li>`
+  ).join("");
+  return `<div class="stat-breakdown-card">
+    <header><strong>${escapeHtml(data.title)}</strong><span class="stat-breakdown-total">${data.total}</span></header>
+    <ul>${rows || `<li><span>No contributions recorded</span><b>—</b></li>`}</ul>
+    ${data.note ? `<footer>${escapeHtml(data.note)}</footer>` : ""}
+  </div>`;
+}
+// A shield is anything named or typed as one, so "Shield, +1" still counts.
+function isShieldItem(item) {
+  return /(^|[\s,])shield([\s,]|$)/i.test(String(item.name || ""))
+    || /shield/i.test(String(item.type || ""));
+}
+// "+1" enchantment carried by a magic armor or shield.
+function magicItemBonus(item) {
+  if (!itemIsActive(item)) return 0;
+  const match = String(item.name || "").match(/\+(\d)\b/);
+  return match ? Number(match[1]) : 0;
+}
+// Base armor stats for a worn item. Generic magic armor ("Armor, +1",
+// "Adamantine Armor") has no stats of its own, so it uses whichever base armor
+// the player assigned, defaulting to the lightest sensible option.
+function armorRuleFor(item) {
+  if (isShieldItem(item)) return null;
+  if (ARMOR_RULES[item.name]) return ARMOR_RULES[item.name];
+  if (item.baseArmor && ARMOR_RULES[item.baseArmor]) return ARMOR_RULES[item.baseArmor];
+  if (itemBaseArmorChoices(item)) return ARMOR_RULES["Chain Shirt"];
+  return null;
+}
+// Generic magic armor the player picks a base for, mirroring base weapons.
+function itemBaseArmorChoices(item) {
+  const name = String(item.name || "");
+  if (!/^Armor, \+\d/.test(name) && !/^(Adamantine|Mithral) Armor$/.test(name)) return null;
+  return Object.keys(ARMOR_RULES);
+}
+// Which equipped items are contributing the flat AC bonus in activeItemEffects.
+function acItemContributors(data) {
+  return (data.inventory || [])
+    .filter(item => itemIsActive(item) && (MAGIC_ITEM_EFFECTS[item.name] || {}).ac)
+    .map(item => ({ label: item.name, value: MAGIC_ITEM_EFFECTS[item.name].ac }));
+}
 function armorClassDetails(data) {
-  if (Number(data.acOverride)) return { value: Number(data.acOverride), source: "Manual override" };
+  if (Number(data.acOverride)) {
+    return { value: Number(data.acOverride), source: "Manual override",
+      breakdown: [{ label: "Manual override", value: Number(data.acOverride) }] };
+  }
   const fx = activeItemEffects(data);
   data = effectiveAbilities(data);
   const items = equippedItems(data);
-  const hasShield = items.some(item => item.name === "Shield" || item.type === "Shield");
-  const shieldBonus = hasShield ? 2 : 0;
+  // Any shield counts, including magic ones like "Shield, +1".
+  const shieldItem = items.find(item => isShieldItem(item));
+  const shieldMagic = shieldItem ? magicItemBonus(shieldItem) : 0;
+  const shieldBonus = shieldItem ? 2 + shieldMagic : 0;
   const defenseStyle = [data.fightingStyle, ...(data.fightingStyles || [])].includes("Defense");
   const mediumDexCap = (data.feats || []).includes("Medium Armor Master") ? 3 : 2;
+  const dexMod = modifier(data.DEX);
   const armorOptions = items.flatMap(item => {
-    const rule = ARMOR_RULES[item.name];
+    const rule = armorRuleFor(item);
     if (!rule) return [];
     const dexCap = rule.type === "Medium Armor" ? mediumDexCap : rule.dex;
-    const dexBonus = dexCap === Infinity ? modifier(data.DEX) : Math.min(dexCap, modifier(data.DEX));
+    const dexBonus = dexCap === Infinity ? dexMod : Math.min(dexCap, dexMod);
+    const magic = magicItemBonus(item);
+    const parts = [{ label: `${item.name} (base)`, value: rule.base }];
+    if (dexBonus) parts.push({ label: `Dexterity${dexCap === Infinity ? "" : ` (max +${dexCap})`}`, value: dexBonus });
+    if (magic) parts.push({ label: `${item.name} enchantment`, value: magic });
     return [{
-      value: rule.base + dexBonus + shieldBonus + (defenseStyle ? 1 : 0),
-      source: `${item.name}${hasShield ? " + Shield" : ""}${defenseStyle ? " + Defense style" : ""}`
+      value: rule.base + dexBonus + magic + shieldBonus + (defenseStyle ? 1 : 0),
+      source: `${item.name}${shieldItem ? ` + ${shieldItem.name}` : ""}${defenseStyle ? " + Defense style" : ""}`,
+      parts
     }];
   });
   const options = armorOptions.length
     ? armorOptions
-    : unarmoredAcOptions(data, hasShield).map(option => ({ ...option, value: option.value + shieldBonus }));
+    : unarmoredAcOptions(data, Boolean(shieldItem)).map(option => ({
+        ...option,
+        value: option.value + shieldBonus,
+        parts: option.parts || [{ label: option.source, value: option.value }]
+      }));
   let best = options.reduce((highest, option) => option.value > highest.value ? option : highest, options[0]);
-  if (data.species === "Warforged") best = { value: best.value + 1, source: `${best.source} + Integrated Protection` };
-  if (fx.acUnarmored && !armorOptions.length && !hasShield) best = { value: best.value + fx.acUnarmored, source: `${best.source} + Bracers of Defense` };
-  if (fx.ac) best = { value: best.value + fx.ac, source: `${best.source} + magic items (+${fx.ac})` };
-  return best;
+  const breakdown = [...(best.parts || [])];
+  if (shieldItem) {
+    breakdown.push({ label: shieldItem.name, value: 2 });
+    if (shieldMagic) breakdown.push({ label: `${shieldItem.name} enchantment`, value: shieldMagic });
+  }
+  if (defenseStyle && armorOptions.length) breakdown.push({ label: "Defense fighting style", value: 1 });
+  if (data.species === "Warforged") {
+    best = { value: best.value + 1, source: `${best.source} + Integrated Protection` };
+    breakdown.push({ label: "Integrated Protection (Warforged)", value: 1 });
+  }
+  if (fx.acUnarmored && !armorOptions.length && !shieldItem) {
+    best = { value: best.value + fx.acUnarmored, source: `${best.source} + Bracers of Defense` };
+    breakdown.push({ label: "Bracers of Defense", value: fx.acUnarmored });
+  }
+  if (fx.ac) {
+    best = { value: best.value + fx.ac, source: `${best.source} + magic items (+${fx.ac})` };
+    acItemContributors(data).forEach(entry => breakdown.push(entry));
+  }
+  return { value: best.value, source: best.source, breakdown: breakdown.filter(part => part.value) };
 }
 
 // Extra maximum HP granted by feats/features that scale with level.
@@ -8982,11 +9136,11 @@ function renderSheet() {
     <div class="sheet-portrait">${c.portrait ? `<img src="${escapeHtml(c.portrait)}" alt="">` : escapeHtml(c.name.charAt(0))}</div>
     <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
     <div class="sheet-core">
-      <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></button>
-      <button><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong></button>
-      <button data-sheet-section-jump="overview"><small>HIT POINTS${helpChip("hp")}</small><strong>${currentHp}/${maximumHp}</strong></button>
-      <button><small>PROFICIENCY${helpChip("proficiency")}</small><strong>${signed(d.prof)}</strong></button>
-      <button data-sheet-section-jump="overview"><small>PASSIVE PERCEPTION</small><strong>${d.passive}</strong></button>
+      <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong><i class="stat-info" data-stat-breakdown="initiative" data-character="${c.id}" title="How is this calculated?">i</i></button>
+      <button data-stat-breakdown="ac" data-character="${c.id}" title="How is this calculated?"><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong><i class="stat-info">i</i></button>
+      <button data-sheet-section-jump="overview"><small>HIT POINTS${helpChip("hp")}</small><strong>${currentHp}/${maximumHp}</strong><i class="stat-info" data-stat-breakdown="hp" data-character="${c.id}" title="How is this calculated?">i</i></button>
+      <button data-stat-breakdown="proficiency" data-character="${c.id}" title="How is this calculated?"><small>PROFICIENCY${helpChip("proficiency")}</small><strong>${signed(d.prof)}</strong><i class="stat-info">i</i></button>
+      <button data-sheet-section-jump="overview"><small>PASSIVE PERCEPTION</small><strong>${d.passive}</strong><i class="stat-info" data-stat-breakdown="passive" data-character="${c.id}" title="How is this calculated?">i</i></button>
     </div>
     <div class="sheet-header-actions">
       ${canControl ? `<button class="button ghost" data-edit="${c.id}">Edit character</button>
@@ -10456,6 +10610,13 @@ function initEvents() {
     const itemAdd = event.target.closest("[data-item-add]");
     if (itemAdd) {
       addBrowserItem(itemAdd.dataset.itemAdd);
+      return;
+    }
+    const statInfo = event.target.closest("[data-stat-breakdown]");
+    if (statInfo) {
+      event.preventDefault();
+      event.stopPropagation();
+      showStatBreakdown(statInfo);
       return;
     }
     const itemAction = event.target.closest("[data-item-action]");

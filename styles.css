@@ -3733,3 +3733,30 @@ html[data-theme="dark"] .dungeon-theme-strip button.active { color: #fff; border
 .setting-toggle button[data-setting="starwars"].active { background: linear-gradient(180deg,#2f5f86,#1f4462); }
 .edition-toggle button[hidden] { display: none; }
 .edition-toggle.single { opacity: .85; }
+
+/* Stat breakdown popover (click a core stat to see how it is calculated) */
+.stat-info {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin-left: 5px; vertical-align: middle;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: var(--panel); color: var(--muted);
+  font: 800 9px/1 system-ui, sans-serif; font-style: normal; cursor: pointer;
+}
+.stat-info:hover { color: var(--ink); border-color: var(--gold-dark, #a4552a); }
+.stat-breakdown-pop { position: absolute; z-index: 1200; }
+.stat-breakdown-card {
+  min-width: 232px; max-width: 300px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--ink);
+  box-shadow: 0 10px 30px rgba(0,0,0,.22);
+}
+.stat-breakdown-card header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.stat-breakdown-card header strong { font: 800 12px/1.2 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em; }
+.stat-breakdown-total { font: 900 20px/1 Cinzel, serif; color: var(--gold-dark, #a4552a); }
+.stat-breakdown-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.stat-breakdown-card li { display: flex; justify-content: space-between; gap: 12px; font: 500 12px/1.5 system-ui, sans-serif; }
+.stat-breakdown-card li b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat-breakdown-card footer { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font: 600 10px/1.4 system-ui, sans-serif; }
