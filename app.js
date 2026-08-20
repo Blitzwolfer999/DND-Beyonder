@@ -3505,12 +3505,29 @@ function groupedSelectOptions(entries) {
   ).join("");
 }
 
+// Classes available in a rules edition. D&D classes are tagged for 2014/2024,
+// SW5E classes for sw5e; Fighter and Monk exist in both systems.
+function classesForEdition(rulesEdition) {
+  return Object.entries(RULES.classes)
+    .filter(([, data]) => !data.editions || data.editions.includes(rulesEdition))
+    .map(([name]) => name);
+}
+// SW5E swaps some skills, so class skill lists are resolved per edition.
+function classSkillsFor(className, rulesEdition) {
+  if (rulesEdition === "sw5e" && typeof SW5E_CLASS_SKILLS !== "undefined" && SW5E_CLASS_SKILLS[className]) {
+    return SW5E_CLASS_SKILLS[className];
+  }
+  return CLASS_SKILLS[className];
+}
 function populateRules(savedCharacter = null) {
   $("#species-select").innerHTML = groupedSelectOptions(customizationEntries(SPECIES_CATALOG, RULES.species[edition], RULES.species[2014]));
   $("#background-select").innerHTML = groupedSelectOptions(customizationEntries(BACKGROUND_CATALOG, RULES.backgrounds[edition], RULES.backgrounds[2014]));
-  $("#class-grid").innerHTML = Object.entries(RULES.classes).map(([name, data]) =>
-    `<button type="button" class="class-option ${name === selectedClass ? "selected" : ""}" data-class="${name}"><span>${data.icon}</span><strong>${name}</strong>${data.origin ? `<small>${data.origin}</small>` : ""}</button>`
-  ).join("");
+  const availableClasses = classesForEdition(edition);
+  if (!availableClasses.includes(selectedClass)) selectedClass = availableClasses[0] || selectedClass;
+  $("#class-grid").innerHTML = availableClasses.map(name => {
+    const data = RULES.classes[name];
+    return `<button type="button" class="class-option ${name === selectedClass ? "selected" : ""}" data-class="${name}"><span>${data.icon}</span><strong>${name}</strong>${data.origin ? `<small>${data.origin}</small>` : ""}</button>`;
+  }).join("");
   populateSubclasses();
   renderOriginRules(savedCharacter);
   renderTalentChoices();
@@ -5273,7 +5290,7 @@ function expertiseCountAtLevel(className, level, rulesEdition) {
 }
 
 function classSkillRuleAtLevel(className, level, rulesEdition, subclass = "") {
-  const base = CLASS_SKILLS[className] || { count: 0, options: [] };
+  const base = classSkillsFor(className, rulesEdition) || { count: 0, options: [] };
   let count = base.count;
   let options = [...base.options];
   if (rulesEdition === "2014" && className === "Fighter") options = options.filter(skill => skill !== "Persuasion");
@@ -11770,6 +11787,9 @@ function init() {
   const migration = { changed: false };
   characters = characters.map(character => normalizeCharacterData(character, { report: migration }));
   if (migration.changed) persistCharacters();
+  // SW5E content needs RULES/SKILLS, which are defined here rather than in a
+  // data file, so it registers once app.js has loaded and before first render.
+  if (typeof registerSw5eRuntime === "function") registerSw5eRuntime();
   seedDemo(); buildAbilities(); populateRules(); resetPortrait(); initDice(); initTheme(); initEvents(); updatePreview(); updateAccount(); renderCards(); setStep(1); navigate(routeViewFromHash(), { replace: true });
   initCloud();
 }
