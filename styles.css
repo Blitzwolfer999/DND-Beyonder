@@ -3760,3 +3760,4 @@ html[data-theme="dark"] .dungeon-theme-strip button.active { color: #fff; border
 .stat-breakdown-card li { display: flex; justify-content: space-between; gap: 12px; font: 500 12px/1.5 system-ui, sans-serif; }
 .stat-breakdown-card li b { font-weight: 800; font-variant-numeric: tabular-nums; }
 .stat-breakdown-card footer { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font: 600 10px/1.4 system-ui, sans-serif; }
+.variant-note { display: block; margin-top: 2px; color: var(--gold-dark, #a4552a); font: 700 9px/1.4 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .3px; }

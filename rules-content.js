@@ -384,6 +384,7 @@ const EQUIPMENT_CATALOG = [
   magicItem("Elven Chain", "Armor (chain shirt)", "Rare", false, "Counts as light armor, grants +1 AC, and you are proficient even without training.", 20),
   magicItem("Glamoured Studded Leather", "Armor (studded leather)", "Rare", false, "+1 AC and, as a bonus action, disguise it as any set of clothing.", 13),
   magicItem("Dragon Scale Mail", "Armor (scale mail)", "Very Rare", true, "+1 AC, resistance to one damage type, and advantage against a dragon's frightful presence.", 45),
+  magicItem("Armor of Resistance", "Armor (light, medium, or heavy)", "Rare", true, "Grants resistance to one damage type chosen when the armor is made.", 40),
   magicItem("Dwarven Plate", "Armor (plate)", "Very Rare", false, "+2 AC and resistance to being shoved or knocked prone.", 65),
   magicItem("Plate Armor of Etherealness", "Armor (plate)", "Legendary", true, "Once per day, slip into the Ethereal Plane for up to 10 minutes.", 65),
   magicItem("Armor, +3", "Armor (any)", "Legendary", false, "+3 bonus to AC while you wear this armor.", 20),

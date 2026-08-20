@@ -7085,6 +7085,31 @@ function renderStatBreakdown(character, stat) {
     ${data.note ? `<footer>${escapeHtml(data.note)}</footer>` : ""}
   </div>`;
 }
+// Items whose effect depends on a choice made when you attune to them, such as
+// which dragon a suit of dragon scale mail came from.
+const DAMAGE_TYPE_OPTIONS = ["Acid", "Cold", "Fire", "Force", "Lightning", "Necrotic",
+  "Poison", "Psychic", "Radiant", "Thunder"];
+const ITEM_VARIANT_CHOICES = {
+  "Dragon Scale Mail": {
+    label: "Dragon",
+    options: {
+      Black: "Acid", Blue: "Lightning", Brass: "Fire", Bronze: "Lightning", Copper: "Acid",
+      Gold: "Fire", Green: "Poison", Red: "Fire", Silver: "Cold", White: "Cold"
+    }
+  },
+  "Ring of Resistance": { label: "Damage type", options: Object.fromEntries(DAMAGE_TYPE_OPTIONS.map(t => [t, t])) },
+  "Armor of Resistance": { label: "Damage type", options: Object.fromEntries(DAMAGE_TYPE_OPTIONS.map(t => [t, t])) },
+  "Potion of Resistance": { label: "Damage type", options: Object.fromEntries(DAMAGE_TYPE_OPTIONS.map(t => [t, t])) }
+};
+function itemVariantChoices(item) {
+  return ITEM_VARIANT_CHOICES[item?.name] || null;
+}
+// The damage type an item's chosen variant resists, if any.
+function itemVariantResistance(item) {
+  const config = itemVariantChoices(item);
+  if (!config || !item.variant) return "";
+  return config.options[item.variant] || "";
+}
 // Wielding a separate melee weapon in each hand: two or more equipped melee
 // weapons, neither of which is two-handed.
 function isDualWielding(data) {
@@ -8699,7 +8724,7 @@ function renderInventorySection(character, extraClass = "") {
           ${itemRequiresAttunement(item) ? `<button type="button" class="item-attune-btn ${item.attuned ? "on" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${item.attuned}" title="${item.attuned ? "Attuned — click to end attunement" : "Requires attunement — click to attune"}">✦</button>` : ""}
           ${hasPactBoon(character, "Pact of the Blade") && parseWeaponProfile(item) ? `<button type="button" class="item-pact-btn ${item.pactWeapon ? "on" : ""}" data-item-action="pact" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${Boolean(item.pactWeapon)}" title="${item.pactWeapon ? "Your pact weapon — click to unset" : "Set as your pact weapon"}">P</button>` : ""}
         </div></td>
-        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const armor = itemBaseArmorChoices(item, character.edition); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
+        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const variant = itemVariantChoices(item); if (!variant) return ""; const resist = itemVariantResistance(item); return `<label class="base-weapon-pick"><span>${escapeHtml(variant.label)}</span><select data-item-variant data-character="${character.id}" data-item-id="${item.id}"><option value="">Choose...</option>${Object.keys(variant.options).map(name => `<option value="${escapeHtml(name)}"${item.variant === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select>${resist ? `<small class="variant-note">${escapeHtml(resist)} resistance</small>` : ""}</label>`; })()}${(() => { const armor = itemBaseArmorChoices(item, character.edition); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
         <td>${Number(item.quantity || 1)}</td>
         <td>${Number((Number(item.weight || 0) * Number(item.quantity || 1)).toFixed(2))} lb.</td>
         <td>${escapeHtml(item.cost || "—")}</td>
@@ -9202,6 +9227,9 @@ function renderSheet() {
     if (item.name === "Brooch of Shielding") defenseSet.add("Force resistance");
     if (item.name === "Mantle of Spell Resistance") defenseSet.add("Adv. vs spells");
     if (item.name === "Cloak of Arachnida") defenseSet.add("Poison resistance");
+    const chosen = itemVariantResistance(item);
+    if (chosen) defenseSet.add(`${chosen} resistance`);
+    if (item.name === "Dragon Scale Mail") defenseSet.add("Adv. vs that dragon's breath");
   });
   const defenses = [...defenseSet].join(", ") || "None recorded";
   $("#sheet-empty").classList.add("hidden");
@@ -11231,6 +11259,15 @@ function initEvents() {
     else renderPrebuildSummary();
   });
   document.addEventListener("change", event => {
+    const variantSelect = event.target.closest("[data-item-variant]");
+    if (variantSelect) {
+      const character = characters.find(item => item.id === variantSelect.dataset.character);
+      const item = character?.inventory?.find(entry => entry.id === variantSelect.dataset.itemId);
+      if (!character || !item) return;
+      item.variant = variantSelect.value || undefined;
+      saveInventoryCharacter(character);
+      return;
+    }
     const baseArmorSelect = event.target.closest("[data-item-base-armor]");
     if (baseArmorSelect) {
       const character = characters.find(item => item.id === baseArmorSelect.dataset.character);
