@@ -36,7 +36,7 @@ const SKILLS = {
 };
 const CLASS_SKILLS = {
   Barbarian: { count: 2, options: ["Animal Handling", "Athletics", "Intimidation", "Nature", "Perception", "Survival"] },
-  Bard: { count: 3, options: Object.keys(SKILLS) },
+  Bard: { count: 3, options: [] }, // "any skill" - resolved per edition in classSkillRuleAtLevel
   Cleric: { count: 2, options: ["History", "Insight", "Medicine", "Persuasion", "Religion"] },
   Druid: { count: 2, options: ["Arcana", "Animal Handling", "Insight", "Medicine", "Nature", "Perception", "Religion", "Survival"] },
   Fighter: { count: 2, options: ["Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Persuasion", "Survival"] },
@@ -3672,7 +3672,7 @@ function quickSkillChoices(className, background, level = 1, themeSkills = []) {
   const profile = quickBuildProfileFor(className);
   const backgroundSkills = [...new Set(BACKGROUND_SKILLS[background] || profile.skills.slice(-2))].slice(0, 2);
   while (backgroundSkills.length < 2) {
-    const fallback = Object.keys(SKILLS).find(skill => !backgroundSkills.includes(skill));
+    const fallback = skillsForEdition(edition).find(skill => !backgroundSkills.includes(skill));
     backgroundSkills.push(fallback);
   }
   const rule = classSkillRuleAtLevel(className, level, edition);
@@ -4319,7 +4319,7 @@ function renderPrebuildOptions(resetBackground = false) {
   const backgroundSelect = $("#prebuild-background");
   if (!classSelect || !subclassSelect || !speciesSelect || !backgroundSelect) return;
   const priorClass = classSelect.value || prebuildClass;
-  classSelect.innerHTML = Object.keys(RULES.classes).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  classSelect.innerHTML = classesForEdition(edition).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
   prebuildClass = RULES.classes[priorClass] ? priorClass : prebuildClass;
   classSelect.value = prebuildClass;
   const level = Math.max(1, Math.min(20, Number($("#prebuild-level")?.value || 3)));
@@ -4838,7 +4838,7 @@ function buildQuickCharacter(preview = false, overrides = null) {
 function renderQuickClasses() {
   const container = $("#quick-class-grid");
   if (!container) return;
-  container.innerHTML = Object.entries(RULES.classes).map(([name, data]) => {
+  container.innerHTML = classesForEdition(edition).map(name => { const data = RULES.classes[name];
     const profile = quickBuildProfileFor(name);
     return `<button type="button" class="quick-class-card ${name === quickClass ? "selected" : ""}" data-quick-class="${escapeHtml(name)}">
       <span class="quick-class-icon">${data.icon}</span>
@@ -4997,7 +4997,7 @@ function generateQuickName(writeToField = true, speciesOverride = "") {
 }
 
 function surpriseQuickBuild() {
-  const classes = Object.keys(RULES.classes);
+  const classes = classesForEdition(edition);
   quickClass = classes[Math.floor(Math.random() * classes.length)];
   renderQuickClasses();
   renderQuickOrigin(true);
@@ -5100,7 +5100,7 @@ function createPrebuiltCharacter() {
 }
 
 function surprisePrebuild() {
-  const classes = Object.keys(RULES.classes);
+  const classes = classesForEdition(edition);
   prebuildClass = classes[Math.floor(Math.random() * classes.length)] || "Fighter";
   const level = 1 + Math.floor(Math.random() * 20);
   if ($("#prebuild-level")) $("#prebuild-level").value = level;
@@ -5173,7 +5173,7 @@ function createPremadeCharacter(key) {
 }
 
 function createRandomCharacter() {
-  const classNames = Object.keys(RULES.classes);
+  const classNames = classesForEdition(edition);
   quickClass = classNames[Math.floor(Math.random() * classNames.length)] || "Fighter";
   renderQuickOrigin(true);
   if ($("#quick-level")) $("#quick-level").value = 1;
@@ -5302,7 +5302,7 @@ function backgroundSkillBlock(savedCharacter, backgroundName, currentSelections 
   const selected = savedCharacter?.backgroundSkills?.length
     ? savedCharacter.backgroundSkills
     : currentSelections.length === 2 ? currentSelections : defaults;
-  return choiceChecks("backgroundSkills", Object.keys(SKILLS), selected, 2, "Background skill proficiencies");
+  return choiceChecks("backgroundSkills", skillsForEdition(edition), selected, 2, "Background skill proficiencies");
 }
 
 function renderOriginRules(savedCharacter = null) {
@@ -5432,14 +5432,16 @@ function expertiseCountAtLevel(className, level, rulesEdition) {
 function classSkillRuleAtLevel(className, level, rulesEdition, subclass = "") {
   const base = classSkillsFor(className, rulesEdition) || { count: 0, options: [] };
   let count = base.count;
-  let options = [...base.options];
+  // An empty option list means "any skill", which has to be resolved against
+  // the edition rather than the global map so SW5E skills stay out of D&D.
+  let options = base.options.length ? [...base.options] : skillsForEdition(rulesEdition);
   if (rulesEdition === "2014" && className === "Fighter") options = options.filter(skill => skill !== "Persuasion");
   if (rulesEdition === "2014" && className === "Wizard") options = options.filter(skill => skill !== "Nature");
   if (rulesEdition === "2024" && className === "Rogue") options = options.filter(skill => skill !== "Performance");
   if (rulesEdition === "2024" && className === "Barbarian" && level >= 3) count += 1;
   if (subclass === "College of Lore" && level >= 3) {
     count += 3;
-    options = Object.keys(SKILLS);
+    options = skillsForEdition(rulesEdition);
   }
   return { count, options };
 }
@@ -5481,7 +5483,7 @@ function levelSubclassChoiceMarkup(character, subclass, targetLevel) {
   );
   if (subclass === "College of Lore" && targetLevel >= 3 && Number(character.level || 1) < 3) {
     const trained = proficientSkills(character);
-    const options = Object.keys(SKILLS).filter(skill => !trained.has(skill));
+    const options = skillsForEdition(edition).filter(skill => !trained.has(skill));
     markup += `<div data-min-choices="3" data-choice-name="skillProficiencies"><strong>Choose three bonus skill proficiencies</strong>${optionChecks("skillProficiencies", options, [], 3)}</div>`;
   }
   return markup;
@@ -5518,7 +5520,7 @@ function renderStartingClassOptions(savedCharacter = null) {
   }
   const expertiseCount = expertiseCountAtLevel(selectedClass, level, edition);
   if (expertiseCount) {
-    blocks.push(choiceChecks("expertise", Object.keys(SKILLS), currentExpertise, expertiseCount, "Expertise"));
+    blocks.push(choiceChecks("expertise", skillsForEdition(character.edition), currentExpertise, expertiseCount, "Expertise"));
   }
   const masteryCount = weaponMasteryCount(selectedClass, level, edition);
   if (masteryCount) {
@@ -9024,7 +9026,7 @@ function renderSheet() {
         return `<button type="button" data-sheet-roll="${ability} saving throw" data-modifier="${saveModifier}"><span class="${proficient ? "proficient" : ""}">${ability}</span><strong>${signed(saveModifier)}</strong></button>`;
       }).join("")}</div>
     </section>
-    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${Object.entries(SKILLS).map(([skill, ability]) => {
+    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${skillsForEdition(c.edition).map(skill => { const ability = SKILLS[skill];
       const proficient = proficientSkills(c).has(skill);
       const expertise = expertiseSkills(c).has(skill);
       const value = skillModifier(c, skill);
@@ -9413,7 +9415,7 @@ function openLevelUp(id, targetClass = "") {
   if (characterTotalLevel(character) >= 20) { toast("This character is already level 20"); return; }
   levelingCharacterId = id;
   const currentClasses = classBreakdown(character);
-  const availableClasses = Object.keys(RULES.classes);
+  const availableClasses = classesForEdition(character.edition || edition);
   levelUpClassName = targetClass && availableClasses.includes(targetClass) ? targetClass : levelUpClassName && availableClasses.includes(levelUpClassName) ? levelUpClassName : primaryClassName(character);
   const currentTotalLevel = characterTotalLevel(character);
   const targetLevel = currentTotalLevel + 1;
@@ -9536,7 +9538,7 @@ function autoLevelCharacter(id, targetClass = "") {
   if (!character) return;
   if (!canControlCharacter(character)) { toast("Only the owner or campaign DM can auto level this sheet"); return; }
   if (characterTotalLevel(character) >= 20) { toast("This character is already level 20"); return; }
-  const availableClasses = Object.keys(RULES.classes);
+  const availableClasses = classesForEdition(character.edition || edition);
   const levelClass = targetClass && availableClasses.includes(targetClass) ? targetClass : primaryClassName(character);
   const targetLevel = characterTotalLevel(character) + 1;
   const before = progressionSnapshot(character);
