@@ -332,6 +332,7 @@ const mapViewportStates = new Map();
 const mapEditHistory = new Map();
 let campaignMapImageDraft = "";
 let campaignMapImageAspect = 0; // height/width of the last uploaded map image, for board calibration
+let campaignMapImagePending = false; // true while an upload is still being processed
 let campaignTileImageDraft = "";
 let campaignCreatureImageDraft = "";
 let campaignLiveTimer = null;
@@ -698,6 +699,68 @@ function reportCampaignError(error, fallbackMessage, showToast = true) {
   const message = isMissingCampaignSchema(error) ? campaignSetupMessage() : `${fallbackMessage}: ${error.message}`;
   setCloudStatus(message, true);
   if (showToast) toast(message);
+}
+// Read an uploaded image, downscale anything oversized, and report its true
+// aspect ratio. Map art is stored inline as a data URL and synced to the cloud,
+// so a full-resolution upload would bloat every campaign payload; capping the
+// longest side keeps sync fast while staying sharp at table zoom levels.
+function prepareUploadedImage(file, options = {}) {
+  const maxDimension = Number(options.maxDimension || 2560);
+  const quality = Number(options.quality || .85);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const original = String(reader.result || "");
+      const image = new Image();
+      image.onerror = () => reject(new Error("decode failed"));
+      image.onload = () => {
+        const { naturalWidth: width, naturalHeight: height } = image;
+        if (!width || !height) { reject(new Error("empty image")); return; }
+        const aspect = height / width;
+        const scale = Math.min(1, maxDimension / Math.max(width, height));
+        if (scale === 1 && original.length < 1_500_000) {
+          resolve({ dataUrl: original, aspect, width, height, resized: false });
+          return;
+        }
+        const targetWidth = Math.max(1, Math.round(width * scale));
+        const targetHeight = Math.max(1, Math.round(height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const context = canvas.getContext("2d");
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, targetWidth, targetHeight);
+        // PNG keeps transparency but is far larger; only worth it for art that
+        // actually uses it, which map backgrounds generally do not.
+        let encoded = canvas.toDataURL("image/jpeg", quality);
+        // Keep the stored payload small enough to sync comfortably: step the
+        // quality, then the dimensions, until it fits.
+        const storageCap = Number(options.storageCap || 2_200_000);
+        let attempt = 0;
+        while (encoded.length > storageCap && attempt < 4) {
+          attempt += 1;
+          const step = Math.max(.4, quality - attempt * .15);
+          if (attempt >= 3) {
+            canvas.width = Math.max(1, Math.round(canvas.width * .75));
+            canvas.height = Math.max(1, Math.round(canvas.height * .75));
+            context.imageSmoothingQuality = "high";
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          }
+          encoded = canvas.toDataURL("image/jpeg", step);
+        }
+        const dataUrl = encoded.length < original.length ? encoded : original;
+        resolve({
+          dataUrl, aspect,
+          width: dataUrl === encoded ? canvas.width : width,
+          height: dataUrl === encoded ? canvas.height : height,
+          resized: dataUrl === encoded && (scale < 1 || attempt > 0)
+        });
+      };
+      image.src = original;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 function normalizeMapData(data = {}) {
   const session = data.session && typeof data.session === "object" ? data.session : {};
@@ -1316,6 +1379,7 @@ async function createCampaignMap(campaignId, values) {
     : null;
   // For an uploaded map image (no scene), size the grid to the image's aspect
   // ratio so it tiles the whole map with square cells and nothing is cropped.
+  if (campaignMapImagePending) { toast("The map image is still processing - try again in a moment"); return; }
   const uploadedColumns = scene?.columns || Number(values.columns) || 24;
   const imageRows = campaignMapImageDraft && campaignMapImageAspect
     ? Math.min(80, Math.max(4, Math.round(uploadedColumns * campaignMapImageAspect)))
@@ -1326,6 +1390,9 @@ async function createCampaignMap(campaignId, values) {
     gridSize: values.gridSize,
     gridEnabled: values.gridEnabled === "on",
     background: campaignMapImageDraft || String(values.background || "").trim(),
+    // A pasted URL has no measurable aspect here, so fit the whole image rather
+    // than stretching it to whatever grid the form happens to hold.
+    backgroundFit: imageRows ? "fill" : (String(values.background || "").trim() ? "contain" : values.backgroundFit),
     tiles: scene?.tiles || [],
     overlays: scene?.overlays || [],
     display: scene?.ambience ? { ambience: scene.ambience } : undefined,
@@ -1606,6 +1673,7 @@ async function updateCampaignMapSettings(mapId, values) {
   if (!map || !canEditCampaign(map.campaign_id)) { toast("Only the DM can edit map settings"); return; }
   map.name = String(values.name || "").trim() || map.name || "Encounter Map";
   // If a new image was just uploaded, match the grid to its aspect ratio.
+  if (campaignMapImagePending) { toast("The map image is still processing - try again in a moment"); return; }
   const settingsColumns = Number(values.columns) || map.data?.columns || 24;
   const settingsRows = campaignMapImageDraft && campaignMapImageAspect
     ? Math.min(80, Math.max(4, Math.round(settingsColumns * campaignMapImageAspect)))
@@ -11203,30 +11271,47 @@ function initEvents() {
       if (status) status.textContent = "No image selected";
       return;
     }
-    const maximumSize = creatureUpload ? 900_000 : 10_000_000;
+    // Map art is downscaled before storage, so the source file can be larger;
+    // the stored size is capped separately in prepareUploadedImage.
+    const maximumSize = creatureUpload ? 900_000 : 30_000_000;
     if (file.size > maximumSize) {
       upload.value = "";
       if (tileUpload) campaignTileImageDraft = "";
       else if (creatureUpload) campaignCreatureImageDraft = "";
       else campaignMapImageDraft = "";
       if (status) status.textContent = "Image is too large for cloud sync";
-      toast(`Use an image under ${creatureUpload ? "900 KB" : "10 MB"}, or paste an image URL`);
+      toast(`Use an image under ${creatureUpload ? "900 KB" : "30 MB"}, or paste an image URL`);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (tileUpload) campaignTileImageDraft = String(reader.result || "");
-      else if (creatureUpload) campaignCreatureImageDraft = String(reader.result || "");
-      else {
-        campaignMapImageDraft = String(reader.result || "");
-        campaignMapImageAspect = 0;
-        const probe = new Image();
-        probe.onload = () => { if (probe.naturalWidth) campaignMapImageAspect = probe.naturalHeight / probe.naturalWidth; };
-        probe.src = campaignMapImageDraft;
-      }
-      if (status) status.textContent = `${file.name} ready`;
-    };
-    reader.readAsDataURL(file);
+    if (status) status.textContent = `Processing ${file.name}...`;
+    if (!tileUpload && !creatureUpload) {
+      // Mark the draft busy so saving waits for the real aspect ratio rather
+      // than falling back to the default row count and distorting the map.
+      campaignMapImageDraft = "";
+      campaignMapImageAspect = 0;
+      campaignMapImagePending = true;
+    }
+    prepareUploadedImage(file, tileUpload || creatureUpload ? { maxDimension: 512, quality: .85 } : {})
+      .then(result => {
+        if (tileUpload) campaignTileImageDraft = result.dataUrl;
+        else if (creatureUpload) campaignCreatureImageDraft = result.dataUrl;
+        else {
+          campaignMapImageDraft = result.dataUrl;
+          campaignMapImageAspect = result.aspect;
+          campaignMapImagePending = false;
+        }
+        if (status) {
+          const size = `${(result.dataUrl.length / 1_048_576).toFixed(1)} MB`;
+          const resized = result.resized ? ` · resized to ${result.width}x${result.height}` : "";
+          status.textContent = `${file.name} ready (${size}${resized})`;
+        }
+      })
+      .catch(() => {
+        campaignMapImagePending = false;
+        upload.value = "";
+        if (status) status.textContent = "Could not read that image";
+        toast("That image could not be read. Try a PNG or JPEG.");
+      });
   });
   const campaignDetail = $("#campaign-detail");
   campaignDetail?.addEventListener("scroll", event => {
