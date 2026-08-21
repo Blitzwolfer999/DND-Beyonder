@@ -6569,6 +6569,11 @@ const MAGIC_ITEM_EFFECTS = {
   "Dagger of Venom": { weaponAttack: 1, weaponDamage: 1 },
   "Berserker Axe": { weaponAttack: 1, weaponDamage: 1 },
   "Bloodrage Greataxe": { weaponAttack: 1, weaponDamage: 1, bonusDamage: "1d6 necrotic" },
+  // Wraps improve unarmed strikes only, so they use their own keys rather than
+  // the generic weapon bonuses.
+  "Wraps of Unarmed Prowess, +1": { unarmedAttack: 1, unarmedDamage: 1, unarmedMagical: true },
+  "Wraps of Unarmed Prowess, +2": { unarmedAttack: 2, unarmedDamage: 2, unarmedMagical: true },
+  "Wraps of Unarmed Prowess, +3": { unarmedAttack: 3, unarmedDamage: 3, unarmedMagical: true },
   "Mace of Smiting": { weaponAttack: 1, weaponDamage: 1 },
   "Sun Blade": { weaponAttack: 2, weaponDamage: 2 },
   "Scimitar of Speed": { weaponAttack: 2, weaponDamage: 2 },
@@ -6603,13 +6608,14 @@ function itemIsActive(item) {
   return itemRequiresAttunement(item) ? Boolean(item.attuned) : Boolean(item.attuned || item.equipped);
 }
 function activeItemEffects(data) {
-  const out = { ac: 0, acUnarmored: 0, save: 0, check: 0, weaponAttack: 0, weaponDamage: 0, spellAttack: 0, spellDc: 0, bonusDamage: [], setSTR: 0, setDEX: 0, setCON: 0, setINT: 0, setWIS: 0, setCHA: 0 };
+  const out = { ac: 0, acUnarmored: 0, save: 0, check: 0, weaponAttack: 0, weaponDamage: 0, spellAttack: 0, spellDc: 0, unarmedAttack: 0, unarmedDamage: 0, unarmedMagical: false, bonusDamage: [], setSTR: 0, setDEX: 0, setCON: 0, setINT: 0, setWIS: 0, setCHA: 0 };
   (data.inventory || []).forEach(item => {
     if (!itemIsActive(item)) return;
     const effect = MAGIC_ITEM_EFFECTS[item.name];
     if (!effect) return;
     ["ac", "acUnarmored", "save", "check"].forEach(key => { if (effect[key]) out[key] += effect[key]; });
-    ["weaponAttack", "weaponDamage", "spellAttack", "spellDc", "setSTR", "setDEX", "setCON", "setINT", "setWIS", "setCHA"].forEach(key => { if (effect[key]) out[key] = Math.max(out[key], effect[key]); });
+    ["weaponAttack", "weaponDamage", "spellAttack", "spellDc", "unarmedAttack", "unarmedDamage", "setSTR", "setDEX", "setCON", "setINT", "setWIS", "setCHA"].forEach(key => { if (effect[key]) out[key] = Math.max(out[key], effect[key]); });
+    if (effect.unarmedMagical) out.unarmedMagical = true;
     if (effect.bonusDamage && !out.bonusDamage.includes(effect.bonusDamage)) out.bonusDamage.push(effect.bonusDamage);
   });
   return out;
@@ -6818,14 +6824,21 @@ function weaponAttacks(character) {
     : 0;
   const unarmedDex = monkLevel && dexMod > strMod;
   const unarmedMod = unarmedDex ? dexMod : strMod;
+  // Wraps of Unarmed Prowess and similar items improve unarmed strikes.
+  const unarmedFx = activeItemEffects(character);
+  const unarmedNote = [
+    monkLevel ? "martial arts" : "",
+    unarmedFx.unarmedMagical ? "magical" : "",
+    unarmedFx.unarmedAttack ? `wraps ${signed(unarmedFx.unarmedAttack)}` : ""
+  ].filter(Boolean).join(" · ");
   attacks.push({
     name: "Unarmed Strike",
-    note: monkLevel ? "martial arts" : "",
+    note: unarmedNote,
     ability: unarmedDex ? "DEX" : "STR",
-    toHit: unarmedMod + prof,
+    toHit: unarmedMod + prof + unarmedFx.unarmedAttack,
     count: monkDie ? 1 : 0,
     sides: monkDie || 0,
-    dmgMod: unarmedMod,
+    dmgMod: unarmedMod + unarmedFx.unarmedDamage,
     flatBase: monkDie ? 0 : 1,
     versatile: null,
     damageType: "bludgeoning",
