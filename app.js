@@ -8810,7 +8810,12 @@ function itemRarity(item) {
 // Item description with the leading rarity + attunement segments removed
 // (those are shown as the rarity chip and the attunement badge instead).
 function itemEffectNote(item) {
-  const parts = String(item.notes || "").split(" · ");
+  // An item's description is copied into `notes` when it is added, so a later
+  // catalogue correction would never reach inventories already holding it.
+  // Prefer the current catalogue text whenever the item is still listed.
+  const catalogEntry = EQUIPMENT_CATALOG.find(entry => entry.name === item.name);
+  const source = catalogEntry?.details || item.notes || item.details || "";
+  const parts = String(source).split(" · ");
   const rarities = ["common", "uncommon", "rare", "very rare", "legendary", "artifact"];
   let start = 0;
   if (parts[start] && rarities.includes(parts[start].trim().toLowerCase())) start += 1;
@@ -9808,6 +9813,13 @@ function confirmAction(options) {
   modal.classList.remove("hidden");
   ok.focus();
 }
+// True when a token's footprint covers the given cell (tokens can be 1x1 to 4x4).
+function mapTokenCoversCell(token, x, y) {
+  const size = mapTokenSize(token);
+  const tokenX = Number(token.x) || 0;
+  const tokenY = Number(token.y) || 0;
+  return x >= tokenX && x < tokenX + size && y >= tokenY && y < tokenY + size;
+}
 function closeConfirm() { $("#confirm-modal")?.classList.add("hidden"); pendingConfirm = null; }
 
 function delevelCharacter(id) {
@@ -10595,6 +10607,25 @@ function initDice() {
 }
 
 function initEvents() {
+  // Delete or Backspace removes the token selected on the board.
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Delete" && event.key !== "Backspace") return;
+    if (!selectedMapToken || !activeMapId) return;
+    const target = event.target;
+    if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    const map = campaignMapById(activeMapId);
+    if (!map || !canEditCampaign(map.campaign_id)) return;
+    const token = normalizeMapData(map.data).tokens.find(item => item.id === selectedMapToken);
+    if (!token) return;
+    event.preventDefault();
+    confirmAction({
+      title: "Delete token?",
+      message: `Remove ${token.name || "this token"} from the map? The character sheet is not affected.`,
+      confirmLabel: "Delete token",
+      danger: true,
+      onConfirm: () => deleteCampaignMapToken(map.id, token.id)
+    });
+  });
   window.addEventListener("hashchange", () => {
     mapTableMode = /^#\/?campaigns\/map(?:[/?&#]|$)/i.test(location.hash);
     if (!mapTableMode) mapDockCollapsed = false;
@@ -11232,7 +11263,13 @@ function initEvents() {
       const cellX = cell.x;
       const cellY = cell.y;
       if (canEditCampaign(map.campaign_id) && selectedMapTool === "paint") paintCampaignMapTile(map.id, selectedMapTile, cellX, cellY, "paint");
-      else if (canEditCampaign(map.campaign_id) && selectedMapTool === "erase") paintCampaignMapTile(map.id, selectedMapTile, cellX, cellY, "erase");
+      else if (canEditCampaign(map.campaign_id) && selectedMapTool === "erase") {
+        // Erasing over a token removes the token; otherwise clear the tile.
+        const onCell = data.tokens.filter(token => mapTokenCoversCell(token, cellX, cellY));
+        const target = onCell[onCell.length - 1];
+        if (target) deleteCampaignMapToken(map.id, target.id);
+        else paintCampaignMapTile(map.id, selectedMapTile, cellX, cellY, "erase");
+      }
       else if (canEditCampaign(map.campaign_id) && (selectedMapTool === "fog-paint" || selectedMapTool === "fog-erase")) updateCampaignFog(map.id, selectedMapTool, cellX, cellY);
       else if (selectedMapTool === "ping") addCampaignMapPing(map.id, x, y);
       else if (selectedMapTool === "ruler") {
