@@ -6872,12 +6872,25 @@ function weaponAttacks(character) {
     : monkLevel >= 5 ? monkProgression[1]
     : monkLevel >= 1 ? monkProgression[0]
     : 0;
-  const unarmedDex = monkLevel && dexMod > strMod;
+  // College of Dance's Dazzling Footwork lets a Bard punch with Dexterity and
+  // roll a Bardic die for the damage, on the same "no armour, no shield" terms
+  // as its unarmoured defence.
+  const danceLevel = classSubclassName(character, "Bard") === "College of Dance"
+    ? classLevel(character, "Bard") : 0;
+  const dazzlingFootwork = danceLevel >= 3 && fightsUnburdened(character);
+  const bardicDie = dazzlingFootwork
+    ? (danceLevel >= 15 ? 12 : danceLevel >= 10 ? 10 : danceLevel >= 5 ? 8 : 6)
+    : 0;
+  const unarmedDex = (monkLevel || dazzlingFootwork) && dexMod > strMod;
   const unarmedMod = unarmedDex ? dexMod : strMod;
+  // The Bardic die replaces the strike's normal damage; if the character is
+  // also a Monk, the larger of the two dice applies.
+  const unarmedDie = Math.max(monkDie, bardicDie);
   // Wraps of Unarmed Prowess and similar items improve unarmed strikes.
   const unarmedFx = activeItemEffects(character);
   const unarmedNote = [
     monkLevel ? "martial arts" : "",
+    dazzlingFootwork ? "dazzling footwork" : "",
     unarmedFx.unarmedMagical ? "magical" : "",
     unarmedFx.unarmedAttack ? `wraps ${signed(unarmedFx.unarmedAttack)}` : ""
   ].filter(Boolean).join(" · ");
@@ -6886,10 +6899,10 @@ function weaponAttacks(character) {
     note: unarmedNote,
     ability: unarmedDex ? "DEX" : "STR",
     toHit: unarmedMod + prof + unarmedFx.unarmedAttack,
-    count: monkDie ? 1 : 0,
-    sides: monkDie || 0,
+    count: unarmedDie ? 1 : 0,
+    sides: unarmedDie || 0,
     dmgMod: unarmedMod + unarmedFx.unarmedDamage,
-    flatBase: monkDie ? 0 : 1,
+    flatBase: unarmedDie ? 0 : 1,
     versatile: null,
     damageType: "bludgeoning",
     bonusDamage: []
@@ -7022,6 +7035,15 @@ function renderAttacksPanel(character, sectionClassName) {
       </article>`
     : "";
   return `<section class="sheet-panel ${sectionClassName}"><h2>Attacks${helpChip("ac")}${attackBadge}</h2><div class="attack-list">${rows}${sneakRow}${spellBlock}</div><p class="attack-hint">All carried weapons appear here; magic bonuses (+X, Flame Tongue, etc.) apply when the weapon is equipped and attuned. Casters can pin spells above.</p></section>`;
+}
+
+// "While you aren't wearing armor or wielding a Shield" -- the gate shared by
+// Dazzling Footwork's AC and its unarmed strike. Shields are excluded from the
+// armour test so a shield alone doesn't read as wearing armour.
+function fightsUnburdened(data) {
+  const items = equippedItems(data);
+  if (items.some(item => isShieldItem(item))) return false;
+  return !items.some(item => !isShieldItem(item) && armorRuleFor(item));
 }
 
 // Best unarmored AC, accounting for class, subclass, feat, and species rules.

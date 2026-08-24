@@ -149,7 +149,7 @@ const SUBCLASS_FEATURE_DATA = {
 
     // ---------------- Bard ----------------
     "College of Dance": [
-      [3, "Dazzling Footwork", "While unarmored you use Charisma for unarmed strikes (damage by your Bardic die) and gain a bonus to AC and acrobatic movement."],
+      [3, "Dazzling Footwork", "While unarmored and without a shield your AC is 10 + Dexterity + Charisma, and your unarmed strikes use Dexterity and deal damage by your Bardic die."],
       [6, "Inspiring Movement", "When an enemy ends its turn near you, spend a reaction and a Bardic die to reposition yourself and an ally."],
       [6, "Tandem Footwork", "When you roll initiative, spend a Bardic die to boost your own and your allies' initiative."],
       [14, "Leading Evasion", "When you succeed on a Dexterity save for half damage you take none, and you can share that protection with nearby allies."]
