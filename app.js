@@ -5311,11 +5311,18 @@ function validateOriginChoices(raw = originFormValues()) {
   return !rule.featChoice || Boolean(String(raw.originFeatChoice || "").trim());
 }
 
+// Which background the ticked skill boxes belong to. Carrying selections across
+// a background change meant every background kept the first one's skills, so a
+// Sage was trained in Insight and Persuasion instead of Arcana and History.
+let backgroundSkillSource = "";
+
 function backgroundSkillBlock(savedCharacter, backgroundName, currentSelections = []) {
   const defaults = BACKGROUND_SKILLS[backgroundName] || [];
+  const keepCurrent = currentSelections.length === 2 && backgroundSkillSource === backgroundName;
   const selected = savedCharacter?.backgroundSkills?.length
     ? savedCharacter.backgroundSkills
-    : currentSelections.length === 2 ? currentSelections : defaults;
+    : keepCurrent ? currentSelections : defaults;
+  backgroundSkillSource = backgroundName;
   return choiceChecks("backgroundSkills", skillsForEdition(edition), selected, 2, "Background skill proficiencies");
 }
 
@@ -6588,6 +6595,7 @@ const MAGIC_ITEM_EFFECTS = {
   "Headband of Intellect": { setINT: 19 },
   "Belt of Hill Giant Strength": { setSTR: 21 },
   "Belt of Stone Giant Strength": { setSTR: 23 },
+  "Belt of Frost Giant Strength": { setSTR: 23 },
   "Belt of Fire Giant Strength": { setSTR: 25 },
   "Belt of Cloud Giant Strength": { setSTR: 27 },
   "Belt of Storm Giant Strength": { setSTR: 29 },
