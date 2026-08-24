@@ -5541,7 +5541,20 @@ function renderStartingClassOptions(savedCharacter = null) {
   }
   const expertiseCount = expertiseCountAtLevel(selectedClass, level, edition);
   if (expertiseCount) {
-    blocks.push(choiceChecks("expertise", skillsForEdition(edition), currentExpertise, expertiseCount, "Expertise"));
+    // Only trained skills can take Expertise. Offering the full skill list let
+    // players tick an untrained skill and only learn it was illegal when the
+    // save was rejected.
+    const trained = [...new Set([
+      ...currentSkills,
+      ...(savedCharacter?.backgroundSkills || selectedValues("backgroundSkills"))
+    ])].filter(skill => skillsForEdition(edition).includes(skill));
+    const stillValid = currentExpertise.filter(skill => trained.includes(skill));
+    blocks.push(trained.length
+      ? choiceChecks("expertise", trained, stillValid, expertiseCount, "Expertise")
+      : `<div class="class-choice-block" data-builder-choice-name="expertise" data-builder-choice-limit="${expertiseCount}">
+          <strong>Expertise · choose ${expertiseCount}</strong>
+          <small>Choose your skill proficiencies first — Expertise doubles a proficiency you already have.</small>
+        </div>`);
   }
   const masteryCount = weaponMasteryCount(selectedClass, level, edition);
   if (masteryCount) {
@@ -7349,14 +7362,22 @@ function spellcastingAbility(data) {
 }
 
 function proficientSkills(data) {
-  const skills = new Set([...(data.skillProficiencies || []), ...(data.backgroundSkills || []), ...(data.expertise || [])]);
+  // Expertise is deliberately not folded in here: it doubles an existing
+  // proficiency rather than granting one. Counting it as proficiency let a
+  // sheet claim Expertise on an untrained skill and pay out double.
+  const skills = new Set([...(data.skillProficiencies || []), ...(data.backgroundSkills || [])]);
   if (classSubclassName(data, "Rogue") === "Scout" && classLevel(data, "Rogue") >= 3) ["Nature", "Survival"].forEach(skill => skills.add(skill));
   if (["Bladesinging", "Bladesinger"].includes(classSubclassName(data, "Wizard")) && classLevel(data, "Wizard") >= (data.edition === "2024" ? 3 : 2)) skills.add("Performance");
   return skills;
 }
 
 function expertiseSkills(data) {
-  const skills = new Set(data.expertise || []);
+  // You cannot be an expert in a skill you are not trained in, so drop any
+  // stored expertise that no longer has a matching proficiency behind it.
+  const proficient = proficientSkills(data);
+  const skills = new Set((data.expertise || []).filter(skill => proficient.has(skill)));
+  // Scout grants the Nature and Survival proficiencies alongside the expertise,
+  // so both sets pick them up independently.
   if (classSubclassName(data, "Rogue") === "Scout" && classLevel(data, "Rogue") >= 3) ["Nature", "Survival"].forEach(skill => skills.add(skill));
   return skills;
 }
@@ -9297,7 +9318,9 @@ function renderSheet() {
     progressionDescription("invocations", name, c.edition),
     unmetInvocations.has(name) ? `Prerequisite not met: ${invocationPrerequisiteText(c.edition, name)}` : ""
   ));
-  (c.expertise || []).forEach(name => addChoice(name, "Expertise", `Your proficiency bonus is doubled for checks you make with ${name}.`));
+  // Read the validated set, not the raw list, so expertise stored against a
+  // skill the character is no longer trained in is not advertised as active.
+  expertiseSkills(c).forEach(name => addChoice(name, "Expertise", `Your proficiency bonus is doubled for checks you make with ${name}.`));
   (c.weaponMastery || []).forEach(name => addChoice(name, "Weapon Mastery", `${WEAPON_MASTERY_PROPERTIES[name] || "Mastery"} property · usable when the weapon's requirements are met.`));
   addChoice(c.divineOrder, "Divine Order", classChoiceDescription(c.divineOrder));
   addChoice(c.primalOrder, "Primal Order", classChoiceDescription(c.primalOrder));
@@ -11486,6 +11509,13 @@ function initEvents() {
       updatePreview();
       return;
     }
+    // Expertise is drawn from the trained skills, so a change to the class
+    // skill picks has to rebuild that list.
+    if (event.target.name === "skillProficiencies") {
+      renderStartingClassOptions();
+      updatePreview();
+      return;
+    }
     if (event.target.name === "startingEquipmentMode") {
       updateEquipmentMethodUI();
       renderStartingEquipmentChoices();
@@ -11533,9 +11563,12 @@ function initEvents() {
     if (["species", "background", "speciesVariant", "backgroundAbilityMode"].includes(event.target.name)) {
       renderOriginRules();
       renderTalentChoices();
+      // Background skills feed Expertise, so its options move with them.
+      renderStartingClassOptions();
     } else if (event.target.closest("#origin-rules")) {
       setCurrentOriginFeat(originFeatFromForm());
       renderTalentChoices();
+      renderStartingClassOptions();
       updatePreview();
     }
     if (event.target.type === "checkbox" && event.target.checked) {
