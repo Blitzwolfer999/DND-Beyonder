@@ -914,6 +914,7 @@ const CONTENT_SUMMARIES = {
     "Fisher": "Raised hauling nets and lines, patient, weather-wise, and steady-handed.",
     "Folk Hero": "Risen from common roots to local fame by standing up when others would not.",
     "Giant Foundling": "Raised among giants or giant-kin, carrying their lore and larger-than-life outlook.",
+    "Guild Artisan": "A trained crafter and dues-paying guild member, trading on skill and the guild's standing.",
     "Inheritor": "Heir to a mysterious legacy or relic whose full meaning is still unfolding.",
     "Knight of the Order": "A sworn knight of a chivalric order, upholding its code and ideals.",
     "Marine": "A seaborne soldier trained to fight on ship and shore alike.",

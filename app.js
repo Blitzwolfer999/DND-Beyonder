@@ -3705,12 +3705,26 @@ function quickSpellChoices(className) {
   return chosen;
 }
 
+// A handful of names exist in both rule sets with different stats (Bedroll,
+// Backpack, Shortbow, Revolver...). A bare name lookup returns whichever is
+// listed first, which put gold-piece D&D gear on Star Wars sheets, so match
+// the character's edition before falling back to the name alone.
+function catalogItem(name, rulesEdition = edition) {
+  const named = EQUIPMENT_CATALOG.filter(item => item.name === name);
+  if (named.length < 2) return named[0];
+  return named.find(item => item.editions
+    ? item.editions.includes(rulesEdition)
+    : rulesEdition !== "sw5e") || named[0];
+}
+
 function quickInventory(className, themeEquipment = null) {
   const fallbackGear = edition === "sw5e" ? ["Bedroll"] : ["Bedroll", "Rations, 1 day"];
-  const names = [...(themeEquipment?.length ? themeEquipment : quickBuildProfileFor(className)?.equipment || []), ...fallbackGear];
+  const names = [...(Array.isArray(themeEquipment) && themeEquipment.length
+    ? themeEquipment
+    : quickBuildProfileFor(className)?.equipment || []), ...fallbackGear];
   const entries = new Map();
   names.forEach(name => {
-    const catalog = EQUIPMENT_CATALOG.find(item => item.name === name)
+    const catalog = catalogItem(name)
       || { name, type: "Adventuring Gear", cost: "", weight: 0, details: "" };
     if (entries.has(name)) {
       entries.get(name).quantity += 1;
@@ -5589,19 +5603,34 @@ function renderClassFeaturePreview() {
   const classRows = (CLASS_FEATURES[edition]?.[selectedClass] || [])
     .filter(([featureLevel]) => featureLevel <= level)
     .map(([featureLevel, name]) => ({ level: featureLevel, name, source: selectedClass }));
-  const subclassRows = subclassName
+  const allSubclassRows = subclassName
     ? resolvedSubclassFeatures(edition, selectedClass, subclassName)
-      .filter(([featureLevel]) => featureLevel <= level)
       .map(([featureLevel, name]) => ({ level: featureLevel, name, source: subclassName }))
     : [];
+  const subclassRows = allSubclassRows.filter(feature => feature.level <= level);
+  // Show what the subclass grants later too, so the pick can be compared against
+  // its rivals before the character is high enough to have unlocked anything.
+  const upcomingRows = allSubclassRows.filter(feature => feature.level > level);
   const features = [...classRows, ...subclassRows];
   const subclassChoices = subclassName ? subclassChoiceSummaryMarkup(subclassName, level) : "";
+  const card = (feature, upcoming) =>
+    `<article class="feature-card${upcoming ? " feature-card-upcoming" : ""}"><small>LEVEL ${feature.level} · ${escapeHtml(feature.source)}${upcoming ? " · UPCOMING" : ""}</small><strong>${escapeHtml(feature.name)}</strong>${ruleDetails(featureDescription(edition, feature.source, feature.name, selectedClass))}</article>`;
+  const unlock = subclassLevel(selectedClass, edition);
+  const upcomingBlock = upcomingRows.length
+    ? `<div class="feature-upcoming-block">
+        <h4>${escapeHtml(subclassName)} unlocks later</h4>
+        <p>${level < unlock
+          ? `You choose this subclass at level ${unlock}. These are the features it goes on to grant.`
+          : "Features this subclass grants above your current level."}</p>
+        <div class="selection-feature-grid">${upcomingRows.map(feature => card(feature, true)).join("")}</div>
+      </div>`
+    : "";
   container.innerHTML = `<h3>Features at level ${level}</h3>
     <p>Class and subclass features are granted automatically at their listed levels.</p>
     ${subclassChoices}
-    <div class="selection-feature-grid">${features.map(feature =>
-      `<article class="feature-card"><small>LEVEL ${feature.level} · ${escapeHtml(feature.source)}</small><strong>${escapeHtml(feature.name)}</strong>${ruleDetails(featureDescription(edition, feature.source, feature.name, selectedClass))}</article>`
-    ).join("") || "<p>No class features are available at this level.</p>"}</div>`;
+    <div class="selection-feature-grid">${features.map(feature => card(feature, false)).join("")
+      || "<p>No class features are available at this level.</p>"}</div>
+    ${upcomingBlock}`;
 }
 
 function populateSubclasses() {
@@ -8789,7 +8818,7 @@ function renderInventorySection(character, extraClass = "") {
     <div class="inventory-summary">
       <span><strong>Carried:</strong> ${Number(weight.toFixed(2))} lb.</span>
       <span><strong>Capacity:</strong> ${capacity} lb.</span>
-      <span class="attune-slots"><strong>Attunement</strong><span class="attune-pips" aria-hidden="true">${[0, 1, 2].map(slot => `<i class="${slot < attuned ? "used" : ""}"></i>`).join("")}</span><small>${attuned}/3 slots</small></span>
+      <span class="attune-slots${attuned > 3 ? " over" : ""}"><strong>Attunement</strong><span class="attune-pips" aria-hidden="true">${[0, 1, 2].map(slot => `<i class="${slot < attuned ? "used" : ""}"></i>`).join("")}</span><small>${attuned}/3 slots${attuned > 3 ? ` · ${attuned - 3} over limit` : ""}</small></span>
       <span><strong>Items:</strong> ${inventory.reduce((sum, item) => sum + Number(item.quantity || 1), 0)}</span>
     </div>
     ${inventory.length ? `<div class="inventory-scroll"><table class="inventory-table">
@@ -8826,7 +8855,7 @@ function itemEffectNote(item) {
   // An item's description is copied into `notes` when it is added, so a later
   // catalogue correction would never reach inventories already holding it.
   // Prefer the current catalogue text whenever the item is still listed.
-  const catalogEntry = EQUIPMENT_CATALOG.find(entry => entry.name === item.name);
+  const catalogEntry = catalogItem(item.name);
   const source = catalogEntry?.details || item.notes || item.details || "";
   const parts = String(source).split(" · ");
   const rarities = ["common", "uncommon", "rare", "very rare", "legendary", "artifact"];

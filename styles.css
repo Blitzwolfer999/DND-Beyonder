@@ -3761,3 +3761,37 @@ html[data-theme="dark"] .dungeon-theme-strip button.active { color: #fff; border
 .stat-breakdown-card li b { font-weight: 800; font-variant-numeric: tabular-nums; }
 .stat-breakdown-card footer { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font: 600 10px/1.4 system-ui, sans-serif; }
 .variant-note { display: block; margin-top: 2px; color: var(--gold-dark, #a4552a); font: 700 9px/1.4 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .3px; }
+
+/* ===== Upcoming subclass features (compare before you commit) ===== */
+.feature-upcoming-block { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.feature-upcoming-block h4 {
+  margin: 0 0 3px; font: 600 13px/1.3 Cinzel, serif; color: var(--gold-dark, #a4552a);
+}
+.feature-upcoming-block > p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+.feature-card-upcoming {
+  border-left-color: var(--muted, #8a8a8a);
+  background: transparent;
+  border-style: dashed;
+  opacity: .78;
+}
+.feature-card-upcoming small { color: var(--muted, #8a8a8a); }
+html[data-theme="dark"] .feature-card-upcoming { background: transparent; color: var(--ink); }
+
+/* ===== Touch targets =====
+   Fine-pointer sizing stays as designed; coarse pointers get thumb-sized
+   controls. The sheet packs a lot of small chips (resource pips, death
+   saves, reset links) that were 14-27px tall and hard to hit on a phone. */
+@media (pointer: coarse) {
+  .resource-reset { min-height: 32px; padding: 8px 6px; }
+  .resource-pip { width: 34px; height: 34px; }
+  .attack-tohit, .attack-damage, .spell-pin-chip, .skill-roll { min-height: 40px; }
+  .death-saves .death-save-group button { width: 28px; height: 28px; }
+  .condition-menu button { min-height: 40px; padding: 9px 12px; }
+  #dismiss-welcome { min-height: 40px; }
+}
+
+/* Attunement past the 3-slot cap: the count was rendered plainly, so "5/3" read
+   as normal. Flag it the way an over-budget value should read. */
+.attune-slots.over small { color: #a4552a; font-weight: 800; }
+.attune-slots.over .attune-pips i.used { background: #c2703a; box-shadow: 0 0 0 1px #a4552a; }
+html[data-theme="dark"] .attune-slots.over small { color: #e39a63; }
