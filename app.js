@@ -5707,6 +5707,23 @@ function normalizeCharacterData(character, options = {}) {
       }
     }
   }
+  // Seven item names exist in both rule sets. Inventories saved while the
+  // catalogue lookup ignored edition kept the wrong one's stats -- gold-piece
+  // D&D gear sitting on a Star Wars sheet. Re-point those at the entry for the
+  // character's own edition; anything already correct, or not in the catalogue
+  // at all (custom gear), is left untouched.
+  if (Array.isArray(character.inventory) && character.inventory.length) {
+    normalized.inventory = character.inventory.map(item => {
+      // Only names carried by more than one rule set can have been mismatched;
+      // leave unique and custom items exactly as the player saved them.
+      if (EQUIPMENT_CATALOG.filter(entry => entry.name === item.name).length < 2) return item;
+      const correct = catalogItem(item.name, normalized.edition);
+      if (!correct || correct.type === item.type) return item;
+      changed = true;
+      return { ...item, type: correct.type, cost: correct.cost, weight: correct.weight };
+    });
+  }
+
   const seen = new Set();
   normalized.spells = (character.spells || []).map(spell => {
     const original = typeof spell === "string" ? { name: spell } : spell || {};
@@ -9362,6 +9379,18 @@ function renderSheet() {
   // skill the character is no longer trained in is not advertised as active.
   expertiseSkills(c).forEach(name => addChoice(name, "Expertise", `Your proficiency bonus is doubled for checks you make with ${name}.`));
   (c.weaponMastery || []).forEach(name => addChoice(name, "Weapon Mastery", `${WEAPON_MASTERY_PROPERTIES[name] || "Mastery"} property · usable when the weapon's requirements are met.`));
+  // Background skills used to stick on whichever background rendered first, so
+  // sheets saved before that fix can carry another background's skills. It is
+  // a legitimate choice to differ, so flag it rather than silently rewriting.
+  const backgroundDefaults = BACKGROUND_SKILLS[c.background] || [];
+  const storedBackgroundSkills = c.backgroundSkills || [];
+  const backgroundDrift = backgroundDefaults.length && storedBackgroundSkills.length
+    && storedBackgroundSkills.slice().sort().join("|") !== backgroundDefaults.slice().sort().join("|");
+  storedBackgroundSkills.forEach(name => addChoice(name, `${c.background} skill`,
+    `Skill proficiency from your background.`,
+    backgroundDrift && !backgroundDefaults.includes(name)
+      ? `${c.background} normally grants ${backgroundDefaults.join(" and ")}.`
+      : ""));
   addChoice(c.divineOrder, "Divine Order", classChoiceDescription(c.divineOrder));
   addChoice(c.primalOrder, "Primal Order", classChoiceDescription(c.primalOrder));
   addChoice(c.blessedStrikes, "Blessed Strikes", classChoiceDescription(c.blessedStrikes));
