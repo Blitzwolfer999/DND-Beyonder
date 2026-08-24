@@ -7047,6 +7047,14 @@ function unarmoredAcOptions(data, hasShield = false) {
   if (sorcererSubclass === "Draconic Bloodline" && classLevel(data, "Sorcerer") >= 1) {
     options.push({ value: 13 + dex, source: "Draconic Resilience (13 + DEX)" });
   }
+  // College of Dance's Dazzling Footwork is an unarmoured defence in the same
+  // family as the Monk's and Barbarian's, but keyed to Charisma. Like the
+  // Bladesinger it drops away if a shield is in hand.
+  if (classSubclassName(data, "Bard") === "College of Dance" && !hasShield
+    && classLevel(data, "Bard") >= 3) {
+    options.push({ value: 10 + dex + modifier(data.CHA), source: "Dazzling Footwork (10 + DEX + CHA)",
+      parts: base({ label: "Charisma (Dazzling Footwork)", value: modifier(data.CHA) }) });
+  }
   // Bladesong adds your Intelligence modifier to AC while it's active (no
   // medium/heavy armor and no shield).
   const wizardSubclass = classSubclassName(data, "Wizard");
@@ -7055,11 +7063,16 @@ function unarmoredAcOptions(data, hasShield = false) {
     options.push({ value: 10 + dex + Math.max(0, modifier(data.INT)), source: "Bladesong (10 + DEX + INT)",
       parts: base({ label: "Intelligence (Bladesong)", value: Math.max(0, modifier(data.INT)) }) });
   }
-  if (feats.has("Dragon Hide")) options.push({ value: 13 + dex, source: "Dragon Hide natural armor" });
-  if (data.species === "Tortle") options.push({ value: 17, source: "Tortle natural armor" });
-  if (data.species === "Lizardfolk") options.push({ value: 13 + dex, source: "Lizardfolk natural armor" });
-  if (data.species === "Loxodon") options.push({ value: 12 + modifier(data.CON), source: "Loxodon natural armor" });
-  if (["Autognome", "Thri-kreen"].includes(data.species)) options.push({ value: 13 + dex, source: `${data.species} natural armor` });
+  // Natural armour is flagged because it behaves differently from the class and
+  // subclass defences above: those switch off the moment you put armour on,
+  // while natural armour explicitly stays available when worn armour would
+  // leave you with a lower AC.
+  if (feats.has("Dragon Hide")) options.push({ value: 13 + dex, source: "Dragon Hide natural armor", natural: true });
+  if (data.species === "Tortle") options.push({ value: 17, source: "Tortle natural armor", natural: true });
+  if (data.species === "Lizardfolk") options.push({ value: 13 + dex, source: "Lizardfolk natural armor", natural: true });
+  if (data.species === "Loxodon") options.push({ value: 12 + modifier(data.CON), source: "Loxodon natural armor", natural: true });
+  if (data.species === "Locathah") options.push({ value: 12 + dex, source: "Locathah natural armor", natural: true });
+  if (["Autognome", "Thri-kreen"].includes(data.species)) options.push({ value: 13 + dex, source: `${data.species} natural armor`, natural: true });
   return options;
 }
 
@@ -7306,13 +7319,18 @@ function armorClassDetails(data) {
       parts
     }];
   });
+  const unarmoredOptions = unarmoredAcOptions(data, Boolean(shieldItem)).map(option => ({
+    ...option,
+    // Worn armour still carries its shield and Defense style while natural
+    // armour supplies the base, so those ride along either way.
+    value: option.value + shieldBonus + (armorOptions.length && defenseStyle ? 1 : 0),
+    parts: option.parts || [{ label: option.source, value: option.value }]
+  }));
+  // Natural armour competes with worn armour; class and subclass unarmoured
+  // defences are simply off while armoured.
   const options = armorOptions.length
-    ? armorOptions
-    : unarmoredAcOptions(data, Boolean(shieldItem)).map(option => ({
-        ...option,
-        value: option.value + shieldBonus,
-        parts: option.parts || [{ label: option.source, value: option.value }]
-      }));
+    ? [...armorOptions, ...unarmoredOptions.filter(option => option.natural)]
+    : unarmoredOptions;
   let best = options.reduce((highest, option) => option.value > highest.value ? option : highest, options[0]);
   const breakdown = [...(best.parts || [])];
   if (shieldItem) {
