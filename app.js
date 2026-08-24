@@ -6505,6 +6505,96 @@ function formData() {
   return data;
 }
 
+// Everything still outstanding before a character counts as finished, gathered
+// as a list rather than a single early return so a part-built character can
+// report all of it at once and still be saved.
+function characterCompletionIssues(data) {
+  const issues = [];
+  const add = (step, message) => issues.push({ step, message });
+  if (!String(data.name || "").trim()) add(1, "Give your character a name");
+  if (!validateAbilityScoresQuiet()) add(4, "Finish assigning ability scores");
+  if (!validateOriginChoices()) add(3, "Complete the origin ability and feat choices");
+  const primaryEditLevel = classLevel(data, data.className) || data.level;
+  const skillRule = classSkillRuleAtLevel(data.className, primaryEditLevel, data.edition, data.subclass);
+  if ((data.skillProficiencies || []).length !== skillRule.count) {
+    add(2, `Choose ${skillRule.count} class skill proficiencies`);
+  }
+  const background = data.backgroundSkills || [];
+  if (background.length !== 2 || new Set(background).size !== 2) {
+    add(3, "Choose two different background skill proficiencies");
+  }
+  const trained = new Set([...(data.skillProficiencies || []), ...background]);
+  if ((data.expertise || []).some(skill => !trained.has(skill))) {
+    add(2, "Expertise must be assigned to a proficient skill");
+  }
+  const expertiseRequired = expertiseCountAtLevel(data.className, primaryEditLevel, data.edition);
+  if ((data.expertise || []).length !== expertiseRequired) {
+    add(2, `Choose ${expertiseRequired} skill${expertiseRequired === 1 ? "" : "s"} for Expertise`);
+  }
+  const masteryRequired = weaponMasteryCount(data.className, primaryEditLevel, data.edition);
+  if ((data.weaponMastery || []).length !== masteryRequired) {
+    add(2, `Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`);
+  }
+  const spellIssue = spellSelectionIssue(data);
+  if (spellIssue) add(5, spellIssue);
+  return issues;
+}
+
+let builderAutosaveTimer = null;
+let lastBuilderSnapshot = "";
+
+// A part-built character is still worth keeping, so saving never refuses. The
+// outstanding requirements ride along on the record instead, and the vault
+// shows it as still in progress until they are met.
+function saveBuilderCharacter({ explicit = false } = {}) {
+  if ($("#standard-builder")?.classList.contains("hidden")) return null;
+  const data = formData();
+  // Nothing worth storing until the character has a name or a class.
+  if (!String(data.name || "").trim() && !data.className) return null;
+  const issues = characterCompletionIssues(data);
+  // Always assign, never delete: the record is merged with its previous version,
+  // so an absent key would leave a resolved requirement showing forever.
+  data.incomplete = issues.length ? issues.map(issue => issue.message) : null;
+  data.id = activeCharacterId && activeCharacterId !== "demo-lyra" ? activeCharacterId : crypto.randomUUID();
+  clearCharacterDeletion(data.id);
+  data.updatedAt = Date.now();
+  const index = characters.findIndex(character => character.id === data.id);
+  if (index >= 0) characters[index] = { ...characters[index], ...data };
+  else characters.unshift(data);
+  // Anchoring to the new id keeps later autosaves updating this same record
+  // rather than minting a fresh character on every keystroke.
+  activeCharacterId = data.id;
+  const saved = persistCharacters();
+  renderCards();
+  return { data, issues, saved };
+}
+
+function queueBuilderAutosave() {
+  clearTimeout(builderAutosaveTimer);
+  builderAutosaveTimer = setTimeout(() => {
+    if ($("#standard-builder")?.classList.contains("hidden")) return;
+    let snapshot = "";
+    try { snapshot = JSON.stringify(formData()); } catch (error) { return; }
+    // Re-rendering the builder fires plenty of events that change nothing;
+    // only write when the character actually differs.
+    if (snapshot === lastBuilderSnapshot) return;
+    const result = saveBuilderCharacter();
+    if (!result) return;
+    lastBuilderSnapshot = snapshot;
+    setBuilderSaveState(result.issues);
+  }, 1200);
+}
+
+function setBuilderSaveState(issues = []) {
+  const status = $("#builder-save-state");
+  if (!status) return;
+  const stamp = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  status.textContent = issues.length
+    ? `Progress saved ${stamp} · ${issues.length} step${issues.length === 1 ? "" : "s"} left`
+    : `Saved ${stamp}`;
+  status.classList.toggle("incomplete", Boolean(issues.length));
+}
+
 function classBreakdown(data) {
   const source = Array.isArray(data?.classes) && data.classes.length
     ? data.classes
@@ -7623,7 +7713,10 @@ function setStep(step) {
   $("#character-form").dataset.currentStep = currentStep;
   $("#prev-step").style.visibility = currentStep === 1 ? "hidden" : "visible";
   $("#next-step").classList.toggle("hidden", currentStep === BUILDER_STEP_COUNT);
-  $("#save-character").classList.toggle("hidden", currentStep !== BUILDER_STEP_COUNT);
+  // Saving is available from any step: a part-built character is kept rather
+  // than lost, so the button never disappears.
+  $("#save-character").classList.remove("hidden");
+  $("#save-character").textContent = currentStep === BUILDER_STEP_COUNT ? "Save character" : "Save progress";
   $("#step-count").textContent = `Step ${currentStep} of ${BUILDER_STEP_COUNT}`;
   if (currentStep === 5) renderTalentChoices();
   if (currentStep === 6 || currentStep === 7) renderStartingEquipmentChoices();
@@ -7730,6 +7823,12 @@ function startNewCharacter() {
   updatePreview();
 }
 
+// A character can be autosaved before it has been named, so anywhere a name is
+// shown needs a stand-in rather than reading charAt on an empty value.
+function characterDisplayName(character) {
+  return String(character?.name || "").trim() || "Unnamed hero";
+}
+
 function characterCard(character, withActions = false) {
   const subclass = classBreakdown(character).map(entry => classSubclassName(character, entry.name)).filter(Boolean).join(" / ") || primaryClassName(character);
   const canControl = canControlCharacter(character);
@@ -7738,13 +7837,15 @@ function characterCard(character, withActions = false) {
     ? (isOwnCharacter(character) ? "Cloud account" : "DM access")
     : "Local only";
   return `<article class="character-card" data-character-id="${character.id}">
-    <div class="art">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}
+    <div class="art">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml(characterDisplayName(character).charAt(0).toUpperCase())}
       ${withActions ? `<div class="card-actions">${canControl ? `<button data-level-up="${character.id}" title="Level up">↑</button><button data-edit="${character.id}" title="Edit">✎</button>` : ""}${canDelete ? `<button data-delete="${character.id}" title="Delete">×</button>` : ""}</div>` : ""}
     </div>
     <div class="card-copy">
       <div class="card-meta"><span>${character.edition === "2024" ? "5.5e · 2024" : "5e · 2014"}</span><strong>Level ${characterTotalLevel(character)}</strong></div>
-      <small class="source-pill">${escapeHtml(sourceLabel)}</small>
-      <h3>${escapeHtml(character.name)}</h3>
+      <small class="source-pill">${escapeHtml(sourceLabel)}</small>${character.incomplete?.length
+        ? `<small class="source-pill progress-pill" title="${escapeHtml(character.incomplete.join(" · "))}">In progress · ${character.incomplete.length} left</small>`
+        : ""}
+      <h3>${escapeHtml(characterDisplayName(character))}</h3>
       <p>${character._campaignShared ? "Campaign sheet · " : ""}${escapeHtml(character.species)} ${escapeHtml(classSummary(character))} · ${escapeHtml(subclass)}</p>
       <span class="card-open">Open character <b>→</b></span>
     </div>
@@ -7764,7 +7865,7 @@ function campaignPartyCard(character, link, ownerLabel, isDm, campaignId) {
     `<button type="button" data-campaign-roll="${escapeHtml(character.id)}" data-owner="${escapeHtml(link.owner_user_id)}" data-roll-label="${escapeHtml(label)}" data-modifier="${modifier}" data-roll-mode="${mode}">${escapeHtml(label)}</button>`;
   return `<article class="campaign-party-card">
     <div class="campaign-party-head">
-      <div class="mini-portrait">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml(character.name.charAt(0).toUpperCase())}</div>
+      <div class="mini-portrait">${character.portrait ? `<img src="${escapeHtml(character.portrait)}" alt="">` : escapeHtml(characterDisplayName(character).charAt(0).toUpperCase())}</div>
       <div>
         <small>${escapeHtml(ownerLabel)}</small>
         <strong>${escapeHtml(character.name)}</strong>
@@ -8397,8 +8498,8 @@ function renderCampaignGameLog(campaignId, isDm = false) {
 
 function renderCards(filter = "") {
   const query = filter.toLowerCase();
-  const ownMatches = ownCharacters().filter(c => c.name.toLowerCase().includes(query));
-  const dmMatches = dmCampaignCharacters().filter(c => c.name.toLowerCase().includes(query));
+  const ownMatches = ownCharacters().filter(c => characterDisplayName(c).toLowerCase().includes(query));
+  const dmMatches = dmCampaignCharacters().filter(c => characterDisplayName(c).toLowerCase().includes(query));
   const recentMatches = [...ownMatches, ...dmMatches];
   const dmCampaignCount = campaigns.filter(campaign => campaignRole(campaign.id) === "dm" || campaign.owner_id === cloudUser?.id).length;
   const playerCampaignCount = campaigns.filter(campaign => campaignRole(campaign.id) === "player").length;
@@ -9446,7 +9547,7 @@ function renderSheet() {
   $("#sheet-empty").classList.add("hidden");
   const sheet = $("#character-sheet"); sheet.classList.remove("hidden");
   sheet.innerHTML = `<div class="sheet-header">
-    <div class="sheet-portrait">${c.portrait ? `<img src="${escapeHtml(c.portrait)}" alt="">` : escapeHtml(c.name.charAt(0))}</div>
+    <div class="sheet-portrait">${c.portrait ? `<img src="${escapeHtml(c.portrait)}" alt="">` : escapeHtml(characterDisplayName(c).charAt(0))}</div>
     <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
     <div class="sheet-core">
       <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong><i class="stat-info" data-stat-breakdown="initiative" data-character="${c.id}" title="How is this calculated?">i</i></button>
@@ -12098,50 +12199,31 @@ function initEvents() {
   $("#quick-name").addEventListener("input", renderQuickSummary);
   form.addEventListener("submit", event => {
     event.preventDefault();
-    if (!validateAbilityScores()) return;
-    const data = formData();
-    if (!data.name.trim()) { setStep(1); form.elements.name.focus(); toast("Your character needs a name"); return; }
-    if (!validateOriginChoices()) { setStep(3); toast("Choose different eligible abilities and complete the origin feat selection"); return; }
-    const primaryEditLevel = classLevel(data, data.className) || data.level;
-    const skillRule = classSkillRuleAtLevel(data.className, primaryEditLevel, data.edition, data.subclass);
-    if (data.skillProficiencies.length !== skillRule.count) {
-      setStep(2);
-      toast(`Choose ${skillRule.count} class skill proficiencies`);
+    validateAbilityScores();
+    clearTimeout(builderAutosaveTimer);
+    const result = saveBuilderCharacter({ explicit: true });
+    if (!result) { setStep(1); form.elements.name.focus(); toast("Give your character a name to start saving"); return; }
+    const { data, issues, saved } = result;
+    if (!saved) {
+      toast("Character updated on this page, but browser storage is full. Remove old exports/images or sign in before refreshing.");
       return;
     }
-    if (data.backgroundSkills.length !== 2 || new Set(data.backgroundSkills).size !== 2) {
-      setStep(3);
-      toast("Choose two different background skill proficiencies");
+    lastBuilderSnapshot = JSON.stringify(data);
+    setBuilderSaveState(issues);
+    // The character is kept either way; an unfinished one stays in the builder
+    // on the step that still needs attention rather than being thrown away.
+    if (issues.length) {
+      setStep(issues[0].step);
+      toast(`${data.name || "Character"} saved as in progress · ${issues[0].message}`);
       return;
     }
-    const trainedSkills = new Set([...data.skillProficiencies, ...data.backgroundSkills]);
-    if (data.expertise.some(skill => !trainedSkills.has(skill))) {
-      setStep(2);
-      toast("Expertise must be assigned to a proficient skill");
-      return;
-    }
-    const expertiseRequired = expertiseCountAtLevel(data.className, primaryEditLevel, data.edition);
-    if (data.expertise.length !== expertiseRequired) {
-      setStep(2);
-      toast(`Choose ${expertiseRequired} skills for Expertise`);
-      return;
-    }
-    const masteryRequired = weaponMasteryCount(data.className, primaryEditLevel, data.edition);
-    if (data.weaponMastery.length !== masteryRequired) { setStep(2); toast(`Choose ${masteryRequired} mastered weapon${masteryRequired === 1 ? "" : "s"}`); return; }
-    const spellIssue = spellSelectionIssue(data);
-    if (spellIssue) { setStep(5); toast(spellIssue); return; }
-    data.id = activeCharacterId && activeCharacterId !== "demo-lyra" ? activeCharacterId : crypto.randomUUID();
-    clearCharacterDeletion(data.id);
-    data.updatedAt = Date.now();
-    const index = characters.findIndex(c => c.id === data.id);
-    if (index >= 0) characters[index] = { ...characters[index], ...data }; else characters.unshift(data);
-    activeCharacterId = data.id;
-    const saved = persistCharacters();
-    renderCards();
     renderSheet();
-    toast(saved ? `${data.name} saved to the vault` : "Character updated on this page, but browser storage is full. Remove old exports/images or sign in before refreshing.");
+    toast(`${data.name} saved to the vault`);
     navigate("sheet");
   });
+  // Autosave anything typed or ticked in the full builder.
+  form.addEventListener("input", queueBuilderAutosave);
+  form.addEventListener("change", queueBuilderAutosave);
   $("#portrait-upload").addEventListener("change", event => {
     const file = event.target.files[0]; if (!file) return;
     if (file.size > 4 * 1024 * 1024) { toast("Please choose an image under 4 MB"); return; }

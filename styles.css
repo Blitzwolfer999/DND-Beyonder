@@ -3799,3 +3799,24 @@ html[data-theme="dark"] .feature-card-upcoming { background: transparent; color:
 .attune-slots.over small { color: #a4552a; font-weight: 800; }
 .attune-slots.over .attune-pips i.used { background: #c2703a; box-shadow: 0 0 0 1px #a4552a; }
 html[data-theme="dark"] .attune-slots.over small { color: #e39a63; }
+
+/* ===== In-progress saves =====
+   The builder keeps a part-built character rather than discarding it, so the
+   footer reports the last write and cards mark what is still unfinished. */
+.builder-save-state {
+  margin-right: 0 !important;
+  color: var(--muted);
+  font: 600 11px/1.4 system-ui, sans-serif;
+}
+.builder-save-state.incomplete { color: var(--gold-dark, #a4552a); }
+.source-pill.progress-pill {
+  margin-left: 6px;
+  color: #a4552a;
+  border-color: #e2c3a8;
+  background: #fbf2e9;
+}
+html[data-theme="dark"] .source-pill.progress-pill {
+  color: #e39a63;
+  border-color: #5a4433;
+  background: #2c2118;
+}
