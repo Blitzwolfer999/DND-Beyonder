@@ -1444,8 +1444,12 @@ html[data-theme="dark"] .spell-slot-tracker { background: rgba(255,255,255,.05);
   .currency-editor { grid-template-columns: repeat(3, 1fr); }
   .currency-editor .button { grid-column: 1 / -1; }
   .choice-heading input { max-width: none; }
-  .step-tabs { grid-template-columns: repeat(7, minmax(58px, 1fr)); }
-  .step-tabs button { min-width: 58px; font-size: 0; }
+  /* 7 tabs at a 58px floor need 406px, which overflowed a 375px phone into
+     `overflow: hidden` -- step 7 was clipped away and could not be tapped.
+     Let them shrink to share the row, and scroll if the screen is narrower
+     still. */
+  .step-tabs { grid-template-columns: repeat(7, minmax(0, 1fr)); overflow-x: auto; }
+  .step-tabs button { min-width: 0; font-size: 0; padding-left: 4px; padding-right: 4px; }
   .step-tabs span { font-size: 10px; margin: 0; }
   .form-step { padding: 24px 18px; }
   .dice-layout { grid-template-columns: 1fr; }
