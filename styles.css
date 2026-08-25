@@ -3820,3 +3820,33 @@ html[data-theme="dark"] .source-pill.progress-pill {
   border-color: #5a4433;
   background: #2c2118;
 }
+
+/* ===== Vault sync indicator =====
+   Whether a device is really sharing a vault was otherwise invisible, which is
+   the one thing you want to confirm when a phone and a desktop disagree. */
+.vault-sync {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  margin: 0 0 14px; padding: 10px 14px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: inherit; text-align: left; cursor: pointer;
+  font: 600 12px/1.4 system-ui, sans-serif;
+}
+.vault-sync:hover { border-color: var(--gold, #c9a227); }
+.vault-sync-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.vault-sync-text { flex: 1; min-width: 0; }
+.vault-sync-action {
+  flex: none; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted);
+  font: 700 10px/1.6 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em;
+}
+.vault-sync.is-synced .vault-sync-dot { background: #2e8a55; }
+.vault-sync.is-local  .vault-sync-dot { background: #a4552a; }
+.vault-sync.is-error  .vault-sync-dot { background: #b3402f; }
+.vault-sync.is-error  .vault-sync-text { color: #b3402f; }
+.vault-sync.is-busy   .vault-sync-dot { background: var(--gold, #c9a227); animation: vault-sync-pulse 1s ease-in-out infinite; }
+@keyframes vault-sync-pulse { 50% { opacity: .3; } }
+@media (max-width: 620px) {
+  .vault-sync { flex-wrap: wrap; }
+  .vault-sync-text { flex: 1 0 100%; order: 2; }
+  .vault-sync-action { order: 3; }
+}

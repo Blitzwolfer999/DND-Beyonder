@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=autosave-62">
+  <link rel="stylesheet" href="styles.css?v=syncui-63">
 </head>
 <body>
   <div class="app-shell">
@@ -532,6 +532,11 @@
           <div><span class="eyebrow">CHARACTER VAULT</span><h1>Your adventurers</h1><p>Saved locally and ready for the next session.</p></div>
           <button class="button primary" data-go="builder">New character</button>
         </div>
+        <button type="button" class="vault-sync" id="vault-sync" aria-live="polite">
+          <span class="vault-sync-dot" aria-hidden="true"></span>
+          <span class="vault-sync-text" id="vault-sync-text">Checking sync…</span>
+          <span class="vault-sync-action">Sync now</span>
+        </button>
         <div class="vault-toolbar">
           <input id="vault-search" type="search" placeholder="Search characters...">
           <button class="button ghost small" id="export-data">Export vault</button>
@@ -753,6 +758,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=sync-78"></script>
+  <script src="app.js?v=syncui-79"></script>
 </body>
 </html>

@@ -2501,18 +2501,52 @@ async function restoreLatestAccountBackup() {
   setBackupStatus(`Restored backup from ${new Date(data[0].created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
   toast("Cloud backup restored");
 }
+// Whether this device is actually sharing a vault is otherwise invisible: the
+// only sync messaging lived inside the account modal. The vault now says so
+// plainly, which is what you want when checking whether a phone and a desktop
+// really are talking to each other.
+let lastVaultSyncAt = 0;
+function setVaultSyncState(state, detail = "") {
+  const host = $("#vault-sync");
+  const label = $("#vault-sync-text");
+  if (!host || !label) return;
+  host.classList.remove("is-synced", "is-local", "is-busy", "is-error");
+  if (state === "local") {
+    host.classList.add("is-local");
+    label.textContent = "Saved on this device only · sign in to sync with your phone";
+  } else if (state === "busy") {
+    host.classList.add("is-busy");
+    label.textContent = "Syncing with your account…";
+  } else if (state === "error") {
+    host.classList.add("is-error");
+    label.textContent = `Sync problem · ${detail || "changes are still saved on this device"}`;
+  } else {
+    host.classList.add("is-synced");
+    lastVaultSyncAt = Date.now();
+    const when = new Date(lastVaultSyncAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const owned = characters.filter(character => !isDemoCharacter(character) && isOwnCharacter(character)).length;
+    label.textContent = `${cloudUser?.email || "Account"} · ${owned} character${owned === 1 ? "" : "s"} synced at ${when}`;
+  }
+  host.classList.toggle("hidden", false);
+}
+
 // Bring the vault back in step with the account, then push anything this device
 // changed while it was away. Used when the tab regains focus or the network
 // returns, so a sheet edited on a phone shows up on the desktop without a
 // manual reload.
 let cloudVaultRefreshing = false;
 async function refreshCloudVault() {
-  if (!cloudUser || !cloudClient || cloudVaultRefreshing) return;
+  if (!cloudUser || !cloudClient) { setVaultSyncState("local"); return; }
+  if (cloudVaultRefreshing) return;
   cloudVaultRefreshing = true;
+  setVaultSyncState("busy");
   try {
     await loadCloudCharacters();
     await syncCharactersToCloud();
     await loadCampaigns();
+    setVaultSyncState("synced");
+  } catch (error) {
+    setVaultSyncState("error", error?.message || "");
   } finally {
     cloudVaultRefreshing = false;
   }
@@ -12585,6 +12619,11 @@ async function initCloud() {
     prepareUserVault(cloudUser);
   }
   updateAccount();
+  $("#vault-sync")?.addEventListener("click", () => {
+    if (!cloudUser) { $("#account-modal")?.classList.remove("hidden"); return; }
+    refreshCloudVault();
+  });
+  setVaultSyncState(cloudUser ? "busy" : "local");
   if (cloudUser) {
     // Pull before pushing: this device may have been offline while another one
     // moved ahead, and merging first means the push carries the newer state
@@ -12593,6 +12632,7 @@ async function initCloud() {
     await syncCharactersToCloud();
     await syncCampaignsToCloud();
     await loadCampaigns();
+    setVaultSyncState("synced");
     await createAccountBackup("Session backup");
   }
   cloudClient.auth.onAuthStateChange((_event, session) => {
