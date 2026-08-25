@@ -4394,7 +4394,9 @@ function buildPrebuiltCharacter(preview = false) {
   };
   reconcilePreparedSpells(character);
   character.currentHp = derived(character).hp;
-  return character;
+  // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
+  // for every other edition.
+  return finalizeD35Character(character);
 }
 
 function renderPrebuildOptions(resetBackground = false) {
@@ -4753,7 +4755,9 @@ function buildThemedCharacter(preview = false) {
   };
   reconcilePreparedSpells(character);
   character.currentHp = derived(character).hp;
-  return character;
+  // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
+  // for every other edition.
+  return finalizeD35Character(character);
 }
 
 function renderThemeSummary() {
@@ -4917,7 +4921,9 @@ function buildQuickCharacter(preview = false, overrides = null) {
   };
   reconcilePreparedSpells(character);
   character.currentHp = derived(character).hp;
-  return character;
+  // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
+  // for every other edition.
+  return finalizeD35Character(character);
 }
 
 function renderQuickClasses() {
@@ -5223,7 +5229,9 @@ function buildPremadeCharacter(hero, preview = false) {
   character.premade = true;
   character.quickBuilt = true;
   character.currentHp = derived(character).hp;
-  return character;
+  // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
+  // for every other edition.
+  return finalizeD35Character(character);
 }
 
 function renderPremadeHeroes() {
@@ -7904,6 +7912,108 @@ function d35Derived(data) {
     skillPointsSpent: Object.values(data.skillRanks || {}).reduce((sum, n) => sum + Number(n || 0), 0),
     armorCheckPenalty: d35ArmorCheckPenalty(data)
   };
+}
+
+// The generators are built around 5e's shape: binary skill proficiencies, a
+// subclass from level one, and the 5e feat list. Run over 3.5 they produced a
+// hybrid -- a Fighter carrying "Arcane Archer" and "Savage Attacker", trained in
+// Perception, which is not a 3.5 skill at all. This converts that output into a
+// legal 3.5 character rather than letting the mismatch reach the sheet.
+const D35_SKILL_EQUIVALENTS = {
+  "Perception": ["Spot", "Listen"], "Investigation": ["Search"], "Insight": ["Sense Motive"],
+  "Stealth": ["Hide", "Move Silently"], "Athletics": ["Climb", "Jump", "Swim"],
+  "Acrobatics": ["Balance", "Tumble"], "Arcana": ["Knowledge"], "History": ["Knowledge"],
+  "Religion": ["Knowledge"], "Nature": ["Knowledge"], "Deception": ["Bluff"],
+  "Persuasion": ["Diplomacy"], "Intimidation": ["Intimidate"], "Medicine": ["Heal"],
+  "Animal Handling": ["Handle Animal"], "Performance": ["Perform"], "Survival": ["Survival"],
+  "Sleight of Hand": ["Sleight of Hand"]
+};
+
+// Feats arrive every three levels, humans get one more, and fighters get their
+// own bonus list on top.
+function d35FeatCount(character) {
+  const level = characterTotalLevel(character);
+  let count = 1 + Math.floor(level / 3);
+  if ((D35_RACES[character.species] || {}).extraFeat) count += 1;
+  const fighter = classLevel(character, "Fighter");
+  if (fighter) count += 1 + Math.floor(fighter / 2);
+  return count;
+}
+
+const D35_FEAT_PREFERENCES = {
+  Barbarian: ["Power Attack", "Cleave", "Great Fortitude", "Improved Initiative", "Toughness", "Great Cleave"],
+  Fighter: ["Power Attack", "Cleave", "Weapon Focus", "Weapon Specialization", "Improved Initiative", "Great Cleave", "Improved Critical", "Toughness"],
+  Paladin: ["Power Attack", "Cleave", "Mounted Combat", "Weapon Focus", "Great Fortitude"],
+  Ranger: ["Point Blank Shot", "Precise Shot", "Rapid Shot", "Track", "Weapon Focus", "Lightning Reflexes"],
+  Rogue: ["Weapon Finesse", "Dodge", "Mobility", "Improved Initiative", "Stealthy", "Combat Reflexes"],
+  Monk: ["Improved Unarmed Strike", "Dodge", "Mobility", "Combat Reflexes", "Iron Will"],
+  Bard: ["Skill Focus", "Combat Casting", "Dodge", "Improved Initiative", "Iron Will"],
+  Cleric: ["Combat Casting", "Great Fortitude", "Iron Will", "Toughness", "Skill Focus"],
+  Druid: ["Combat Casting", "Great Fortitude", "Iron Will", "Alertness", "Skill Focus"],
+  Sorcerer: ["Combat Casting", "Iron Will", "Improved Initiative", "Toughness", "Skill Focus"],
+  Wizard: ["Combat Casting", "Iron Will", "Improved Initiative", "Skill Focus", "Alertness"]
+};
+
+function finalizeD35Character(character) {
+  if (!character || character.edition !== "d35") return character;
+  const built = { ...character };
+  // 3.5 core classes have no subclasses; anything here came from the 5e lists.
+  built.subclass = "";
+  built.customSubclass = "";
+  built.classes = (built.classes || []).map(entry => ({ ...entry, subclass: "", customSubclass: "" }));
+
+  // Racial ability modifiers, which 5e generation never applied.
+  const race = D35_RACES[built.species] || D35_RACES.Human;
+  if (!built.d35RaceApplied) {
+    Object.entries(race.bonuses || {}).forEach(([ability, amount]) => {
+      built[ability] = Math.max(1, Number(built[ability] || 10) + amount);
+    });
+    built.d35RaceApplied = true;
+  }
+  built.size = race.size || "Medium";
+  built.speed = race.speed || 30;
+
+  // Legal feats, in an order that suits the class.
+  const legal = new Set((D35_FEATS || []).map(feat => feat.name));
+  const kept = (built.feats || []).filter(name => legal.has(name));
+  const wanted = D35_FEAT_PREFERENCES[built.className] || D35_FEAT_PREFERENCES.Fighter;
+  const target = d35FeatCount(built);
+  const feats = [...new Set(kept)];
+  wanted.forEach(name => { if (feats.length < target && !feats.includes(name)) feats.push(name); });
+  (D35_FEATS || []).forEach(feat => { if (feats.length < target && !feats.includes(feat.name)) feats.push(feat.name); });
+  built.feats = feats.slice(0, target);
+
+  // Turn the 5e proficiency list into ranks, spending the real budget against
+  // the real caps. Class skills come first so the points do the most good.
+  const suggested = [];
+  (built.skillProficiencies || []).forEach(skill => {
+    (D35_SKILL_EQUIVALENTS[skill] || (D35_SKILLS[skill] ? [skill] : [])).forEach(mapped => {
+      if (!suggested.includes(mapped)) suggested.push(mapped);
+    });
+  });
+  const classSkills = (D35_CLASSES[built.className] || {}).classSkills || [];
+  classSkills.forEach(skill => { if (!suggested.includes(skill) && D35_SKILLS[skill]) suggested.push(skill); });
+  const ordered = suggested.sort((a, b) =>
+    Number(classSkills.includes(b)) - Number(classSkills.includes(a)));
+  let budget = d35SkillPointTotal(built);
+  const ranks = {};
+  ordered.forEach(skill => {
+    if (budget <= 0) return;
+    const isClass = classSkills.includes(skill);
+    const cap = isClass ? characterTotalLevel(built) + 3 : Math.floor((characterTotalLevel(built) + 3) / 2);
+    // Cross-class ranks cost two points each.
+    const cost = isClass ? 1 : 2;
+    const affordable = Math.floor(budget / cost);
+    const rank = Math.min(cap, affordable);
+    if (rank > 0) { ranks[skill] = rank; budget -= rank * cost; }
+  });
+  built.skillRanks = ranks;
+  built.skillProficiencies = [];
+  built.backgroundSkills = [];
+  built.expertise = [];
+  built.alignment = built.alignment && D35_ALIGNMENTS.includes(built.alignment)
+    ? built.alignment : "True Neutral";
+  return built;
 }
 
 // The 3.5 header carries a different set of numbers from the 5e one: attack is
