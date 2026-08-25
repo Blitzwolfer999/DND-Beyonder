@@ -2149,10 +2149,25 @@ async function syncCharactersToCloud() {
   let syncedOwnCount = 0;
   let syncedSharedCount = 0;
   try {
+    // The upsert overwrites whatever is in the row, so a device holding an older
+    // copy could wipe out newer work done elsewhere. Read the remote timestamps
+    // first and push only what is actually newer.
+    const { data: stampRows, error: stampError } = await cloudClient
+      .from("characters").select("id, updated_at").eq("user_id", cloudUser.id);
+    if (stampError) {
+      setCloudStatus(`Cloud sync paused so newer changes on another device are not overwritten: ${stampError.message}`, true);
+      return;
+    }
+    const remoteStamps = new Map((stampRows || []).map(row => [row.id, Date.parse(row.updated_at) || 0]));
+    const isNewerThanRemote = character => {
+      const remote = remoteStamps.get(character.id);
+      return remote === undefined || characterTimestamp(character) >= remote;
+    };
     const ownRows = characters
       .filter(character => !isDemoCharacter(character)
         && characterTimestamp(character) > deletionTimestamp(character.id)
-        && isOwnCharacter(character))
+        && isOwnCharacter(character)
+        && isNewerThanRemote(character))
       .map(character => ({
       id: character.id,
       user_id: cloudUser.id,
@@ -2172,8 +2187,13 @@ async function syncCharactersToCloud() {
         is_deleted: false,
         updated_at: new Date(character.updatedAt || Date.now()).toISOString()
       }));
-    const activeIds = new Set(ownRows.map(row => row.id));
-    const deletedRows = Object.entries(deletedCharacters).filter(([id]) => !activeIds.has(id)).map(([id, timestamp]) => ({
+    const activeIds = new Set(characters.filter(isOwnCharacter).map(character => character.id));
+    const deletedRows = Object.entries(deletedCharacters)
+      // A tombstone must not overwrite a newer edit made on another device
+      // either, so it is held back until the deletion is the later event.
+      .filter(([id, timestamp]) => !activeIds.has(id)
+        && (remoteStamps.get(id) === undefined || timestamp >= remoteStamps.get(id)))
+      .map(([id, timestamp]) => ({
       id,
       user_id: cloudUser.id,
       data: { id },
@@ -2481,6 +2501,23 @@ async function restoreLatestAccountBackup() {
   setBackupStatus(`Restored backup from ${new Date(data[0].created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
   toast("Cloud backup restored");
 }
+// Bring the vault back in step with the account, then push anything this device
+// changed while it was away. Used when the tab regains focus or the network
+// returns, so a sheet edited on a phone shows up on the desktop without a
+// manual reload.
+let cloudVaultRefreshing = false;
+async function refreshCloudVault() {
+  if (!cloudUser || !cloudClient || cloudVaultRefreshing) return;
+  cloudVaultRefreshing = true;
+  try {
+    await loadCloudCharacters();
+    await syncCharactersToCloud();
+    await loadCampaigns();
+  } finally {
+    cloudVaultRefreshing = false;
+  }
+}
+
 async function loadCloudCharacters() {
   if (!cloudUser || !cloudClient) return;
   const { data, error } = await cloudClient.from("characters").select("id, user_id, data, updated_at, is_deleted");
@@ -12549,6 +12586,10 @@ async function initCloud() {
   }
   updateAccount();
   if (cloudUser) {
+    // Pull before pushing: this device may have been offline while another one
+    // moved ahead, and merging first means the push carries the newer state
+    // rather than fighting it.
+    await loadCloudCharacters();
     await syncCharactersToCloud();
     await syncCampaignsToCloud();
     await loadCampaigns();
@@ -12564,17 +12605,22 @@ async function initCloud() {
     }
     updateAccount();
     if (changed && cloudUser) setTimeout(async () => {
+      await loadCloudCharacters();
       await syncCharactersToCloud();
       await syncCampaignsToCloud();
       await loadCampaigns();
       await createAccountBackup("Session backup");
     }, 0);
   });
+  // Characters are refreshed in their own right rather than only as the tail of
+  // loadCampaigns(), which returns early whenever any campaign table errors --
+  // that left the vault stale on a device that had no campaigns or hit a
+  // campaign schema problem.
   window.addEventListener("online", () => {
-    if (cloudUser) loadCampaigns();
+    if (cloudUser) refreshCloudVault();
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && cloudUser) loadCampaigns();
+    if (!document.hidden && cloudUser) refreshCloudVault();
   });
 }
 
