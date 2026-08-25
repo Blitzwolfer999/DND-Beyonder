@@ -7283,6 +7283,11 @@ function statBreakdown(character, stat) {
   const eff = effectiveAbilities(character);
   const fx = activeItemEffects(character);
   if (stat === "ac") {
+    if (isD35(character)) {
+      const ac = d35ArmorClass(character);
+      return { title: "Armor Class", total: ac.value, parts: ac.breakdown,
+        note: `Touch ${ac.touch} · flat-footed ${ac.flatFooted}${ac.maxDex === Infinity ? "" : ` · armor caps Dexterity at +${ac.maxDex}`}` };
+    }
     const ac = armorClassDetails(character);
     return { title: "Armor Class", total: ac.value, parts: ac.breakdown || [], note: ac.source };
   }
@@ -7669,6 +7674,19 @@ function savingThrowModifier(data, ability) {
 }
 
 function derived(data) {
+  // 3.5 uses its own hit-die, Armor Class and attack model. Delegating here
+  // means the sheet, the party card and the level-up flow all read the right
+  // numbers without each having to know which edition they are looking at.
+  if (isD35(data)) {
+    const d35 = d35Derived(data);
+    return {
+      prof: d35.bab, ac: d35.ac, acSource: d35.acSource,
+      hp: Number(data.hpOverride) || d35.hp,
+      initiative: d35.initiative, initiativeSource: "Dexterity", initiativeAdvantage: false,
+      passive: 10 + d35SkillModifier(data, "Spot").total,
+      d35
+    };
+  }
   data = effectiveAbilities(data);
   const level = characterTotalLevel(data);
   const con = modifier(data.CON);
@@ -7694,6 +7712,222 @@ function derived(data) {
     initiativeAdvantage: initiative.advantage,
     passive: 10 + skillModifier(data, "Perception") + (data.edition === "2014" && (data.feats || []).includes("Observant") ? 5 : 0)
   };
+}
+
+/* ---- D&D 3.5 engine ----
+ * 3.5 resolves attacks, saves, skills and Armor Class differently enough from
+ * 5e that it gets its own set of functions rather than more edition branches
+ * inside the 5e ones. Everything below returns plain numbers so the sheet can
+ * render 3.5 without the 5e paths knowing about it.
+ */
+function isD35(data) { return (data?.edition || data) === "d35"; }
+
+// Base attack bonus is summed per class, not taken from total level, which is
+// what makes a Fighter 6 / Rogue 6 weaker at attacking than a Fighter 12.
+function d35BaseAttackBonus(data) {
+  return classBreakdown(data).reduce((total, entry) => {
+    const rate = D35_CLASSES[entry.name]?.bab || "average";
+    return total + d35BabForClass(rate, entry.level);
+  }, 0);
+}
+
+// Saves stack the same way: each class contributes its own progression, so a
+// two-class character collects both base values.
+function d35SaveBonus(data, save) {
+  const abilityFor = { fort: "CON", ref: "DEX", will: "WIS" };
+  const eff = effectiveAbilities(data);
+  const base = classBreakdown(data).reduce((total, entry) => {
+    const rate = D35_CLASSES[entry.name]?.saves?.[save] || "poor";
+    return total + d35SaveProgression(rate, entry.level);
+  }, 0);
+  let value = base + modifier(eff[abilityFor[save]]);
+  // A paladin's Divine Grace adds Charisma to every save.
+  if (classLevel(data, "Paladin") >= 2) value += Math.max(0, modifier(eff.CHA));
+  const feats = new Set(data.feats || []);
+  if (save === "fort" && feats.has("Great Fortitude")) value += 2;
+  if (save === "ref" && feats.has("Lightning Reflexes")) value += 2;
+  if (save === "will" && feats.has("Iron Will")) value += 2;
+  return { base, total: value, ability: abilityFor[save] };
+}
+
+// Total ranks available across a career. The first level pays four times over,
+// and humans get a bonus on top.
+function d35SkillPointTotal(data) {
+  const race = D35_RACES[data.species] || {};
+  const intMod = modifier(effectiveAbilities(data).INT);
+  return classBreakdown(data).reduce((total, entry) => {
+    const perLevel = Math.max(1, (D35_CLASSES[entry.name]?.skillPoints || 2) + intMod + (race.extraSkillPoints ? 1 : 0));
+    // Only the very first level of the character multiplies by four.
+    const firstLevelBonus = total === 0 ? perLevel * 3 : 0;
+    return total + perLevel * entry.level + firstLevelBonus;
+  }, 0);
+}
+
+function d35IsClassSkill(data, skill) {
+  return classBreakdown(data).some(entry => (D35_CLASSES[entry.name]?.classSkills || []).includes(skill));
+}
+
+// Class skills cap at level + 3 ranks; cross-class skills cap at half that and
+// cost two points per rank.
+function d35MaxRanks(data, skill) {
+  const level = characterTotalLevel(data);
+  return d35IsClassSkill(data, skill) ? level + 3 : Math.floor((level + 3) / 2);
+}
+
+function d35ArmorCheckPenalty(data) {
+  return equippedItems(data).reduce((total, item) => {
+    const rule = D35_ARMOR[item.baseArmor || item.name];
+    return total + (rule ? Number(rule.check || 0) : 0);
+  }, 0);
+}
+
+function d35SkillModifier(data, skill) {
+  const eff = effectiveAbilities(data);
+  const ability = D35_SKILLS[skill] || SKILLS[skill] || "INT";
+  const ranks = Number((data.skillRanks || {})[skill] || 0);
+  let value = ranks + modifier(eff[ability]);
+  if (D35_ARMOR_CHECK_SKILLS.has(skill)) value += d35ArmorCheckPenalty(data);
+  const feats = new Set(data.feats || []);
+  if (feats.has("Alertness") && ["Listen", "Spot"].includes(skill)) value += 2;
+  if (feats.has("Stealthy") && ["Hide", "Move Silently"].includes(skill)) value += 2;
+  if ((data.skillFocus || []) .includes(skill)) value += 3;
+  return { ranks, total: value, ability, classSkill: d35IsClassSkill(data, skill),
+    untrained: ranks === 0 && D35_TRAINED_ONLY.has(skill) };
+}
+
+// 3.5 splits Armor Class three ways. Touch drops anything physical, and
+// flat-footed drops anything you need to react to use.
+function d35ArmorClass(data) {
+  const eff = effectiveAbilities(data);
+  const race = D35_RACES[data.species] || {};
+  const size = D35_SIZE_MODIFIERS[data.size || race.size || "Medium"] || 0;
+  let armorBonus = 0;
+  let shieldBonus = 0;
+  let maxDex = Infinity;
+  equippedItems(data).forEach(item => {
+    const rule = D35_ARMOR[item.baseArmor || item.name];
+    if (!rule) return;
+    if (rule.type === "shield") shieldBonus += rule.ac;
+    else { armorBonus += rule.ac; maxDex = Math.min(maxDex, rule.maxDex); }
+    if (rule.maxDex !== undefined && rule.type === "shield") maxDex = Math.min(maxDex, rule.maxDex);
+  });
+  const dex = Math.min(modifier(eff.DEX), maxDex);
+  const natural = Number(data.naturalArmor || 0);
+  const deflection = Number(data.deflectionBonus || 0);
+  const dodge = (data.feats || []).includes("Dodge") ? 1 : 0;
+  const misc = Number(data.miscAcBonus || 0);
+  const parts = [{ label: "Base", value: 10 }];
+  if (armorBonus) parts.push({ label: "Armor", value: armorBonus });
+  if (shieldBonus) parts.push({ label: "Shield", value: shieldBonus });
+  if (dex) parts.push({ label: maxDex === Infinity ? "Dexterity" : `Dexterity (max +${maxDex})`, value: dex });
+  if (size) parts.push({ label: `Size (${data.size || race.size || "Medium"})`, value: size });
+  if (natural) parts.push({ label: "Natural armor", value: natural });
+  if (deflection) parts.push({ label: "Deflection", value: deflection });
+  if (dodge) parts.push({ label: "Dodge", value: dodge });
+  if (misc) parts.push({ label: "Misc", value: misc });
+  const normal = 10 + armorBonus + shieldBonus + dex + size + natural + deflection + dodge + misc;
+  return {
+    value: normal,
+    touch: 10 + dex + size + deflection + dodge + misc,
+    flatFooted: 10 + armorBonus + shieldBonus + size + natural + deflection + misc,
+    maxDex, breakdown: parts,
+    source: `3.5 Armor Class ${normal} · touch ${10 + dex + size + deflection + dodge + misc} · flat-footed ${10 + armorBonus + shieldBonus + size + natural + deflection + misc}`
+  };
+}
+
+// A save DC is fixed by the spell's level, not the caster's, which is why a
+// 20th-level wizard's magic missile is still DC 11.
+function d35SpellSaveDc(data, className, spellLevel) {
+  const ability = D35_CLASSES[className]?.castingAbility || "INT";
+  return 10 + Number(spellLevel || 0) + modifier(effectiveAbilities(data)[ability]);
+}
+
+// High casting ability grants extra prepared slots, one per four points above
+// the level's requirement.
+function d35BonusSpells(abilityScore, spellLevel) {
+  const mod = modifier(abilityScore);
+  if (spellLevel === 0 || mod < spellLevel) return 0;
+  return Math.floor((mod - spellLevel) / 4) + 1;
+}
+
+function d35SpellsPerDay(data, className) {
+  const table = D35_SPELLS_PER_DAY[className];
+  if (!table) return [];
+  const level = classLevel(data, className);
+  const row = table[Math.max(0, Math.min(19, level - 1))] || [];
+  const ability = D35_CLASSES[className]?.castingAbility || "INT";
+  const score = effectiveAbilities(data)[ability];
+  return row.map((count, spellLevel) => ({
+    level: spellLevel,
+    base: count,
+    bonus: d35BonusSpells(score, spellLevel),
+    total: count + d35BonusSpells(score, spellLevel),
+    dc: d35SpellSaveDc(data, className, spellLevel)
+  }));
+}
+
+// Grapple, the other number every 3.5 sheet carries.
+function d35GrappleModifier(data) {
+  const race = D35_RACES[data.species] || {};
+  const sizeGrapple = { Small: -4, Medium: 0, Large: 4, Huge: 8 }[data.size || race.size || "Medium"] || 0;
+  return d35BaseAttackBonus(data) + modifier(effectiveAbilities(data).STR) + sizeGrapple;
+}
+
+function d35Derived(data) {
+  const eff = effectiveAbilities(data);
+  const con = modifier(eff.CON);
+  let first = true;
+  const hp = classBreakdown(data).reduce((total, entry) => {
+    const die = D35_CLASSES[entry.name]?.hit || 8;
+    let classHp = 0;
+    for (let i = 0; i < entry.level; i += 1) {
+      // Maximum at the very first level, average rounded up after that.
+      classHp += (first ? die : Math.floor(die / 2) + 1) + con;
+      first = false;
+    }
+    return total + classHp;
+  }, 0);
+  const bab = d35BaseAttackBonus(data);
+  const feats = new Set(data.feats || []);
+  const ac = d35ArmorClass(data);
+  return {
+    hp: Math.max(1, hp + (feats.has("Toughness") ? 3 : 0)),
+    bab,
+    attacks: d35IterativeAttacks(bab),
+    ac: ac.value, touchAc: ac.touch, flatFootedAc: ac.flatFooted, acSource: ac.source,
+    fort: d35SaveBonus(data, "fort"),
+    ref: d35SaveBonus(data, "ref"),
+    will: d35SaveBonus(data, "will"),
+    initiative: modifier(eff.DEX) + (feats.has("Improved Initiative") ? 4 : 0),
+    grapple: d35GrappleModifier(data),
+    skillPoints: d35SkillPointTotal(data),
+    skillPointsSpent: Object.values(data.skillRanks || {}).reduce((sum, n) => sum + Number(n || 0), 0),
+    armorCheckPenalty: d35ArmorCheckPenalty(data)
+  };
+}
+
+// The 3.5 header carries a different set of numbers from the 5e one: attack is
+// a sequence rather than a single bonus, Armor Class is three values, and the
+// three saves replace per-ability proficiency.
+function renderD35CoreStats(c, currentHp, maximumHp) {
+  const d = d35Derived(c);
+  const attacks = d.attacks.map(bonus => signed(bonus)).join(" / ");
+  const save = (key, label) => `<button data-sheet-roll="${label} save" data-modifier="${d[key].total}">
+    <small>${label.toUpperCase()}</small><strong>${signed(d[key].total)}</strong></button>`;
+  return `<div class="sheet-core d35-core">
+    <button data-sheet-roll="Initiative" data-modifier="${d.initiative}"><small>INITIATIVE</small><strong>${signed(d.initiative)}</strong></button>
+    <button data-stat-breakdown="ac" data-character="${c.id}" title="How is this calculated?"><small>ARMOR CLASS</small><strong>${d.ac}</strong><i class="stat-info">i</i></button>
+    <button data-sheet-section-jump="overview"><small>TOUCH / FLAT-FOOTED</small><strong>${d.touchAc} / ${d.flatFootedAc}</strong></button>
+    <button data-sheet-section-jump="overview"><small>HIT POINTS</small><strong>${currentHp}/${maximumHp}</strong></button>
+    <button data-sheet-roll="Attack" data-modifier="${d.attacks[0]}"><small>BASE ATTACK</small><strong>${attacks}</strong></button>
+    ${save("fort", "Fortitude")}${save("ref", "Reflex")}${save("will", "Will")}
+    <button data-sheet-roll="Grapple" data-modifier="${d.grapple}"><small>GRAPPLE</small><strong>${signed(d.grapple)}</strong></button>
+  </div>
+  <div class="d35-skill-budget${d.skillPointsSpent > d.skillPoints ? " over" : ""}">
+    <span>Skill ranks</span><strong>${d.skillPointsSpent} / ${d.skillPoints}</strong>
+    ${d.skillPointsSpent > d.skillPoints ? `<em>${d.skillPointsSpent - d.skillPoints} over budget</em>` : ""}
+    ${d.armorCheckPenalty ? `<em>Armor check ${d.armorCheckPenalty}</em>` : ""}
+  </div>`;
 }
 
 function resolvedSubclassFeatures(rulesEdition, className, subclassName) {
@@ -9620,13 +9854,13 @@ function renderSheet() {
   sheet.innerHTML = `<div class="sheet-header">
     <div class="sheet-portrait">${c.portrait ? `<img src="${escapeHtml(c.portrait)}" alt="">` : escapeHtml(characterDisplayName(c).charAt(0))}</div>
     <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
-    <div class="sheet-core">
+    ${isD35(c) ? renderD35CoreStats(c, currentHp, maximumHp) : `<div class="sheet-core">
       <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong><i class="stat-info" data-stat-breakdown="initiative" data-character="${c.id}" title="How is this calculated?">i</i></button>
       <button data-stat-breakdown="ac" data-character="${c.id}" title="How is this calculated?"><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong><i class="stat-info">i</i></button>
       <button data-sheet-section-jump="overview"><small>HIT POINTS${helpChip("hp")}</small><strong>${currentHp}/${maximumHp}</strong><i class="stat-info" data-stat-breakdown="hp" data-character="${c.id}" title="How is this calculated?">i</i></button>
       <button data-stat-breakdown="proficiency" data-character="${c.id}" title="How is this calculated?"><small>PROFICIENCY${helpChip("proficiency")}</small><strong>${signed(d.prof)}</strong><i class="stat-info">i</i></button>
       <button data-sheet-section-jump="overview"><small>PASSIVE PERCEPTION</small><strong>${d.passive}</strong><i class="stat-info" data-stat-breakdown="passive" data-character="${c.id}" title="How is this calculated?">i</i></button>
-    </div>
+    </div>`}
     <div class="sheet-header-actions">
       ${canControl ? `<button class="button ghost" data-edit="${c.id}">Edit character</button>
       <button class="button ghost" data-delevel="${c.id}" ${characterTotalLevel(c) <= 1 ? "disabled" : ""}>${characterTotalLevel(c) <= 1 ? "Minimum level" : "Delevel"}</button>
@@ -12688,6 +12922,7 @@ function init() {
   // SW5E content needs RULES/SKILLS, which are defined here rather than in a
   // data file, so it registers once app.js has loaded and before first render.
   if (typeof registerSw5eRuntime === "function") registerSw5eRuntime();
+  if (typeof registerD35Runtime === "function") registerD35Runtime();
   seedDemo(); buildAbilities(); populateRules(); resetPortrait(); initDice(); initTheme(); initEvents(); updatePreview(); updateAccount(); renderCards(); setStep(1); navigate(routeViewFromHash(), { replace: true });
   initCloud();
 }

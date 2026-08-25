@@ -3850,3 +3850,21 @@ html[data-theme="dark"] .source-pill.progress-pill {
   .vault-sync-text { flex: 1 0 100%; order: 2; }
   .vault-sync-action { order: 3; }
 }
+
+/* ===== D&D 3.5 sheet =====
+   3.5 carries more header numbers than 5e -- an attack sequence, three Armor
+   Classes and three saves -- so the core grid runs wider and wraps. */
+.sheet-core.d35-core { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.d35-skill-budget {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 10px 0 0; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  font: 600 12px/1.4 system-ui, sans-serif;
+}
+.d35-skill-budget strong { font-variant-numeric: tabular-nums; }
+.d35-skill-budget em {
+  font-style: normal; color: #a4552a;
+  font: 700 10px/1.6 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em;
+}
+.d35-skill-budget.over strong { color: #b3402f; }
+html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
