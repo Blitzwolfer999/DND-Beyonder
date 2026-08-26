@@ -3854,7 +3854,12 @@ html[data-theme="dark"] .source-pill.progress-pill {
 /* ===== D&D 3.5 sheet =====
    3.5 carries more header numbers than 5e -- an attack sequence, three Armor
    Classes and three saves -- so the core grid runs wider and wraps. */
-.sheet-core.d35-core { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+/* The header sizes this column to its content, so auto-fit collapses to a
+   single file. 3.5 carries nine values rather than five, so it keeps the fixed
+   track width and simply runs three rows deep. */
+.sheet-core.d35-core { grid-template-columns: repeat(3, 96px); }
+.sheet-core.d35-core strong { font-size: 20px; }
+.sheet-core.d35-core button { padding: 10px 4px; }
 .d35-skill-budget {
   display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
   margin: 10px 0 0; padding: 8px 12px;
@@ -3868,3 +3873,4 @@ html[data-theme="dark"] .source-pill.progress-pill {
 }
 .d35-skill-budget.over strong { color: #b3402f; }
 html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
+.skill-roll.skill-untrained { opacity: .62; }

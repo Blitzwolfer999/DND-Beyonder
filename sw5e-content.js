@@ -24,9 +24,21 @@ const SW5E_EXCLUDED_SKILLS = ["Arcana", "History", "Religion"];
 // Skill list shown for an edition. Only SW5E swaps the D&D knowledge skills.
 function skillsForEdition(rulesEdition) {
   const all = Object.keys(SKILLS);
-  if (rulesEdition !== "sw5e") return all.filter(name => !SW5E_SKILLS[name]);
+  // 3.5 has its own skill list -- Spot and Listen rather than Perception, Hide
+  // and Move Silently rather than Stealth -- so it never falls back to the 5e
+  // names, which would otherwise show skills the edition does not have.
+  if (rulesEdition === "d35" && typeof D35_SKILLS !== "undefined") return Object.keys(D35_SKILLS);
+  if (rulesEdition !== "sw5e") {
+    return all.filter(name => !SW5E_SKILLS[name]
+      && !(typeof D35_SKILLS !== "undefined" && D35_SKILLS[name] && !D35_SHARED_SKILLS.has(name)));
+  }
   return all.filter(name => !SW5E_EXCLUDED_SKILLS.includes(name));
 }
+// Skill names 3.5 and 5e genuinely share, so registering the 3.5 list does not
+// strip them out of the 5e editions.
+const D35_SHARED_SKILLS = new Set(["Athletics", "Acrobatics", "Perception", "Insight", "Deception",
+  "Persuasion", "Intimidation", "Medicine", "Survival", "Stealth", "Performance", "Religion",
+  "History", "Arcana", "Nature", "Investigation", "Sleight of Hand", "Animal Handling"]);
 function isSw5eClass(className) {
   return Boolean(SW5E_DATA.chassis[className]);
 }

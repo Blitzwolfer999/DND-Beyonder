@@ -8240,6 +8240,15 @@ function startNewCharacter() {
 
 // A character can be autosaved before it has been named, so anywhere a name is
 // shown needs a stand-in rather than reading charAt on an empty value.
+// One place that names the rules set, so a sheet and a vault card cannot
+// disagree -- and so a new edition does not silently read as 5e.
+function editionLabel(rulesEdition) {
+  if (rulesEdition === "d35") return "3.5e";
+  if (rulesEdition === "2024") return "5.5e · 2024";
+  if (rulesEdition === "sw5e") return "SW5E";
+  return "5e · 2014";
+}
+
 function characterDisplayName(character) {
   return String(character?.name || "").trim() || "Unnamed hero";
 }
@@ -8256,7 +8265,7 @@ function characterCard(character, withActions = false) {
       ${withActions ? `<div class="card-actions">${canControl ? `<button data-level-up="${character.id}" title="Level up">↑</button><button data-edit="${character.id}" title="Edit">✎</button>` : ""}${canDelete ? `<button data-delete="${character.id}" title="Delete">×</button>` : ""}</div>` : ""}
     </div>
     <div class="card-copy">
-      <div class="card-meta"><span>${character.edition === "2024" ? "5.5e · 2024" : "5e · 2014"}</span><strong>Level ${characterTotalLevel(character)}</strong></div>
+      <div class="card-meta"><span>${editionLabel(character.edition)}</span><strong>Level ${characterTotalLevel(character)}</strong></div>
       <small class="source-pill">${escapeHtml(sourceLabel)}</small>${character.incomplete?.length
         ? `<small class="source-pill progress-pill" title="${escapeHtml(character.incomplete.join(" · "))}">In progress · ${character.incomplete.length} left</small>`
         : ""}
@@ -9963,7 +9972,7 @@ function renderSheet() {
   const sheet = $("#character-sheet"); sheet.classList.remove("hidden");
   sheet.innerHTML = `<div class="sheet-header">
     <div class="sheet-portrait">${c.portrait ? `<img src="${escapeHtml(c.portrait)}" alt="">` : escapeHtml(characterDisplayName(c).charAt(0))}</div>
-    <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${c.edition === "2024" ? "5.5e · 2024" : "5e · 2014"} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
+    <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${editionLabel(c.edition)} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
     ${isD35(c) ? renderD35CoreStats(c, currentHp, maximumHp) : `<div class="sheet-core">
       <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong><i class="stat-info" data-stat-breakdown="initiative" data-character="${c.id}" title="How is this calculated?">i</i></button>
       <button data-stat-breakdown="ac" data-character="${c.id}" title="How is this calculated?"><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong><i class="stat-info">i</i></button>
@@ -10014,6 +10023,15 @@ function renderSheet() {
       const proficient = proficientSkills(c).has(skill);
       const expertise = expertiseSkills(c).has(skill);
       const value = skillModifier(c, skill);
+      if (isD35(c)) {
+        // 3.5 shows how many ranks are actually bought, marks class skills, and
+        // flags the ones that cannot be tried untrained.
+        const d35 = d35SkillModifier(c, skill);
+        const note = [`${d35.ranks} rank${d35.ranks === 1 ? "" : "s"}`,
+          d35.classSkill ? "class skill" : "", d35.untrained ? "trained only" : ""]
+          .filter(Boolean).join(" · ");
+        return `<button class="skill-roll${d35.untrained ? " skill-untrained" : ""}" data-sheet-roll="${skill}" data-modifier="${d35.total}"><span class="${d35.ranks ? "proficient" : ""}">${skill} <small>(${d35.ability}) ${note}</small></span><strong>${signed(d35.total)}</strong></button>`;
+      }
       return `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${value}"><span class="${proficient ? "proficient" : ""}">${skill} <small>(${ability})${expertise ? " · Expertise" : ""}</small></span><strong>${signed(value)}</strong></button>`;
     }).join("")}</div></section>
     ${renderAttacksPanel(c, sectionClass("overview"))}
