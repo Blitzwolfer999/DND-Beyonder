@@ -6839,7 +6839,7 @@ function formData() {
     // Feats carried over from a 5e session are not legal here, and the origin
     // feat is a 5e concept, so both are dropped rather than saved.
     const legal = new Set((typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : []).map(feat => feat.name));
-    data.feats = (data.feats || []).filter(name => legal.has(name));
+    data.feats = (data.feats || []).filter(name => d35FeatIsLegal(name, legal));
     data.originFeat = "";
     data.featAbilityChoices = {};
     // 3.5 has no proficiency list, expertise or background skills.
@@ -8204,6 +8204,16 @@ const D35_SKILL_EQUIVALENTS = {
 
 // Feats arrive every three levels, humans get one more, and fighters get their
 // own bonus list on top.
+// Several 3.5 feats take a choice recorded in the name -- Weapon Focus
+// (Longsword), Skill Focus (Spellcraft). The base name is what has to be legal;
+// the parenthesised part is the player's pick.
+function d35FeatIsLegal(name, legal) {
+  const raw = String(name || "").trim();
+  if (legal.has(raw)) return true;
+  const base = raw.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return Boolean(base) && legal.has(base);
+}
+
 function d35FeatCount(character) {
   const level = characterTotalLevel(character);
   let count = 1 + Math.floor(level / 3);
@@ -8255,8 +8265,9 @@ function finalizeD35Character(character) {
   built.speed = race.speed || 30;
 
   // Legal feats, in an order that suits the class.
-  const legal = new Set((D35_FEATS || []).map(feat => feat.name));
-  const kept = (built.feats || []).filter(name => legal.has(name));
+  const legal = new Set((typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : (D35_FEATS || []))
+    .map(feat => feat.name));
+  const kept = (built.feats || []).filter(name => d35FeatIsLegal(name, legal));
   const wanted = D35_FEAT_PREFERENCES[built.className] || D35_FEAT_PREFERENCES.Fighter;
   const target = d35FeatCount(built);
   const feats = [...new Set(kept)];
@@ -8305,6 +8316,82 @@ function finalizeD35Character(character) {
 // and what each does.
 // The two domains a cleric chose, with the power each grants and the bonus
 // spell it adds at every level.
+// 3.5 weapon stats differ from their 5e namesakes, so an equipped weapon on a
+// 3.5 sheet is read from the 3.5 table: 1d8 for a longsword with a 19-20 threat
+// range, and criticals that multiply rather than rolling extra dice.
+function d35WeaponProfile(item, character) {
+  if (typeof D35_WEAPONS === "undefined") return null;
+  const rule = D35_WEAPONS[item.baseWeapon] || D35_WEAPONS[item.name];
+  if (!rule) return null;
+  const race = (typeof D35_RACES !== "undefined" && D35_RACES[character.species]) || {};
+  const small = (character.size || race.size || "Medium") === "Small";
+  return { ...rule, damage: small ? rule.dmgSmall : rule.dmgMedium };
+}
+
+function d35Attacks(character) {
+  const eff = effectiveAbilities(character);
+  const bab = d35BaseAttackBonus(character);
+  const str = modifier(eff.STR);
+  const dex = modifier(eff.DEX);
+  const race = (typeof D35_RACES !== "undefined" && D35_RACES[character.species]) || {};
+  const size = D35_SIZE_MODIFIERS[character.size || race.size || "Medium"] || 0;
+  const finesse = (character.feats || []).includes("Weapon Finesse");
+  // Weapon Focus applies to one chosen weapon, not to everything a character
+  // carries. Without a recorded choice the bonus is only applied when the feat
+  // names its weapon, as "Weapon Focus (Longsword)" -- guessing would quietly
+  // inflate every attack on the sheet.
+  const focused = new Set((character.feats || [])
+    .map(name => /^Weapon (?:Focus|Specialization)\s*\(([^)]+)\)/.exec(name))
+    .filter(Boolean)
+    .map(match => match[1].trim().toLowerCase()));
+  return equippedItems(character).map(item => {
+    const profile = d35WeaponProfile(item, character);
+    if (!profile) return null;
+    const ranged = profile.group === "Ranged";
+    const light = profile.group === "Light melee";
+    const ability = ranged || (finesse && light) ? dex : str;
+    const focusBonus = focused.has(String(item.name).toLowerCase()) ? 1 : 0;
+    const bonus = bab + ability + size + focusBonus + magicItemBonus(item);
+    return {
+      name: item.name,
+      sequence: d35IterativeAttacks(bab).map(step => step + ability + size + focusBonus + magicItemBonus(item)),
+      toHit: bonus,
+      damage: profile.damage,
+      damageBonus: ranged ? 0 : str,
+      critical: profile.critical,
+      type: profile.type,
+      range: profile.range || "",
+      category: profile.category
+    };
+  }).filter(Boolean);
+}
+
+function renderD35Attacks(c, sectionClassName) {
+  if (!isD35(c)) return "";
+  const attacks = d35Attacks(c);
+  const bab = d35BaseAttackBonus(c);
+  const eff = effectiveAbilities(c);
+  const race = (typeof D35_RACES !== "undefined" && D35_RACES[c.species]) || {};
+  const size = D35_SIZE_MODIFIERS[c.size || race.size || "Medium"] || 0;
+  const unarmed = d35IterativeAttacks(bab).map(step => step + modifier(eff.STR) + size);
+  const row = attack => `<article class="attack-row">
+    <div><strong>${escapeHtml(attack.name)}</strong><small>${escapeHtml(attack.category)} · ${escapeHtml(attack.type)}${attack.range ? ` · range ${escapeHtml(attack.range)}` : ""}</small></div>
+    <button type="button" data-sheet-roll="${escapeHtml(attack.name)}" data-modifier="${attack.toHit}">${attack.sequence.map(signed).join(" / ")}</button>
+    <span>${escapeHtml(attack.damage)}${attack.damageBonus ? signed(attack.damageBonus) : ""} <small>crit ${escapeHtml(attack.critical)}</small></span>
+  </article>`;
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Attacks</h2><span>Full attack uses the whole sequence; a standard action uses the first.</span></div>
+    <div class="d35-attack-list">
+      ${attacks.map(row).join("")}
+      <article class="attack-row">
+        <div><strong>Unarmed strike</strong><small>Simple · Bludgeoning</small></div>
+        <button type="button" data-sheet-roll="Unarmed strike" data-modifier="${unarmed[0]}">${unarmed.map(signed).join(" / ")}</button>
+        <span>1d3${modifier(eff.STR) ? signed(modifier(eff.STR)) : ""} <small>crit ×2</small></span>
+      </article>
+    </div>
+  </section>`;
+}
+
 function renderD35Domains(c, sectionClassName) {
   if (!isD35(c) || typeof D35_DOMAINS === "undefined") return "";
   const chosen = (c.domains || []).filter(name => D35_DOMAINS[name]);
@@ -10552,6 +10639,7 @@ function renderSheet() {
       <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
+    ${renderD35Attacks(c, sectionClass("overview"))}
     ${renderD35Domains(c, sectionClass("features"))}
     ${renderD35Spellbook(c, sectionClass("overview"))}
     ${renderInventorySection(c, sectionClass("inventory"))}
