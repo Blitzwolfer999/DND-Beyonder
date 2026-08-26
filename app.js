@@ -9461,6 +9461,67 @@ function monsterCard(monster) {
   </article>`;
 }
 
+// Magic items share the compendium with the bestiary. Prices are kept as
+// printed and also parsed, so "what can the party afford" is a real filter.
+let itemSearch = "";
+let itemKind = "";
+let itemPrice = "";
+let compendiumTab = "creatures";
+
+function magicItemMatches() {
+  const query = itemSearch.trim().toLowerCase();
+  const [low, high] = itemPrice ? itemPrice.split("-").map(Number) : [null, null];
+  return (typeof D35_MAGIC_ITEMS === "undefined" ? [] : D35_MAGIC_ITEMS).filter(item => {
+    if (itemKind && item.kind !== itemKind) return false;
+    if (low !== null && (item.priceValue < low || item.priceValue > high)) return false;
+    if (!query) return true;
+    return `${item.name} ${item.kind} ${item.summary || ""}`.toLowerCase().includes(query);
+  });
+}
+
+function magicItemCard(item) {
+  return `<article class="monster-card">
+    <header>
+      <div><h3>${escapeHtml(item.name)}</h3><small>${escapeHtml(item.kind)}${item.tier ? ` · ${escapeHtml(item.tier)}` : ""}</small></div>
+      <span class="monster-cr">${escapeHtml(item.price)}</span>
+    </header>
+    ${item.summary ? `<p class="magic-item-summary">${escapeHtml(item.summary)}</p>` : ""}
+  </article>`;
+}
+
+function renderMagicItems() {
+  const list = $("#item-list");
+  if (!list) return;
+  const kindSelect = $("#item-kind");
+  if (kindSelect && kindSelect.options.length <= 1 && typeof D35_MAGIC_ITEM_KINDS !== "undefined") {
+    kindSelect.innerHTML = `<option value="">All kinds</option>`
+      + D35_MAGIC_ITEM_KINDS.map(kind => `<option value="${escapeHtml(kind)}">${escapeHtml(kind)}</option>`).join("");
+  }
+  const matches = magicItemMatches();
+  const count = $("#bestiary-count");
+  if (count && compendiumTab === "items") {
+    const total = typeof D35_MAGIC_ITEMS === "undefined" ? 0 : D35_MAGIC_ITEMS.length;
+    count.textContent = matches.length === total
+      ? `${total} magic items from the 3.5 SRD, cheapest first.`
+      : `${matches.length} of ${total} magic items.`;
+  }
+  list.innerHTML = matches.length
+    ? matches.map(magicItemCard).join("")
+    : `<div class="empty-state"><span>*</span><h2>No items match</h2><p>Try a different search or filter.</p></div>`;
+}
+
+function setCompendiumTab(tab) {
+  compendiumTab = tab;
+  $$(".compendium-tabs button").forEach(button =>
+    button.classList.toggle("active", button.dataset.compendium === tab));
+  const creatures = tab === "creatures";
+  $("#creature-filters")?.classList.toggle("hidden", !creatures);
+  $("#item-filters")?.classList.toggle("hidden", creatures);
+  $("#bestiary-list")?.classList.toggle("hidden", !creatures);
+  $("#item-list")?.classList.toggle("hidden", creatures);
+  if (creatures) renderBestiary(); else renderMagicItems();
+}
+
 function renderBestiary() {
   const list = $("#bestiary-list");
   if (!list) return;
@@ -13260,6 +13321,11 @@ function initEvents() {
   $("#d35-feat-search")?.addEventListener("input", event => {
     d35FeatSearch = event.target.value; renderD35FeatChoices();
   });
+  $$(".compendium-tabs button").forEach(button =>
+    button.addEventListener("click", () => setCompendiumTab(button.dataset.compendium)));
+  $("#item-search")?.addEventListener("input", event => { itemSearch = event.target.value; renderMagicItems(); });
+  $("#item-kind")?.addEventListener("change", event => { itemKind = event.target.value; renderMagicItems(); });
+  $("#item-price")?.addEventListener("change", event => { itemPrice = event.target.value; renderMagicItems(); });
   // Bestiary filters
   $("#bestiary-search")?.addEventListener("input", event => {
     bestiarySearch = event.target.value; renderBestiary();

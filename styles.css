@@ -3978,3 +3978,7 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 @media (max-width: 620px) {
   .d35-attack-list .attack-row { grid-template-columns: 1fr; gap: 6px; }
 }
+
+/* ===== Compendium tabs & magic items ===== */
+.compendium-tabs { margin-bottom: 12px; }
+.magic-item-summary { margin: 0; color: var(--muted); font: 500 12px/1.5 system-ui, sans-serif; }

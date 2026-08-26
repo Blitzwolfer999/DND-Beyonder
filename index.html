@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=d35weapons-72">
+  <link rel="stylesheet" href="styles.css?v=d35items-73">
 </head>
 <body>
   <div class="app-shell">
@@ -579,9 +579,13 @@
 
       <section class="view" id="bestiary-view">
         <div class="page-head">
-          <div><span class="eyebrow">BESTIARY</span><h1>Creatures</h1><p id="bestiary-count">Stat blocks for the creatures your party will meet.</p></div>
+          <div><span class="eyebrow">BESTIARY</span><h1>Compendium</h1><p id="bestiary-count">Stat blocks for the creatures your party will meet.</p></div>
         </div>
-        <div class="vault-toolbar bestiary-toolbar">
+        <div class="sheet-tabs compendium-tabs">
+          <button type="button" class="active" data-compendium="creatures">Creatures</button>
+          <button type="button" data-compendium="items">Magic items</button>
+        </div>
+        <div class="vault-toolbar bestiary-toolbar" id="creature-filters">
           <input id="bestiary-search" type="search" placeholder="Search creatures...">
           <select id="bestiary-kind"><option value="">All types</option></select>
           <select id="bestiary-cr">
@@ -593,7 +597,19 @@
             <option value="21-99">CR 21+</option>
           </select>
         </div>
+        <div class="vault-toolbar bestiary-toolbar hidden" id="item-filters">
+          <input id="item-search" type="search" placeholder="Search magic items...">
+          <select id="item-kind"><option value="">All kinds</option></select>
+          <select id="item-price">
+            <option value="">Any price</option>
+            <option value="0-2500">Up to 2,500 gp</option>
+            <option value="2501-10000">2,501-10,000 gp</option>
+            <option value="10001-40000">10,001-40,000 gp</option>
+            <option value="40001-999999">Over 40,000 gp</option>
+          </select>
+        </div>
         <div class="bestiary-grid" id="bestiary-list"></div>
+        <div class="bestiary-grid hidden" id="item-list"></div>
       </section>
 
       <section class="view" id="campaigns-view">
@@ -790,6 +806,7 @@
   <script src="dnd35-feats.js?v=d35feat-1"></script>
   <script src="dnd35-domains.js?v=d35dom-1"></script>
   <script src="dnd35-weapons.js?v=d35wpn-1"></script>
+  <script src="dnd35-magicitems.js?v=d35mi-1"></script>
   <script src="name-data.js?v=names-1"></script>
   <script src="theme-data.js?v=themes-3"></script>
   <script src="sw5e-creation.js?v=sw5e-create-3"></script>
@@ -808,6 +825,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=d35weapons-107"></script>
+  <script src="app.js?v=d35items-108"></script>
 </body>
 </html>
