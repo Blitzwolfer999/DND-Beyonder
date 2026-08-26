@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=d35-67">
+  <link rel="stylesheet" href="styles.css?v=bestiary-68">
 </head>
 <body>
   <div class="app-shell">
@@ -34,6 +34,7 @@
         <button class="nav-item" data-view="builder"><span>✦</span> Create</button>
         <button class="nav-item" data-view="vault"><span>⌑</span> Vault</button>
         <button class="nav-item" data-view="campaigns"><span>⚑</span> Campaigns</button>
+        <button class="nav-item" data-view="bestiary"><span>❦</span> Bestiary</button>
         <button class="nav-item" data-view="dice"><span>◇</span> Dice</button>
       </nav>
       <div class="top-actions">
@@ -561,6 +562,25 @@
         </section>
       </section>
 
+      <section class="view" id="bestiary-view">
+        <div class="page-head">
+          <div><span class="eyebrow">BESTIARY</span><h1>Creatures</h1><p id="bestiary-count">Stat blocks for the creatures your party will meet.</p></div>
+        </div>
+        <div class="vault-toolbar bestiary-toolbar">
+          <input id="bestiary-search" type="search" placeholder="Search creatures...">
+          <select id="bestiary-kind"><option value="">All types</option></select>
+          <select id="bestiary-cr">
+            <option value="">Any challenge</option>
+            <option value="0-1">CR 1 or lower</option>
+            <option value="2-5">CR 2-5</option>
+            <option value="6-10">CR 6-10</option>
+            <option value="11-20">CR 11-20</option>
+            <option value="21-99">CR 21+</option>
+          </select>
+        </div>
+        <div class="bestiary-grid" id="bestiary-list"></div>
+      </section>
+
       <section class="view" id="campaigns-view">
         <div class="page-head">
           <div><span class="eyebrow">CAMPAIGN HUB</span><h1>Gather the party</h1><p>Create a campaign, invite players, and manage shared character sheets from one table.</p></div>
@@ -751,6 +771,7 @@
   <script src="dnd35-content.js?v=d35-2"></script>
   <script src="dnd35-spells.js?v=d35s-2"></script>
   <script src="dnd35-classfeatures.js?v=d35cf-1"></script>
+  <script src="dnd35-monsters.js?v=d35mon-2"></script>
   <script src="name-data.js?v=names-1"></script>
   <script src="theme-data.js?v=themes-3"></script>
   <script src="sw5e-creation.js?v=sw5e-create-3"></script>
@@ -769,6 +790,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=d35build-94"></script>
+  <script src="app.js?v=bestiary-96"></script>
 </body>
 </html>

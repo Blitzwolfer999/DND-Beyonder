@@ -257,7 +257,7 @@ const MAX_RECOVERY_SNAPSHOTS = 5;
 const BACKUP_META_KEY = "arcanaForge.cloudBackupMeta.v1";
 const THEME_KEY = "dndb.theme";
 const QUICK_BUILD_VERSION = 6;
-const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns"]);
+const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns", "bestiary"]);
 const BUILDER_STEP_COUNT = 7;
 
 let edition = "2014";
@@ -8280,6 +8280,7 @@ function navigate(view, options = {}) {
   if (options.updateHash !== false) syncRoute(view, Boolean(options.replace));
   if (view === "vault" || view === "dashboard") renderCards();
   if (view === "campaigns") renderCampaigns();
+  if (view === "bestiary") renderBestiary();
   if (view === "sheet") renderSheet();
   startCampaignLiveSync(view === "campaigns");
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -9103,6 +9104,81 @@ function renderCampaignGameLog(campaignId, isDm = false) {
       }).join("") : `<li class="empty-log"><div><strong>No shared rolls yet</strong><small>Roll from a campaign sheet to start the log.</small></div></li>`}
     </ol>
   </section>`;
+}
+
+// ---- Bestiary ----
+// A DM-facing browser over the 3.5 stat blocks. The printed lines are shown as
+// written; the parsed numbers drive search, filtering and sorting.
+let bestiarySearch = "";
+let bestiaryKind = "";
+let bestiaryCr = "";
+
+function bestiaryMatches() {
+  const query = bestiarySearch.trim().toLowerCase();
+  const [low, high] = bestiaryCr ? bestiaryCr.split("-").map(Number) : [null, null];
+  return (typeof D35_MONSTERS === "undefined" ? [] : D35_MONSTERS).filter(monster => {
+    if (bestiaryKind && monster.kind !== bestiaryKind) return false;
+    if (low !== null && (monster.crValue < low || monster.crValue > high)) return false;
+    if (!query) return true;
+    return `${monster.name} ${monster.type} ${monster.specialAttacks || ""} ${monster.specialQualities || ""} ${monster.environment || ""}`
+      .toLowerCase().includes(query);
+  });
+}
+
+function monsterCard(monster) {
+  const line = (label, value) => value
+    ? `<div class="monster-line"><small>${label}</small><span>${escapeHtml(value)}</span></div>` : "";
+  return `<article class="monster-card">
+    <header>
+      <div><h3>${escapeHtml(monster.name)}</h3><small>${escapeHtml(monster.type)}</small></div>
+      <span class="monster-cr">CR ${escapeHtml(monster.cr || "-")}</span>
+    </header>
+    <div class="monster-stat-row">
+      <button type="button" data-monster-roll="${escapeHtml(monster.name)}" data-modifier="${monster.initiative ? parseInt(monster.initiative, 10) || 0 : 0}"><small>INIT</small><strong>${escapeHtml(monster.initiative || "+0")}</strong></button>
+      <div><small>AC</small><strong>${monster.acValue}</strong></div>
+      <div><small>TOUCH</small><strong>${monster.touchAc}</strong></div>
+      <div><small>FLAT</small><strong>${monster.flatAc}</strong></div>
+      <div><small>HP</small><strong>${monster.hp}</strong></div>
+    </div>
+    ${line("Hit Dice", monster.hitDice)}
+    ${line("Speed", monster.speed)}
+    ${line("Armor Class", monster.ac)}
+    ${line("Base Attack/Grapple", monster.babGrapple)}
+    ${line("Attack", monster.attack)}
+    ${line("Full Attack", monster.fullAttack)}
+    ${line("Space/Reach", monster.spaceReach)}
+    ${line("Special Attacks", monster.specialAttacks)}
+    ${line("Special Qualities", monster.specialQualities)}
+    ${line("Saves", monster.saves)}
+    ${line("Abilities", monster.abilities)}
+    ${line("Skills", monster.skills)}
+    ${line("Feats", monster.feats)}
+    ${line("Environment", monster.environment)}
+    ${line("Organization", monster.organization)}
+    ${line("Alignment", monster.alignment)}
+    ${line("Advancement", monster.advancement)}
+  </article>`;
+}
+
+function renderBestiary() {
+  const list = $("#bestiary-list");
+  if (!list) return;
+  const kindSelect = $("#bestiary-kind");
+  if (kindSelect && kindSelect.options.length <= 1 && typeof D35_MONSTER_KINDS !== "undefined") {
+    kindSelect.innerHTML = `<option value="">All types</option>`
+      + D35_MONSTER_KINDS.map(kind => `<option value="${escapeHtml(kind)}">${escapeHtml(kind)}</option>`).join("");
+  }
+  const matches = bestiaryMatches().slice().sort((a, b) => a.crValue - b.crValue || a.name.localeCompare(b.name));
+  const count = $("#bestiary-count");
+  if (count) {
+    const total = typeof D35_MONSTERS === "undefined" ? 0 : D35_MONSTERS.length;
+    count.textContent = matches.length === total
+      ? `${total} creatures from the 3.5 SRD, sorted by challenge rating.`
+      : `${matches.length} of ${total} creatures.`;
+  }
+  list.innerHTML = matches.length
+    ? matches.map(monsterCard).join("")
+    : `<div class="empty-state"><span>*</span><h2>No creatures match</h2><p>Try a different search or filter.</p></div>`;
 }
 
 function renderCards(filter = "") {
@@ -12859,6 +12935,23 @@ function initEvents() {
   // Autosave anything typed or ticked in the full builder.
   form.addEventListener("input", queueBuilderAutosave);
   form.addEventListener("change", queueBuilderAutosave);
+
+  // Bestiary filters
+  $("#bestiary-search")?.addEventListener("input", event => {
+    bestiarySearch = event.target.value; renderBestiary();
+  });
+  $("#bestiary-kind")?.addEventListener("change", event => {
+    bestiaryKind = event.target.value; renderBestiary();
+  });
+  $("#bestiary-cr")?.addEventListener("change", event => {
+    bestiaryCr = event.target.value; renderBestiary();
+  });
+  document.addEventListener("click", event => {
+    const trigger = event.target.closest("[data-monster-roll]");
+    if (!trigger) return;
+    const modifier = Number(trigger.dataset.modifier || 0);
+    roll(20, 1, modifier, `${trigger.dataset.monsterRoll} initiative`);
+  });
   $("#portrait-upload").addEventListener("change", event => {
     const file = event.target.files[0]; if (!file) return;
     if (file.size > 4 * 1024 * 1024) { toast("Please choose an image under 4 MB"); return; }

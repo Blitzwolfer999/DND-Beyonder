@@ -3887,3 +3887,33 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .d35-skill-name small { color: var(--muted); font-size: 11px; }
 .d35-skill-row input { width: 100%; text-align: center; }
 .d35-skill-total { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* ===== Bestiary ===== */
+.bestiary-toolbar select { min-height: 40px; }
+.bestiary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.monster-card {
+  padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+  font: 500 12px/1.5 system-ui, sans-serif;
+}
+.monster-card header { display: flex; align-items: start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.monster-card h3 { margin: 0; font: 600 17px/1.2 Cinzel, serif; }
+.monster-card header small { color: var(--muted); }
+.monster-cr {
+  flex: none; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+  font: 800 11px/1.6 system-ui, sans-serif; white-space: nowrap;
+}
+.monster-stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
+.monster-stat-row > * {
+  padding: 6px 2px; text-align: center; border: 1px solid var(--line); border-radius: 8px;
+  background: transparent; color: inherit;
+}
+.monster-stat-row button { cursor: pointer; }
+.monster-stat-row button:hover { border-color: var(--gold, #c9a227); }
+.monster-stat-row small { display: block; color: var(--muted); font: 700 9px/1.4 system-ui, sans-serif; letter-spacing: .04em; }
+.monster-stat-row strong { display: block; font: 700 15px/1.2 Cinzel, serif; }
+.monster-line { display: grid; grid-template-columns: 128px 1fr; gap: 8px; padding: 2px 0; }
+.monster-line small { color: var(--muted); font-weight: 700; }
+@media (max-width: 620px) {
+  .bestiary-grid { grid-template-columns: 1fr; }
+  .monster-line { grid-template-columns: 1fr; gap: 0; }
+}
