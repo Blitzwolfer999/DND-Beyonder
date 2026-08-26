@@ -3930,6 +3930,20 @@ function defaultSubclassFor(className, level = 1, rulesEdition = edition) {
 function gameSettingFor(rulesEdition) {
   return rulesEdition === "sw5e" ? "starwars" : "dnd";
 }
+// Ranks are clamped to the skill's cap on the way in, so typing 99 into a
+// cross-class box settles at what the level actually allows.
+function applyD35SkillRank(input) {
+  const skill = input.dataset.d35Skill;
+  const cap = Number(input.max || 0);
+  const value = Math.max(0, Math.min(cap, Math.round(Number(input.value) || 0)));
+  if (value) d35SkillRankDraft[skill] = value; else delete d35SkillRankDraft[skill];
+  input.value = value;
+  renderD35SkillChoices();
+  updatePreview();
+}
+
+function resetD35SkillDraft() { d35SkillRankDraft = {}; }
+
 function setGameSetting(setting, options = {}) {
   const target = setting === "starwars" ? "sw5e" : (lastDndEdition || "2014");
   if (edition !== "sw5e") lastDndEdition = edition;
@@ -3943,6 +3957,7 @@ function setGameSetting(setting, options = {}) {
   selectedInvocations.clear();
   selectedMetamagic.clear();
   selectedPactBoon = "";
+  resetD35SkillDraft();
   const fields = $("#class-choice-fields");
   if (fields) fields.innerHTML = "";
   syncRulesetToggles();
@@ -6236,9 +6251,69 @@ function renderClassOptionChoices() {
   section.classList.toggle("hidden", !blocks.length);
   host.innerHTML = blocks.join("");
 }
+// 3.5 buys skills with ranks rather than picking proficiencies, so the Talents
+// step gets a spender: class skills cost a point a rank up to level + 3, and
+// cross-class skills cost two a rank up to half that.
+let d35SkillRankDraft = {};
+
+function d35BuilderCharacter() {
+  const level = Number(form.elements.level?.value || 1);
+  const abilities = Object.fromEntries(ABILITIES.map(ability =>
+    [ability, Number(form.elements[ability]?.value || 10)]));
+  return {
+    edition: "d35",
+    className: selectedClass,
+    level,
+    classes: [{ name: selectedClass, level }],
+    species: $("#species-select")?.value || "Human",
+    skillRanks: d35SkillRankDraft,
+    feats: [...selectedFeatNames],
+    inventory: [],
+    ...abilities
+  };
+}
+
+function renderD35SkillChoices() {
+  const section = $("#d35-skills-section");
+  const list = $("#d35-skill-list");
+  if (!section || !list) return;
+  if (edition !== "d35") { section.classList.add("hidden"); return; }
+  section.classList.remove("hidden");
+  const character = d35BuilderCharacter();
+  const level = characterTotalLevel(character);
+  const classSkills = (D35_CLASSES[selectedClass] || {}).classSkills || [];
+  const budget = d35SkillPointTotal(character);
+  const spent = Object.entries(d35SkillRankDraft).reduce((total, [skill, ranks]) =>
+    total + Number(ranks || 0) * (classSkills.includes(skill) ? 1 : 2), 0);
+  const remaining = budget - spent;
+  const guidance = $("#d35-skill-guidance");
+  if (guidance) {
+    guidance.textContent = `Class skills cost 1 point a rank and cap at ${level + 3}. `
+      + `Cross-class skills cost 2 and cap at ${Math.floor((level + 3) / 2)}.`;
+  }
+  const meter = $("#d35-skill-budget");
+  if (meter) {
+    meter.textContent = `${remaining} of ${budget} points left`;
+    meter.classList.toggle("over", remaining < 0);
+  }
+  list.innerHTML = Object.keys(D35_SKILLS).sort().map(skill => {
+    const isClass = classSkills.includes(skill);
+    const cap = isClass ? level + 3 : Math.floor((level + 3) / 2);
+    const ranks = Number(d35SkillRankDraft[skill] || 0);
+    const cost = isClass ? 1 : 2;
+    const modifier = d35SkillModifier({ ...character, skillRanks: d35SkillRankDraft }, skill);
+    return `<label class="d35-skill-row${isClass ? " is-class" : ""}">
+      <span class="d35-skill-name">${escapeHtml(skill)} <small>(${D35_SKILLS[skill]})${isClass ? " · class skill" : ` · ${cost} pts/rank`}</small></span>
+      <input type="number" min="0" max="${cap}" value="${ranks}" data-d35-skill="${escapeHtml(skill)}" inputmode="numeric">
+      <span class="d35-skill-total">${signed(modifier.total)}</span>
+    </label>`;
+  }).join("");
+}
+
 function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!$("#feat-list")) return;
   renderClassOptionChoices();
+  renderD35SkillChoices();
   $$("select[data-asi-mode]").forEach(select => {
     selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
     selectedAsi[select.dataset.asiMode].mode = select.value;
@@ -6614,6 +6689,13 @@ function formData() {
       ? kit.filter((item, index) => selectedEquipment.has(String(index)))
       : kit;
     data.currency = existing?.currency || { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 };
+  }
+  if (edition === "d35") {
+    data.skillRanks = { ...d35SkillRankDraft };
+    // 3.5 has no proficiency list, expertise or background skills.
+    data.skillProficiencies = [];
+    data.backgroundSkills = [];
+    data.expertise = [];
   }
   reconcilePreparedSpells(data, existing || data);
   return data;
@@ -10237,6 +10319,7 @@ function editCharacter(id) {
   selectedPactBoon = c.pactBoon || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
   selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
+  d35SkillRankDraft = { ...(c.skillRanks || {}) };
   showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
   $("#builder-title").textContent = `Edit ${c.name}`;
@@ -12197,6 +12280,7 @@ function initEvents() {
     }
   });
   form.addEventListener("input", event => {
+    if (event.target.dataset?.d35Skill) { applyD35SkillRank(event.target); return; }
     if (ABILITIES.includes(event.target.name)) {
       enforceAbilityCaps();
       updateAbilityMethodStatus();
@@ -12229,6 +12313,7 @@ function initEvents() {
       updatePreview();
       return;
     }
+    if (event.target.dataset.d35Skill) { applyD35SkillRank(event.target); return; }
     // Expertise is drawn from the trained skills, so a change to the class
     // skill picks has to rebuild that list.
     if (event.target.name === "skillProficiencies") {

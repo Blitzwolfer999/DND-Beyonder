@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=d35-66">
+  <link rel="stylesheet" href="styles.css?v=d35-67">
 </head>
 <body>
   <div class="app-shell">
@@ -369,6 +369,13 @@
                 <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
                 <div class="option-list" id="feat-list"></div>
                 <label>Homebrew feats<input name="customFeats" placeholder="Comma-separated homebrew feats"></label>
+              </section>
+              <section class="choice-section hidden" id="d35-skills-section">
+                <div class="choice-heading">
+                  <div><h3>Skill ranks</h3><p id="d35-skill-guidance"></p></div>
+                  <span id="d35-skill-budget" class="d35-budget"></span>
+                </div>
+                <div class="option-list" id="d35-skill-list"></div>
               </section>
               <section class="choice-section hidden" id="class-options-section">
                 <div class="choice-heading"><div><h3>Class options</h3><p id="class-options-guidance">Pact Boon, Eldritch Invocations, and Metamagic for your current level.</p></div></div>
@@ -762,6 +769,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=d35detail-92"></script>
+  <script src="app.js?v=d35build-94"></script>
 </body>
 </html>

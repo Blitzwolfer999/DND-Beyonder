@@ -3874,3 +3874,16 @@ html[data-theme="dark"] .source-pill.progress-pill {
 .d35-skill-budget.over strong { color: #b3402f; }
 html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .skill-roll.skill-untrained { opacity: .62; }
+
+/* ===== 3.5 skill rank spender ===== */
+.d35-budget { font: 700 12px/1.4 system-ui, sans-serif; color: var(--muted); }
+.d35-budget.over { color: #b3402f; }
+.d35-skill-row {
+  display: grid; grid-template-columns: 1fr 74px 48px; align-items: center; gap: 10px;
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  font: 500 13px/1.4 system-ui, sans-serif;
+}
+.d35-skill-row.is-class { border-left: 3px solid var(--gold, #c9a227); }
+.d35-skill-name small { color: var(--muted); font-size: 11px; }
+.d35-skill-row input { width: 100%; text-align: center; }
+.d35-skill-total { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
