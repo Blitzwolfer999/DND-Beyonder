@@ -3949,3 +3949,15 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 }
 .d35-spell strong { font: 600 13px/1.3 system-ui, sans-serif; }
 .d35-spell span { color: var(--muted); font: 500 11px/1.45 system-ui, sans-serif; }
+
+/* ===== 3.5 cleric domains ===== */
+.d35-domain-row {
+  display: grid; grid-template-columns: 22px 1fr; align-items: start; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  font: 500 13px/1.45 system-ui, sans-serif;
+}
+.d35-domain-row.is-picked { border-color: var(--gold, #c9a227); box-shadow: inset 3px 0 0 var(--gold, #c9a227); }
+.d35-domain-row.is-blocked { opacity: .5; }
+.d35-domain-power, .d35-domain-spells { display: block; font-size: 11px; line-height: 1.5; color: var(--muted); }
+.d35-domain-power { margin: 2px 0; }
+.d35-domain-spells { font-variant-numeric: tabular-nums; }

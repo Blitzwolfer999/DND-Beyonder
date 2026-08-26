@@ -3943,7 +3943,7 @@ function applyD35SkillRank(input) {
   updatePreview();
 }
 
-function resetD35SkillDraft() { d35SkillRankDraft = {}; }
+function resetD35SkillDraft() { d35SkillRankDraft = {}; selectedD35Domains = new Set(); }
 
 function setGameSetting(setting, options = {}) {
   const target = setting === "starwars" ? "sw5e" : (lastDndEdition || "2014");
@@ -6333,6 +6333,40 @@ function d35PrereqUnmet(character, feat) {
 
 let d35FeatSearch = "";
 
+// A 3.5 cleric picks two domains. Each grants a power and adds one bonus spell
+// slot at every spell level, so the choice is worth surfacing as its own step
+// rather than buried in class options.
+function renderD35DomainChoices() {
+  const section = $("#d35-domains-section");
+  const list = $("#d35-domain-list");
+  if (!section || !list) return;
+  const isCleric = edition === "d35" && selectedClass === "Cleric";
+  section.classList.toggle("hidden", !isCleric);
+  if (!isCleric) return;
+  const chosen = selectedD35Domains;
+  const meter = $("#d35-domain-budget");
+  if (meter) {
+    meter.textContent = `${chosen.size} of 2 chosen`;
+    meter.classList.toggle("over", chosen.size > 2);
+  }
+  const names = typeof D35_DOMAIN_NAMES !== "undefined" ? D35_DOMAIN_NAMES : [];
+  list.innerHTML = names.map(name => {
+    const domain = D35_DOMAINS[name];
+    const picked = chosen.has(name);
+    const full = chosen.size >= 2 && !picked;
+    return `<label class="d35-domain-row${picked ? " is-picked" : ""}${full ? " is-blocked" : ""}">
+      <input type="checkbox" data-d35-domain="${escapeHtml(name)}" ${picked ? "checked" : ""} ${full ? "disabled" : ""}>
+      <span>
+        <strong>${escapeHtml(name)}</strong>
+        <span class="d35-domain-power">${escapeHtml(domain.power)}</span>
+        <span class="d35-domain-spells">${domain.spells.map(spell => `${spell.level}. ${escapeHtml(spell.name)}`).join(" · ")}</span>
+      </span>
+    </label>`;
+  }).join("");
+}
+
+let selectedD35Domains = new Set();
+
 function renderD35FeatChoices() {
   // The 5e feat browser lists feats that do not exist in 3.5, so it steps aside.
   const fiveE = $("#feat-list")?.closest(".choice-section");
@@ -6422,6 +6456,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   renderClassOptionChoices();
   renderD35SkillChoices();
   renderD35FeatChoices();
+  renderD35DomainChoices();
   $$("select[data-asi-mode]").forEach(select => {
     selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
     selectedAsi[select.dataset.asiMode].mode = select.value;
@@ -6800,6 +6835,7 @@ function formData() {
   }
   if (edition === "d35") {
     data.skillRanks = { ...d35SkillRankDraft };
+    data.domains = selectedClass === "Cleric" ? [...selectedD35Domains] : [];
     // Feats carried over from a 5e session are not legal here, and the origin
     // feat is a 5e concept, so both are dropped rather than saved.
     const legal = new Set((typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : []).map(feat => feat.name));
@@ -8267,6 +8303,24 @@ function finalizeD35Character(character) {
 // A 3.5 caster's spells, grouped by the level they occupy for that class. The
 // slot resources above say how many you may cast; this says which ones you have
 // and what each does.
+// The two domains a cleric chose, with the power each grants and the bonus
+// spell it adds at every level.
+function renderD35Domains(c, sectionClassName) {
+  if (!isD35(c) || typeof D35_DOMAINS === "undefined") return "";
+  const chosen = (c.domains || []).filter(name => D35_DOMAINS[name]);
+  if (!chosen.length) return "";
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Domains</h2><span>Each adds one bonus spell slot per level.</span></div>
+    <div class="feature-grid">${chosen.map(name => {
+      const domain = D35_DOMAINS[name];
+      return `<article class="feature-card"><small>DOMAIN</small><strong>${escapeHtml(name)}</strong>
+        ${ruleDetails(domain.power)}
+        <span class="d35-domain-spells">${domain.spells.map(spell =>
+          `${spell.level}. ${escapeHtml(spell.name)}`).join(" · ")}</span></article>`;
+    }).join("")}</div>
+  </section>`;
+}
+
 function renderD35Spellbook(c, sectionClassName) {
   if (!isD35(c)) return "";
   const className = primaryClassName(c);
@@ -8559,12 +8613,18 @@ function d35ResourceDefinitions(character) {
         name: `${value.label}`, max: value.max, recovery: "long", group: "class" });
     });
   });
-  D35_SPELLS_PER_DAY[primaryClassName(character)] && d35SpellsPerDay(character, primaryClassName(character))
-    .forEach(row => {
+  const casting = primaryClassName(character);
+  if (D35_SPELLS_PER_DAY[casting]) {
+    // Each domain adds one bonus spell slot at every level the cleric can cast.
+    const domainBonus = casting === "Cleric" && (character.domains || []).length ? 1 : 0;
+    d35SpellsPerDay(character, casting).forEach(row => {
       if (!row.total) return;
-      resources.push({ id: `d35-spell-${row.level}`, name: `Level ${row.level} spells · DC ${row.dc}`,
-        max: row.total, recovery: "long", group: "spell", slotLevel: row.level });
+      const bonus = row.level > 0 ? domainBonus : 0;
+      resources.push({ id: `d35-spell-${row.level}`,
+        name: `Level ${row.level} spells · DC ${row.dc}${bonus ? " (+1 domain)" : ""}`,
+        max: row.total + bonus, recovery: "long", group: "spell", slotLevel: row.level });
     });
+  }
   return resources;
 }
 
@@ -10492,6 +10552,7 @@ function renderSheet() {
       <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
+    ${renderD35Domains(c, sectionClass("features"))}
     ${renderD35Spellbook(c, sectionClass("overview"))}
     ${renderInventorySection(c, sectionClass("inventory"))}
     <section class="sheet-panel sheet-wide ${sectionClass("features")}">
@@ -10551,6 +10612,7 @@ function editCharacter(id) {
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
   selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
   d35SkillRankDraft = { ...(c.skillRanks || {}) };
+  selectedD35Domains = new Set(c.domains || []);
   showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
   $("#builder-title").textContent = `Edit ${c.name}`;
@@ -12545,6 +12607,13 @@ function initEvents() {
     if (event.target.name === "pactBoon") {
       selectedPactBoon = event.target.value;
       renderClassOptionChoices();
+      updatePreview();
+      return;
+    }
+    if (event.target.dataset.d35Domain) {
+      const name = event.target.dataset.d35Domain;
+      if (event.target.checked) selectedD35Domains.add(name); else selectedD35Domains.delete(name);
+      renderD35DomainChoices();
       updatePreview();
       return;
     }

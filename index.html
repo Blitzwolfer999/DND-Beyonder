@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=d35spellbook-70">
+  <link rel="stylesheet" href="styles.css?v=d35domains-71">
 </head>
 <body>
   <div class="app-shell">
@@ -370,6 +370,13 @@
                 <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
                 <div class="option-list" id="feat-list"></div>
                 <label>Homebrew feats<input name="customFeats" placeholder="Comma-separated homebrew feats"></label>
+              </section>
+              <section class="choice-section hidden" id="d35-domains-section">
+                <div class="choice-heading">
+                  <div><h3>Cleric domains</h3><p id="d35-domain-guidance">Choose two. Each grants a power and one bonus spell at every spell level.</p></div>
+                  <span id="d35-domain-budget" class="d35-budget"></span>
+                </div>
+                <div class="option-list" id="d35-domain-list"></div>
               </section>
               <section class="choice-section hidden" id="d35-feats-section">
                 <div class="choice-heading">
@@ -781,6 +788,7 @@
   <script src="dnd35-classfeatures.js?v=d35cf-1"></script>
   <script src="dnd35-monsters.js?v=d35mon-2"></script>
   <script src="dnd35-feats.js?v=d35feat-1"></script>
+  <script src="dnd35-domains.js?v=d35dom-1"></script>
   <script src="name-data.js?v=names-1"></script>
   <script src="theme-data.js?v=themes-3"></script>
   <script src="sw5e-creation.js?v=sw5e-create-3"></script>
@@ -799,6 +807,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=d35spellbook-102"></script>
+  <script src="app.js?v=d35domains-104"></script>
 </body>
 </html>
