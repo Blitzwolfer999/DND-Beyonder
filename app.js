@@ -6273,6 +6273,99 @@ function d35BuilderCharacter() {
   };
 }
 
+// A 3.5 prerequisite line reads like "Str 13, Power Attack" or "base attack
+// bonus +4". Parsing it means the picker can grey out what you cannot take yet
+// and say why, rather than letting an illegal build save and fail later.
+function d35PrereqUnmet(character, feat) {
+  const line = String(feat.prereq || "").trim();
+  if (!line) return [];
+  const owned = new Set((character.feats || []).map(name => name.toLowerCase()));
+  const abilities = effectiveAbilities(character);
+  const bab = d35BaseAttackBonus(character);
+  const unmet = [];
+  line.split(/,(?![^(]*\))/).forEach(rawPart => {
+    const part = rawPart.trim().replace(/\.$/, "");
+    if (!part) return;
+    const ability = /^(Str|Dex|Con|Int|Wis|Cha)\s+(\d+)$/i.exec(part);
+    if (ability) {
+      const key = ability[1].toUpperCase();
+      if (Number(abilities[key] || 10) < Number(ability[2])) unmet.push(part);
+      return;
+    }
+    const attack = /base attack bonus\s*\+?(\d+)/i.exec(part);
+    if (attack) {
+      if (bab < Number(attack[1])) unmet.push(`base attack bonus +${attack[1]}`);
+      return;
+    }
+    const ranks = /^(.+?)\s+(\d+)\s+ranks?$/i.exec(part);
+    if (ranks) {
+      if (Number((character.skillRanks || {})[ranks[1].trim()] || 0) < Number(ranks[2])) unmet.push(part);
+      return;
+    }
+    const casterLevel = /caster level\s*(\d+)/i.exec(part);
+    if (casterLevel) {
+      if (characterTotalLevel(character) < Number(casterLevel[1])) unmet.push(part);
+      return;
+    }
+    // Anything left that names a feat we know about is treated as a feat
+    // requirement; free-text conditions ("proficiency with selected weapon")
+    // are left to the player rather than guessed at.
+    const known = (typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : [])
+      .some(other => other.name.toLowerCase() === part.toLowerCase());
+    if (known && !owned.has(part.toLowerCase())) unmet.push(part);
+  });
+  return unmet;
+}
+
+let d35FeatSearch = "";
+
+function renderD35FeatChoices() {
+  // The 5e feat browser lists feats that do not exist in 3.5, so it steps aside.
+  const fiveE = $("#feat-list")?.closest(".choice-section");
+  if (fiveE) fiveE.classList.toggle("hidden", edition === "d35");
+  const section = $("#d35-feats-section");
+  const list = $("#d35-feat-list");
+  if (!section || !list) return;
+  if (edition !== "d35") { section.classList.add("hidden"); return; }
+  section.classList.remove("hidden");
+  const character = d35BuilderCharacter();
+  const total = d35FeatCount(character);
+  const remaining = total - selectedFeatNames.size;
+  const guidance = $("#d35-feat-guidance");
+  if (guidance) {
+    const fighter = classLevel(character, "Fighter");
+    const bits = ["One feat at 1st level and another every three levels after"];
+    if ((D35_RACES[character.species] || {}).extraFeat) bits.push("a human bonus feat");
+    if (fighter) bits.push(`${1 + Math.floor(fighter / 2)} fighter bonus feats`);
+    guidance.textContent = `${bits.join(", ")}.`;
+  }
+  const meter = $("#d35-feat-budget");
+  if (meter) {
+    meter.textContent = remaining === 0 ? `${total} of ${total} chosen`
+      : remaining > 0 ? `${remaining} of ${total} still to choose`
+      : `${-remaining} too many for ${total} slots`;
+    meter.classList.toggle("over", remaining < 0);
+  }
+  const query = d35FeatSearch.trim().toLowerCase();
+  const source = typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : [];
+  list.innerHTML = source
+    .filter(feat => !query || `${feat.name} ${feat.kind} ${feat.summary || ""}`.toLowerCase().includes(query))
+    .map(feat => {
+      const picked = selectedFeatNames.has(feat.name);
+      const unmet = d35PrereqUnmet(character, feat);
+      const blocked = unmet.length > 0 && !picked;
+      return `<label class="d35-feat-row${blocked ? " is-blocked" : ""}${picked ? " is-picked" : ""}">
+        <input type="checkbox" name="feats" value="${escapeHtml(feat.name)}" ${picked ? "checked" : ""} ${blocked ? "disabled" : ""}>
+        <span>
+          <strong>${escapeHtml(feat.name)}</strong> <small>${escapeHtml(feat.kind)}</small>
+          ${feat.prereq ? `<em class="d35-feat-prereq">Requires ${escapeHtml(feat.prereq)}</em>` : ""}
+          ${blocked ? `<em class="d35-feat-blocked">Missing ${escapeHtml(unmet.join(", "))}</em>` : ""}
+          <span class="d35-feat-summary">${escapeHtml(feat.summary || "")}</span>
+        </span>
+      </label>`;
+    }).join("");
+}
+
 function renderD35SkillChoices() {
   const section = $("#d35-skills-section");
   const list = $("#d35-skill-list");
@@ -6314,6 +6407,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   if (!$("#feat-list")) return;
   renderClassOptionChoices();
   renderD35SkillChoices();
+  renderD35FeatChoices();
   $$("select[data-asi-mode]").forEach(select => {
     selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
     selectedAsi[select.dataset.asiMode].mode = select.value;
@@ -6692,6 +6786,12 @@ function formData() {
   }
   if (edition === "d35") {
     data.skillRanks = { ...d35SkillRankDraft };
+    // Feats carried over from a 5e session are not legal here, and the origin
+    // feat is a 5e concept, so both are dropped rather than saved.
+    const legal = new Set((typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : []).map(feat => feat.name));
+    data.feats = (data.feats || []).filter(name => legal.has(name));
+    data.originFeat = "";
+    data.featAbilityChoices = {};
     // 3.5 has no proficiency list, expertise or background skills.
     data.skillProficiencies = [];
     data.backgroundSkills = [];
@@ -12426,7 +12526,12 @@ function initEvents() {
       renderTalentChoices();
       updatePreview();
     }
-    if (event.target.name === "feats") event.target.checked ? selectedFeatNames.add(event.target.value) : selectedFeatNames.delete(event.target.value);
+    if (event.target.name === "feats") {
+      event.target.checked ? selectedFeatNames.add(event.target.value) : selectedFeatNames.delete(event.target.value);
+      // Taking a feat can satisfy another one's prerequisite, so 3.5 rebuilds
+      // the list to unlock whatever just became legal.
+      if (edition === "d35") { renderD35FeatChoices(); updatePreview(); }
+    }
     if (event.target.dataset.featAbility) {
       selectedFeatAbilities[event.target.dataset.featAbility] = event.target.value;
       updatePreview();
@@ -12936,6 +13041,9 @@ function initEvents() {
   form.addEventListener("input", queueBuilderAutosave);
   form.addEventListener("change", queueBuilderAutosave);
 
+  $("#d35-feat-search")?.addEventListener("input", event => {
+    d35FeatSearch = event.target.value; renderD35FeatChoices();
+  });
   // Bestiary filters
   $("#bestiary-search")?.addEventListener("input", event => {
     bestiarySearch = event.target.value; renderBestiary();

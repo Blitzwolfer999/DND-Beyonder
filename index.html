@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=bestiary-68">
+  <link rel="stylesheet" href="styles.css?v=d35feats-69">
 </head>
 <body>
   <div class="app-shell">
@@ -370,6 +370,14 @@
                 <label class="search-label">Search feats or sources<input id="feat-search" type="search" placeholder="e.g. War Caster, Eberron, Origin"></label>
                 <div class="option-list" id="feat-list"></div>
                 <label>Homebrew feats<input name="customFeats" placeholder="Comma-separated homebrew feats"></label>
+              </section>
+              <section class="choice-section hidden" id="d35-feats-section">
+                <div class="choice-heading">
+                  <div><h3>Feats</h3><p id="d35-feat-guidance"></p></div>
+                  <span id="d35-feat-budget" class="d35-budget"></span>
+                </div>
+                <label class="search-label">Search feats<input id="d35-feat-search" type="search" placeholder="e.g. Power Attack, Metamagic"></label>
+                <div class="option-list" id="d35-feat-list"></div>
               </section>
               <section class="choice-section hidden" id="d35-skills-section">
                 <div class="choice-heading">
@@ -772,6 +780,7 @@
   <script src="dnd35-spells.js?v=d35s-2"></script>
   <script src="dnd35-classfeatures.js?v=d35cf-1"></script>
   <script src="dnd35-monsters.js?v=d35mon-2"></script>
+  <script src="dnd35-feats.js?v=d35feat-1"></script>
   <script src="name-data.js?v=names-1"></script>
   <script src="theme-data.js?v=themes-3"></script>
   <script src="sw5e-creation.js?v=sw5e-create-3"></script>
@@ -790,6 +799,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=bestiary-96"></script>
+  <script src="app.js?v=d35feats-99"></script>
 </body>
 </html>

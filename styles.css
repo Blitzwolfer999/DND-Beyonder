@@ -3917,3 +3917,22 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
   .bestiary-grid { grid-template-columns: 1fr; }
   .monster-line { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* ===== 3.5 feat picker ===== */
+.d35-feat-row {
+  display: grid; grid-template-columns: 22px 1fr; align-items: start; gap: 10px;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  font: 500 13px/1.45 system-ui, sans-serif;
+}
+.d35-feat-row.is-picked { border-color: var(--gold, #c9a227); box-shadow: inset 3px 0 0 var(--gold, #c9a227); }
+.d35-feat-row.is-blocked { opacity: .55; }
+.d35-feat-row small {
+  margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line);
+  color: var(--muted); font: 700 9px/1.7 system-ui, sans-serif; text-transform: uppercase;
+}
+.d35-feat-prereq, .d35-feat-blocked, .d35-feat-summary {
+  display: block; font-style: normal; font-size: 11px; line-height: 1.5;
+}
+.d35-feat-prereq { color: var(--muted); }
+.d35-feat-blocked { color: #b3402f; font-weight: 700; }
+.d35-feat-summary { color: var(--muted); margin-top: 2px; }
