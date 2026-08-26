@@ -3888,6 +3888,7 @@ function quickDefaultSubclass(className) {
 }
 
 function defaultSubclassFor(className, level = 1, rulesEdition = edition) {
+  if (rulesEdition === "d35") return "";
   const options = subclassEntries(className, rulesEdition);
   const preferred = {
     "2014:Barbarian": "Path of the Berserker",
@@ -6002,11 +6003,20 @@ function spellRecordClass(spell, character) {
 // Look up a spell's own level by searching every class list in that edition.
 // Subclass-granted spells are often off the base class list (a Hexblade's
 // Shield, an Oathbreaker's Animate Dead), so a class-scoped lookup isn't enough.
-function lookupSpellLevel(rulesEdition, name) {
+function lookupSpellLevel(rulesEdition, name, className = "") {
   // Spell names vary between data sets by apostrophe style and casing
   // ("Hunter's Mark" vs "Hunter’s Mark"), so compare on a normalized key.
   const key = text => String(text).toLowerCase().replace(/[’']/g, "").replace(/\s+/g, " ").trim();
   const target = key(name);
+  // 3.5 keeps its own lists, and a spell's level differs per class there --
+  // Cure Light Wounds is 1st for a cleric and 2nd for a ranger.
+  if (rulesEdition === "d35" && typeof D35_SPELL_INDEX !== "undefined") {
+    const entry = D35_SPELL_INDEX[target];
+    if (!entry) return null;
+    if (className && entry.classes[className] !== undefined) return entry.classes[className];
+    const levels = Object.values(entry.classes);
+    return levels.length ? Math.min(...levels) : null;
+  }
   const editions = [rulesEdition, rulesEdition === "2024" ? "2014" : "2024"];
   for (const edition of editions) {
     const lists = SPELL_LISTS[edition] || {};
@@ -6051,6 +6061,10 @@ function characterSpellRecords(character) {
     // Spell stored as a bare name (theme/quick builds): look up its real level
     // from the class spell lists so cantrips vs leveled spells group correctly.
     const className = primaryClassName(character);
+    if (character.edition === "d35") {
+      const level = lookupSpellLevel("d35", spell, className);
+      return { name: spell, level: level === null ? 0 : level, className };
+    }
     const subclass = classSubclassName(character, className);
     const lists = spellListsFor(character.edition || "2014", className, subclass) || {};
     const listedLevel = Object.entries(lists).find(([, names]) => names.includes(spell))?.[0];
@@ -8250,6 +8264,46 @@ function finalizeD35Character(character) {
 // The 3.5 header carries a different set of numbers from the 5e one: attack is
 // a sequence rather than a single bonus, Armor Class is three values, and the
 // three saves replace per-ability proficiency.
+// A 3.5 caster's spells, grouped by the level they occupy for that class. The
+// slot resources above say how many you may cast; this says which ones you have
+// and what each does.
+function renderD35Spellbook(c, sectionClassName) {
+  if (!isD35(c)) return "";
+  const className = primaryClassName(c);
+  const known = (c.spells || []).map(spell => {
+    const name = typeof spell === "string" ? spell : spell.name;
+    const entry = (typeof D35_SPELL_INDEX !== "undefined" && D35_SPELL_INDEX[String(name).toLowerCase()]) || null;
+    const level = lookupSpellLevel("d35", name, className);
+    return { name, level: level === null ? 0 : level, desc: entry ? entry.desc : "" };
+  });
+  const available = (typeof D35_SPELL_LISTS !== "undefined" && D35_SPELL_LISTS[className]) || null;
+  if (!known.length && !available) return "";
+  const byLevel = new Map();
+  known.forEach(spell => {
+    if (!byLevel.has(spell.level)) byLevel.set(spell.level, []);
+    byLevel.get(spell.level).push(spell);
+  });
+  const levels = [...byLevel.keys()].sort((a, b) => a - b);
+  const slots = d35SpellsPerDay(c, className);
+  const groups = levels.map(level => {
+    const slot = slots.find(row => row.level === level);
+    return `<div class="d35-spell-group">
+      <h3>Level ${level}${slot ? ` <small>${slot.total} per day · save DC ${slot.dc}</small>` : ""}</h3>
+      ${byLevel.get(level).sort((a, b) => a.name.localeCompare(b.name)).map(spell =>
+        `<article class="d35-spell"><strong>${escapeHtml(spell.name)}</strong>${spell.desc
+          ? `<span>${escapeHtml(spell.desc)}</span>` : ""}</article>`).join("")}
+    </div>`;
+  }).join("");
+  const total = available
+    ? Object.values(available).reduce((sum, rows) => sum + rows.length, 0) : 0;
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Spellbook</h2><span>${known.length
+      ? `${known.length} recorded${total ? ` · ${total} on the ${escapeHtml(className)} list` : ""}`
+      : `Nothing recorded yet${total ? ` · ${total} spells on the ${escapeHtml(className)} list` : ""}`}</span></div>
+    ${groups || `<p class="attack-hint">Add spells from the builder's Spells step and they will be grouped by level here.</p>`}
+  </section>`;
+}
+
 function renderD35CoreStats(c, currentHp, maximumHp) {
   const d = d35Derived(c);
   const attacks = d.attacks.map(bonus => signed(bonus)).join(" / ");
@@ -10438,6 +10492,7 @@ function renderSheet() {
       <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
+    ${renderD35Spellbook(c, sectionClass("overview"))}
     ${renderInventorySection(c, sectionClass("inventory"))}
     <section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Species Traits</h2>
@@ -10536,6 +10591,10 @@ function editCharacter(id) {
 }
 
 function subclassLevel(className, rulesEdition) {
+  // 3.5 core classes have no subclasses at all, so nothing ever unlocks one.
+  // Returning a level past 20 keeps every "have you reached it yet" check false
+  // without each caller needing to know about the edition.
+  if (rulesEdition === "d35") return Infinity;
   if (rulesEdition === "2024") return 3;
   if (["Cleric", "Sorcerer", "Warlock"].includes(className)) return 1;
   if (["Druid", "Wizard"].includes(className)) return 2;
