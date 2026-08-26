@@ -3342,7 +3342,7 @@ function featEligible(feat, level, className, rulesEdition) {
   if (feat.category === "General") return level >= 4;
   if (feat.category === "Dragonmark" && /^(Greater|Potent)/.test(feat.name)) return level >= 4;
   if (feat.category === "Fighting Style") {
-    return (CLASS_FEATURES[rulesEdition]?.[className] || []).some(([unlock, name]) => unlock <= level && name.includes("Fighting Style"));
+    return classFeatureRows(className, rulesEdition).some(([unlock, name]) => unlock <= level && name.includes("Fighting Style"));
   }
   return true;
 }
@@ -3501,7 +3501,13 @@ function setPortraitFromCanvas() {
   updatePreview();
 }
 
-function speciesDescription(name) {
+function speciesDescription(name, rulesEdition = edition) {
+  // The shared summaries describe the 5e version of a race, naming 5e traits.
+  // 3.5 keeps its own one-liners so a half-orc is not described by Relentless
+  // Endurance, which that edition does not have.
+  if (rulesEdition === "d35" && typeof D35_RACES !== "undefined" && D35_RACES[name]?.summary) {
+    return D35_RACES[name].summary;
+  }
   return (typeof CONTENT_SUMMARIES !== "undefined" && CONTENT_SUMMARIES.species && CONTENT_SUMMARIES.species[name]) || "";
 }
 
@@ -3599,7 +3605,7 @@ function speciesTraitSummary(name, speciesName) {
 function speciesTraitCards(character) {
   const speciesName = character.species || "Custom";
   const cards = [];
-  const summary = speciesDescription(speciesName);
+  const summary = speciesDescription(speciesName, character.edition);
   if (summary) cards.push({ name: speciesName, source: "Species", description: summary });
   if (character.edition === "2014" && character.speciesVariant) {
     cards.push({
@@ -3615,9 +3621,22 @@ function speciesTraitCards(character) {
   if (bonusText) {
     cards.push({
       name: "Origin ability increases",
-      source: character.edition === "2024" ? "Background ability bonuses" : "Species ability bonuses",
+      source: character.edition === "2024" ? "Background ability bonuses"
+        : character.edition === "d35" ? "Racial ability adjustments" : "Species ability bonuses",
       description: `${bonusText}. These increases are already included in the ability scores shown on the sheet.`
     });
+  }
+  if (character.edition === "d35") {
+    // 3.5 races have their own traits; the 5e tables would hand a half-orc
+    // Relentless Endurance and Savage Attacks, which do not exist in 3.5.
+    const race = (typeof D35_RACES !== "undefined" && D35_RACES[speciesName]) || null;
+    if (race) {
+      cards.push({ name: "Size and speed", source: speciesName,
+        description: `${race.size} size, base speed ${race.speed} feet.` });
+    }
+    ((typeof D35_RACE_TRAITS !== "undefined" && D35_RACE_TRAITS[speciesName]) || [])
+      .forEach(([name, description]) => cards.push({ name, source: speciesName, description }));
+    return cards;
   }
   (SPECIES_TRAIT_SUMMARIES[speciesName] || ["Species Traits"]).forEach(name => {
     cards.push({ name, source: speciesName, description: speciesTraitSummary(name, speciesName) });
@@ -3665,6 +3684,12 @@ function classesForEdition(rulesEdition) {
 function classSkillsFor(className, rulesEdition) {
   if (rulesEdition === "sw5e" && typeof SW5E_CLASS_SKILLS !== "undefined" && SW5E_CLASS_SKILLS[className]) {
     return SW5E_CLASS_SKILLS[className];
+  }
+  // 3.5 class skills are the list you may buy ranks in at full price, not a
+  // pick-N-of-these choice, so the whole list is offered.
+  if (rulesEdition === "d35" && typeof D35_CLASSES !== "undefined" && D35_CLASSES[className]) {
+    const options = D35_CLASSES[className].classSkills || [];
+    return { count: options.length, options };
   }
   return CLASS_SKILLS[className];
 }
@@ -4277,7 +4302,7 @@ function prebuildSpellChoices(className, level, subclass, characterData, rulesEd
 }
 
 function prebuildProgressionHistory(className, subclass, level) {
-  const classRows = (CLASS_FEATURES[edition]?.[className] || [])
+  const classRows = classFeatureRows(className, edition)
     .filter(([featureLevel]) => featureLevel <= level)
     .map(([featureLevel, name]) => ({ level: featureLevel, choices: {}, features: [`${className}: ${name}`], summary: `${className} feature gained.` }));
   const subclassRows = subclass ? resolvedSubclassFeatures(edition, className, subclass)
@@ -4443,7 +4468,7 @@ function renderPrebuildSummary() {
   const primary = quickBuildProfileFor(character.className)?.abilities?.[0] || "STR";
   const spellNames = character.spells.map(spell => spell.name);
   const spellCoverage = spellLevelCoverage(character.spells);
-  const featureCount = (CLASS_FEATURES[edition]?.[character.className] || []).filter(([level]) => level <= character.level).length
+  const featureCount = classFeatureRows(character.className, edition).filter(([level]) => level <= character.level).length
     + (character.subclass ? resolvedSubclassFeatures(edition, character.className, character.subclass).filter(([level]) => level <= character.level).length : 0);
   summary.innerHTML = `
     <div class="quick-summary-title"><span>${RULES.classes[character.className]?.icon || "PB"}</span><div><small>LEVEL ${character.level} ${edition === "2024" ? "5.5e" : "5e"} PREBUILD</small><h3>${escapeHtml(character.species)} ${escapeHtml(character.subclass || character.className)}</h3><p>${escapeHtml(character.background)} background</p></div></div>
@@ -4966,7 +4991,7 @@ function renderQuickSummary() {
   const stats = derived(character);
   const spellNames = character.spells.map(spell => spell.name);
   const spellCoverage = spellLevelCoverage(character.spells);
-  const featureCount = (CLASS_FEATURES[edition]?.[quickClass] || []).filter(([level]) => level <= character.level).length
+  const featureCount = classFeatureRows(quickClass, edition).filter(([level]) => level <= character.level).length
     + (character.subclass ? resolvedSubclassFeatures(edition, quickClass, character.subclass).filter(([level]) => level <= character.level).length : 0);
   summary.innerHTML = `
     <div class="quick-summary-title"><span>${RULES.classes[quickClass].icon}</span><div><small>LEVEL ${character.level} ${edition === "2024" ? "5.5e" : "5e"}</small><h3>${escapeHtml(character.species)} ${escapeHtml(character.subclass || quickClass)}</h3><p>${escapeHtml(character.background)} background</p></div></div>
@@ -5335,6 +5360,16 @@ function selectedSpeciesVariant(raw = originFormValues()) {
 
 function originAbilityBonuses(raw = originFormValues()) {
   const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
+  // 3.5 puts ability adjustments on the race, and they can be negative. Without
+  // this the edition fell through to the 2024 background rules, found nothing
+  // for a 3.5 background, and every race came out flat.
+  if (edition === "d35") {
+    const race = D35_RACES[raw.species || $("#species-select")?.value] || {};
+    Object.entries(race.bonuses || {}).forEach(([ability, amount]) => {
+      bonuses[ability] += Number(amount);
+    });
+    return bonuses;
+  }
   if (edition === "2014") {
     const variant = selectedSpeciesVariant(raw);
     Object.entries(variant.bonuses || {}).forEach(([ability, amount]) => bonuses[ability] += Number(amount));
@@ -5594,7 +5629,7 @@ function renderStartingClassOptions(savedCharacter = null) {
   const select = $("#fighting-style-select");
   if (!field || !select) return;
   const level = Number(form.elements.level?.value || 1);
-  const hasFightingStyle = (CLASS_FEATURES[edition]?.[selectedClass] || [])
+  const hasFightingStyle = classFeatureRows(selectedClass, edition)
     .some(([unlock, name]) => unlock <= level && name.includes("Fighting Style"));
   field.classList.toggle("hidden", !hasFightingStyle);
   if (!hasFightingStyle) {
@@ -5699,7 +5734,7 @@ function renderClassFeaturePreview() {
   if (!container) return;
   const level = Number(form.elements.level?.value || 1);
   const subclassName = $("#subclass-select")?.value || "";
-  const classRows = (CLASS_FEATURES[edition]?.[selectedClass] || [])
+  const classRows = classFeatureRows(selectedClass, edition)
     .filter(([featureLevel]) => featureLevel <= level)
     .map(([featureLevel, name]) => ({ level: featureLevel, name, source: selectedClass }));
   const allSubclassRows = subclassName
@@ -7208,10 +7243,16 @@ function renderAttacksPanel(character, sectionClassName) {
     const chips = known.map(spell => `<button type="button" class="spell-pin-chip ${pinned.has(spell.name) ? "active" : ""}" data-pin-spell="${escapeHtml(spell.name)}" data-character="${escapeHtml(character.id)}">${escapeHtml(spell.name)}</button>`).join("");
     spellBlock = `${pinnedRows}<details class="spell-attack-picker"><summary>Add spells to your attacks</summary>${chips ? `<div class="spell-pin-list">${chips}</div>` : `<p class="attack-hint">Learn or prepare spells to add them here.</p>`}</details>`;
   }
-  const perAction = attacksPerAction(character);
+  // 3.5 gets its extra swings from Base Attack Bonus rather than 5e's Extra
+  // Attack feature, and each one is at a lower bonus, so the badge shows the
+  // actual sequence instead of a flat count.
+  const perAction = isD35(character) ? d35IterativeAttacks(d35BaseAttackBonus(character)).length
+    : attacksPerAction(character);
   const sneak = sneakAttackDice(character);
   const attackBadge = perAction > 1
-    ? `<span class="attack-count-badge" title="Extra Attack — your Attack action makes ${perAction} attacks">&times;${perAction} attacks</span>`
+    ? (isD35(character)
+      ? `<span class="attack-count-badge" title="Base attack bonus grants ${perAction} attacks on a full attack">${d35IterativeAttacks(d35BaseAttackBonus(character)).map(bonus => signed(bonus)).join(" / ")}</span>`
+      : `<span class="attack-count-badge" title="Extra Attack — your Attack action makes ${perAction} attacks">&times;${perAction} attacks</span>`)
     : "";
   const sneakRow = sneak
     ? `<article class="attack-row sneak-attack-row">
@@ -7700,7 +7741,7 @@ function derived(data) {
   const con = modifier(data.CON);
   let firstHitDie = true;
   const baseHp = Math.max(1, classBreakdown(data).reduce((total, entry) => {
-    const hit = RULES.classes[entry.name]?.hit || 8;
+    const hit = classHitDie(entry.name, data.edition);
     let classHp = 0;
     for (let index = 0; index < entry.level; index += 1) {
       classHp += firstHitDie ? hit + con : Math.ceil(hit / 2) + 1 + con;
@@ -7962,12 +8003,20 @@ function finalizeD35Character(character) {
   built.customSubclass = "";
   built.classes = (built.classes || []).map(entry => ({ ...entry, subclass: "", customSubclass: "" }));
 
-  // Racial ability modifiers, which 5e generation never applied.
+  // Racial ability modifiers, which 5e generation never applied. The scores
+  // arrive with 5e species and background increases already baked in, so those
+  // are taken back out first -- otherwise a 3.5 wizard keeps a +2 Strength it
+  // was never entitled to.
   const race = D35_RACES[built.species] || D35_RACES.Human;
   if (!built.d35RaceApplied) {
-    Object.entries(race.bonuses || {}).forEach(([ability, amount]) => {
-      built[ability] = Math.max(1, Number(built[ability] || 10) + amount);
+    ABILITIES.forEach(ability => {
+      const fiveE = Number((built.originBonuses || {})[ability] || 0)
+        + Number((built.featBonuses || {})[ability] || 0);
+      const racial = Number((race.bonuses || {})[ability] || 0);
+      built[ability] = Math.max(1, Number(built[ability] || 10) - fiveE + racial);
     });
+    built.originBonuses = Object.fromEntries(ABILITIES.map(a => [a, Number((race.bonuses || {})[a] || 0)]));
+    built.featBonuses = Object.fromEntries(ABILITIES.map(a => [a, 0]));
     built.d35RaceApplied = true;
   }
   built.size = race.size || "Medium";
@@ -8242,6 +8291,60 @@ function startNewCharacter() {
 // shown needs a stand-in rather than reading charAt on an empty value.
 // One place that names the rules set, so a sheet and a vault card cannot
 // disagree -- and so a new edition does not silently read as 5e.
+// 3.5 and 5e disagree on five of the eleven shared class names -- a 3.5 wizard
+// rolls d4 where a 5e one rolls d6 -- so the die is read per edition rather
+// than straight off the shared RULES entry.
+// 3.5 keeps its class features in its own table. Without this a 3.5 character
+// fell through to the 5e lists, so a Fighter picked up Action Surge and Second
+// Wind and a Barbarian got 5e Rage.
+// Per-day uses a 3.5 character actually tracks, read off its own feature table
+// ("rage 1/day", "smite evil 2/day") rather than the 5e resource list.
+function d35ResourceDefinitions(character) {
+  const resources = [];
+  classBreakdown(character).forEach(entry => {
+    const die = classHitDie(entry.name, "d35");
+    resources.push({ id: `${entry.name.toLowerCase()}-hit-dice`, name: `${entry.name} Hit Dice · d${die}`,
+      max: entry.level, recovery: "long", group: "class" });
+    let best = {};
+    classFeatureRows(entry.name, "d35")
+      .filter(([level]) => level <= entry.level)
+      .forEach(([, name]) => {
+        const uses = /^(.*?)\s+(\d+)\s*\/\s*day$/i.exec(name);
+        if (!uses) return;
+        const label = uses[1].trim();
+        const count = Number(uses[2]);
+        const key = label.toLowerCase();
+        // A feature that improves keeps only its highest printed number.
+        if (!best[key] || count > best[key].max) best[key] = { label, max: count };
+      });
+    Object.entries(best).forEach(([key, value]) => {
+      resources.push({ id: `${entry.name.toLowerCase()}-${key.replace(/\s+/g, "-")}`,
+        name: `${value.label}`, max: value.max, recovery: "long", group: "class" });
+    });
+  });
+  D35_SPELLS_PER_DAY[primaryClassName(character)] && d35SpellsPerDay(character, primaryClassName(character))
+    .forEach(row => {
+      if (!row.total) return;
+      resources.push({ id: `d35-spell-${row.level}`, name: `Level ${row.level} spells · DC ${row.dc}`,
+        max: row.total, recovery: "long", group: "spell", slotLevel: row.level });
+    });
+  return resources;
+}
+
+function classFeatureRows(className, rulesEdition) {
+  if (rulesEdition === "d35") {
+    return (typeof D35_CLASS_FEATURES !== "undefined" && D35_CLASS_FEATURES[className]) || [];
+  }
+  return CLASS_FEATURES[rulesEdition]?.[className] || [];
+}
+
+function classHitDie(className, rulesEdition) {
+  if (rulesEdition === "d35" && typeof D35_CLASSES !== "undefined" && D35_CLASSES[className]) {
+    return D35_CLASSES[className].hit;
+  }
+  return RULES.classes[className]?.hit || 8;
+}
+
 function editionLabel(rulesEdition) {
   if (rulesEdition === "d35") return "3.5e";
   if (rulesEdition === "2024") return "5.5e · 2024";
@@ -9208,6 +9311,10 @@ function traitResourceMax(character, max) {
 }
 function traitResourceDefinitions(character) {
   const rulesEdition = character.edition || "2014";
+  // These tables describe 5e species and feat abilities. 3.5 racial traits come
+  // from D35_RACE_TRAITS instead, so a 3.5 half-orc must not pick up a 5e
+  // half-orc's Relentless Endurance.
+  if (rulesEdition === "d35") return [];
   const entries = [
     ...(SPECIES_TRAIT_RESOURCES[character.species] || []),
     ...(character.feats || []).flatMap(feat => FEAT_RESOURCES[feat] || [])
@@ -9225,7 +9332,7 @@ function singleClassResourceDefinitions(character) {
   const add = (id, name, max, recovery = "long", extra = {}) => {
     if (max > 0) resources.push({ id, name, max, recovery, ...extra });
   };
-  add("hit-dice", `Hit Dice · d${RULES.classes[character.className]?.hit || 8}`, level, "long", {
+  add("hit-dice", `Hit Dice · d${classHitDie(character.className, character.edition)}`, level, "long", {
     longRecovery: revised ? "all" : Math.max(1, Math.floor(level / 2)),
     type: level > 12 ? "pool" : "pips"
   });
@@ -9363,6 +9470,10 @@ function singleClassResourceDefinitions(character) {
 }
 
 function resourceDefinitions(character) {
+  // 5e class resources -- Action Surge, Ki, Rage as 5e models it -- do not
+  // belong on a 3.5 sheet. 3.5 tracks its per-day uses through class features
+  // instead, so only the shared hit dice and spell slots carry over.
+  if (isD35(character)) return d35ResourceDefinitions(character);
   const entries = classBreakdown(character);
   if (entries.length > 1) {
     const classResources = entries.flatMap(entry => singleClassResourceDefinitions(withClassContext(character, entry.name, entry.level)).map(resource => ({
@@ -9859,7 +9970,7 @@ function renderSheet() {
   const primaryClass = primaryClassName(c);
   const cls = RULES.classes[primaryClass];
   const classFeatures = classEntries.flatMap(entry =>
-    (CLASS_FEATURES[c.edition]?.[entry.name] || [])
+    classFeatureRows(entry.name, c.edition)
       .filter(([level]) => level <= entry.level)
       .map(([level, name]) => ({ level, name, source: entry.name, className: entry.name }))
   );
@@ -9942,7 +10053,7 @@ function renderSheet() {
   const passiveInvestigation = 10 + skillModifier(c, "Investigation");
   const passiveInsight = 10 + skillModifier(c, "Insight");
   const hitDiceMap = {};
-  classEntries.forEach(entry => { const die = RULES.classes[entry.name]?.hit || 8; hitDiceMap[die] = (hitDiceMap[die] || 0) + entry.level; });
+  classEntries.forEach(entry => { const die = classHitDie(entry.name, c.edition); hitDiceMap[die] = (hitDiceMap[die] || 0) + entry.level; });
   const hitDice = Object.entries(hitDiceMap).sort((a, b) => b[0] - a[0]).map(([die, count]) => `${count}d${die}`).join(" + ");
   const speciesTraitNames = (typeof SPECIES_TRAIT_SUMMARIES !== "undefined" && SPECIES_TRAIT_SUMMARIES[c.species]) || [];
   const darkvision = speciesTraitNames.some(t => /superior darkvision/i.test(t)) ? "120 ft"
@@ -10040,19 +10151,25 @@ function renderSheet() {
       <div class="combat-stat-grid">
         <div class="combat-stat"><small>Speed</small><strong>${walkSpeed} ft</strong></div>
         <div class="combat-stat"><small>Initiative</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></div>
-        <div class="combat-stat"><small>Proficiency</small><strong>${signed(d.prof)}</strong></div>
+        <div class="combat-stat"><small>${isD35(c) ? "Base Attack" : "Proficiency"}</small><strong>${signed(d.prof)}</strong></div>
         <div class="combat-stat"><small>Hit Dice</small><strong>${escapeHtml(hitDice)}</strong></div>
-        <div class="combat-stat"><small>Passive Perception</small><strong>${d.passive}</strong></div>
+        ${isD35(c) ? `<div class="combat-stat"><small>Passive Spot</small><strong>${d.passive}</strong></div>
+        <div class="combat-stat"><small>Grapple</small><strong>${signed(d35GrappleModifier(c))}</strong></div>
+        <div class="combat-stat"><small>Size</small><strong>${escapeHtml(c.size || (D35_RACES[c.species] || {}).size || "Medium")}</strong></div>`
+        : `<div class="combat-stat"><small>Passive Perception</small><strong>${d.passive}</strong></div>
         <div class="combat-stat"><small>Passive Investigation</small><strong>${passiveInvestigation}</strong></div>
-        <div class="combat-stat"><small>Passive Insight</small><strong>${passiveInsight}</strong></div>
+        <div class="combat-stat"><small>Passive Insight</small><strong>${passiveInsight}</strong></div>`}
         <div class="combat-stat"><small>Darkvision</small><strong>${escapeHtml(darkvision)}</strong></div>
       </div>
       <div class="combat-detail-grid">
         <div class="combat-detail"><small>Armor Class</small><span>${escapeHtml(d.acSource)}</span></div>
         <div class="combat-detail"><small>Initiative bonus</small><span>${escapeHtml(d.initiativeSource)}${d.initiativeAdvantage ? " · advantage" : ""}</span></div>
-        <div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
+        ${isD35(c) ? `<div class="combat-detail"><small>Saving throws</small><span>Fort ${signed(d35SaveBonus(c, "fort").total)} · Ref ${signed(d35SaveBonus(c, "ref").total)} · Will ${signed(d35SaveBonus(c, "will").total)}</span></div>
+        <div class="combat-detail"><small>Skill ranks spent</small><span>${Object.entries(c.skillRanks || {}).filter(([, n]) => Number(n) > 0).map(([skill, n]) => `${skill} ${n}`).join(", ") || "None spent"}</span></div>
+        <div class="combat-detail"><small>Racial traits</small><span>${escapeHtml(((typeof D35_RACE_TRAITS !== "undefined" && D35_RACE_TRAITS[c.species]) || []).map(([name]) => name).join(", ") || "None")}</span></div>`
+        : `<div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
         <div class="combat-detail"><small>Skill proficiencies</small><span>${[...proficientSkills(c)].sort().join(", ") || "None selected"}</span></div>
-        <div class="combat-detail"><small>Defenses &amp; resistances</small><span>${escapeHtml(defenses)}</span></div>
+        <div class="combat-detail"><small>Defenses &amp; resistances</small><span>${escapeHtml(defenses)}</span></div>`}
         <div class="combat-detail"><small>Active conditions</small><span>${activeConditions.length ? escapeHtml(activeConditions.join(", ")) : "None"}</span></div>
       </div>
       ${renderDeathSaves(c)}
@@ -10425,7 +10542,7 @@ function openLevelUp(id, targetClass = "") {
   const targetClassLevel = currentClassLevel + 1;
   const context = withClassContext(character, levelUpClassName, currentClassLevel);
   const features = levelFeatures(character, targetLevel, levelUpClassName);
-  const fixedGain = Math.max(1, Math.ceil(RULES.classes[levelUpClassName].hit / 2) + 1 + modifier(character.CON));
+  const fixedGain = Math.max(1, Math.ceil(classHitDie(levelUpClassName, character.edition) / 2) + 1 + modifier(character.CON));
   const classSelect = `<label class="level-class-picker">Class to advance<select name="levelClass" id="level-class-select">
     <optgroup label="Current classes">${currentClasses.map(entry => `<option value="${escapeHtml(entry.name)}" ${entry.name === levelUpClassName ? "selected" : ""}>${escapeHtml(entry.name)} ${entry.level} → ${entry.level + 1}</option>`).join("")}</optgroup>
     <optgroup label="Add multiclass">${availableClasses.filter(name => !currentClasses.some(entry => entry.name === name)).map(name => `<option value="${escapeHtml(name)}" ${name === levelUpClassName ? "selected" : ""}>Add ${escapeHtml(name)} 1</option>`).join("")}</optgroup>
@@ -10446,12 +10563,12 @@ function openLevelUp(id, targetClass = "") {
     </section>
     <section class="advancement-section">
       <h3>Hit points</h3>
-      <p>Use the class fixed value or roll the ${levelUpClassName}'s d${RULES.classes[levelUpClassName].hit} Hit Die.</p>
+      <p>Use the class fixed value or roll the ${levelUpClassName}'s d${classHitDie(levelUpClassName, character.edition)} Hit Die.</p>
       <div class="progression-choice">
         ${optionRadios("hpMethod", [`Fixed (+${fixedGain} HP)`, "Roll Hit Die"], `Fixed (+${fixedGain} HP)`)}
         <div class="hidden" id="hp-roll-controls">
-          <label>Hit Die result<input name="hpRoll" type="number" min="1" max="${RULES.classes[levelUpClassName].hit}" value="${Math.ceil(RULES.classes[levelUpClassName].hit / 2)}"></label>
-          <button type="button" class="button small ghost" id="roll-level-hp">Roll d${RULES.classes[levelUpClassName].hit}</button>
+          <label>Hit Die result<input name="hpRoll" type="number" min="1" max="${classHitDie(levelUpClassName, character.edition)}" value="${Math.ceil(classHitDie(levelUpClassName, character.edition) / 2)}"></label>
+          <button type="button" class="button small ghost" id="roll-level-hp">Roll d${classHitDie(levelUpClassName, character.edition)}</button>
         </div>
       </div>
     </section>
@@ -12863,7 +12980,7 @@ function initEvents() {
     const character = characters.find(item => item.id === levelingCharacterId);
     if (!character) return;
     const selectedClass = $("#level-class-select")?.value || levelUpClassName || primaryClassName(character);
-    const sides = RULES.classes[selectedClass].hit;
+    const sides = classHitDie(selectedClass, character.edition);
     const result = Math.floor(Math.random() * sides) + 1;
     $("#level-up-form").elements.hpRoll.value = result;
     toast(`Rolled ${result} on the d${sides}`);

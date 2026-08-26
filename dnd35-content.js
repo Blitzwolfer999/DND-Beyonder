@@ -269,6 +269,41 @@ function registerD35Runtime() {
   }
 }
 
+
+// Racial traits, kept apart from the 5e species tables so a 3.5 half-orc does
+// not inherit Relentless Endurance and Savage Attacks, which are 5e features.
+const D35_RACE_TRAITS = {
+  Human: [["Bonus feat", "One extra feat at 1st level."],
+          ["Skilled", "Four extra skill points at 1st level and one per level after."]],
+  Dwarf: [["Darkvision", "See 60 feet in complete darkness."],
+          ["Stonecunning", "+2 on Search checks for unusual stonework, and you notice it in passing."],
+          ["Stability", "+4 against bull rush and trip attempts while on the ground."],
+          ["Hardy", "+2 on saves against poison, and +2 against spells and spell-like effects."],
+          ["Ancient foes", "+1 to hit orcs and goblinoids, and +4 dodge bonus against giants."]],
+  Elf: [["Immunity to sleep", "Magic sleep effects do not work on you, and +2 against enchantments."],
+        ["Low-light vision", "See twice as far as a human in dim light."],
+        ["Keen senses", "+2 on Listen, Search and Spot, and you notice secret doors in passing."],
+        ["Martial training", "Proficient with longsword, rapier, longbow and shortbow."]],
+  Gnome: [["Low-light vision", "See twice as far as a human in dim light."],
+          ["Illusion affinity", "+2 on saves against illusions, and +1 to the save DC of illusions you cast."],
+          ["Ancient foes", "+1 to hit kobolds and goblinoids, and +4 dodge bonus against giants."],
+          ["Keen ears", "+2 on Listen checks and +2 on Craft (alchemy)."],
+          ["Speak with animals", "Speak with burrowing mammals once per day."]],
+  "Half-Elf": [["Immunity to sleep", "Magic sleep effects do not work on you, and +2 against enchantments."],
+               ["Low-light vision", "See twice as far as a human in dim light."],
+               ["Keen senses", "+1 on Listen, Search and Spot."],
+               ["Diplomatic", "+2 on Diplomacy and Gather Information checks."],
+               ["Elven blood", "You count as an elf for any effect related to race."]],
+  "Half-Orc": [["Darkvision", "See 60 feet in complete darkness."],
+               ["Orc blood", "You count as an orc for any effect related to race."]],
+  Halfling: [["Lucky", "+1 on all saving throws."],
+             ["Brave", "+2 more against fear, on top of the racial bonus to saves."],
+             ["Deadly aim", "+1 to hit with thrown weapons and slings."],
+             ["Nimble", "+2 on Climb, Jump, Listen and Move Silently."]]
+};
+
+if (typeof window !== "undefined") window.D35_RACE_TRAITS = D35_RACE_TRAITS;
+
 if (typeof window !== "undefined") {
   window.D35_EDITION = D35_EDITION;
   window.D35_CLASSES = D35_CLASSES;
