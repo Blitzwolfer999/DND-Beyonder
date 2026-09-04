@@ -3888,6 +3888,7 @@ function quickDefaultSubclass(className) {
 }
 
 function defaultSubclassFor(className, level = 1, rulesEdition = edition) {
+  if (rulesEdition === "adnd2e") return "";
   if (rulesEdition === "d35") return "";
   const options = subclassEntries(className, rulesEdition);
   const preferred = {
@@ -7564,6 +7565,11 @@ function statBreakdown(character, stat) {
   const eff = effectiveAbilities(character);
   const fx = activeItemEffects(character);
   if (stat === "ac") {
+    if (isAdnd(character)) {
+      const ac = adndArmorClass(character);
+      return { title: "Armor Class", total: ac.value, parts: ac.breakdown,
+        note: "2E Armor Class counts down from 10; lower is better." };
+    }
     if (isD35(character)) {
       const ac = d35ArmorClass(character);
       return { title: "Armor Class", total: ac.value, parts: ac.breakdown,
@@ -7955,6 +7961,18 @@ function savingThrowModifier(data, ability) {
 }
 
 function derived(data) {
+  // 2E is further out still: Armor Class descends, attacks come from THAC0 and
+  // saves are five categories. The sheet reads those from the 2E model.
+  if (isAdnd(data)) {
+    const two = adndDerived(data);
+    return {
+      prof: two.thac0, ac: two.ac, acSource: two.acSource,
+      hp: two.hp,
+      initiative: 0, initiativeSource: "Roll each round in 2E", initiativeAdvantage: false,
+      passive: 10,
+      adnd: two
+    };
+  }
   // 3.5 uses its own hit-die, Armor Class and attack model. Delegating here
   // means the sheet, the party card and the level-up flow all read the right
   // numbers without each having to know which edition they are looking at.
@@ -8001,6 +8019,203 @@ function derived(data) {
  * inside the 5e ones. Everything below returns plain numbers so the sheet can
  * render 3.5 without the 5e paths knowing about it.
  */
+/* ---- AD&D 2nd Edition engine ----
+ * 2E inverts most of what the other editions assume. Armor Class counts down
+ * from 10, an attack lands when the d20 reaches THAC0 minus the target's AC,
+ * saves are five named categories rather than six abilities, and Strength runs
+ * past 18 on a percentile. All of that lives here rather than as branches
+ * inside the 5e and 3.5 functions.
+ */
+// AD&D 2E registers the same way the other editions do: its classes and races
+// are its own, and the shared 5e entries stay out of it.
+function registerAdndRuntime() {
+  if (typeof RULES === "undefined" || typeof ADND_CLASSES === "undefined") return;
+  const ED = "adnd2e";
+  Object.values(RULES.classes).forEach(data => {
+    if (!data.editions) data.editions = ["2014", "2024"];
+  });
+  Object.entries(ADND_CLASSES).forEach(([name, data]) => {
+    const existing = RULES.classes[name];
+    if (existing) {
+      existing.editions = [...new Set([...(existing.editions || []), ED])];
+      existing.subclasses = { ...(existing.subclasses || {}), [ED]: [] };
+      return;
+    }
+    RULES.classes[name] = { icon: data.icon, hit: data.hit, primary: (data.prime || ["STR"])[0],
+      save: [], origin: "AD&D 2nd Edition", editions: [ED], subclasses: { [ED]: [] } };
+  });
+  RULES.species[ED] = Object.keys(ADND_RACES);
+  RULES.backgrounds[ED] = ["Acolyte", "Artisan", "Courtier", "Farmer", "Mercenary",
+    "Merchant", "Noble", "Sage", "Sailor", "Soldier", "Thief", "Wanderer"];
+  if (typeof FEATS !== "undefined") FEATS[ED] = [];
+  if (typeof CONTENT_SUMMARIES !== "undefined") {
+    Object.entries(ADND_RACES).forEach(([name, race]) => {
+      if (!CONTENT_SUMMARIES.species[name]) CONTENT_SUMMARIES.species[name] = race.summary;
+    });
+  }
+}
+
+function isAdnd(data) { return (data?.edition || data) === "adnd2e"; }
+
+function adndClassGroup(character) {
+  return (ADND_CLASSES[primaryClassName(character)] || {}).group || "rogue";
+}
+
+// A warrior's Strength can carry a percentile. It is stored separately so a
+// score of 18 with no percentile still reads as plain 18.
+function adndStrength(character) {
+  const score = Math.max(1, Math.min(19, Number(character.STR) || 10));
+  const percentile = Number(character.strPercentile || 0);
+  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  if (score === 18 && percentile > 0 && cls.exceptionalStrength) {
+    const band = ADND_EXCEPTIONAL_STRENGTH.find(entry => percentile <= entry.max)
+      || ADND_EXCEPTIONAL_STRENGTH[ADND_EXCEPTIONAL_STRENGTH.length - 1];
+    return { ...band, score, percentile, display: band.label };
+  }
+  const row = ADND_STRENGTH[score] || ADND_STRENGTH[10];
+  return { ...row, score, percentile: 0, display: String(score) };
+}
+
+function adndAbilityRow(table, score) {
+  const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
+  const value = Math.max(keys[0], Math.min(keys[keys.length - 1], Number(score) || 10));
+  return table[value] || table[keys[0]];
+}
+
+// Armor Class descends from 10. Armour and shields lower it, and a high
+// Dexterity lowers it further.
+function adndArmorClass(character) {
+  const dex = adndAbilityRow(ADND_DEXTERITY, character.DEX);
+  const parts = [{ label: "Base", value: 10 }];
+  let ac = 10;
+  let shield = 0;
+  equippedItems(character).forEach(item => {
+    const rating = Number(item.acRating || 0);
+    if (!rating) return;
+    if (/shield/i.test(item.name || "")) { shield += rating; return; }
+    ac = Math.min(ac, 10 - rating);
+    parts.push({ label: `${item.name}`, value: -rating });
+  });
+  if (shield) { ac -= shield; parts.push({ label: "Shield", value: -shield }); }
+  const dexAdj = Number(dex.ac || 0);
+  if (dexAdj) { ac += dexAdj; parts.push({ label: `Dexterity ${character.DEX}`, value: dexAdj }); }
+  const misc = Number(character.acBonus || 0);
+  if (misc) { ac -= misc; parts.push({ label: "Magical protection", value: -misc }); }
+  return { value: ac, breakdown: parts, rearAc: ac - dexAdj,
+    source: `Armor Class ${ac} \u00b7 lower is better` };
+}
+
+function adndSaves(character) {
+  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  const base = adndSaveTargets(adndClassGroup(character), characterTotalLevel(character));
+  const bonus = Number(cls.saveBonus || 0);
+  const wisdom = adndAbilityRow(ADND_WISDOM, character.WIS);
+  const magicalDefence = Number((wisdom && wisdom.defense) || 0);
+  return ADND_SAVE_CATEGORIES.map(category => {
+    // A paladin's blanket bonus and Wisdom's magical defence both make the
+    // target easier to reach, so they subtract from the number needed.
+    const spellOnly = category.key === "spell" ? magicalDefence : 0;
+    return { ...category, target: Math.max(1, base[category.key] - bonus - spellOnly),
+      base: base[category.key], bonus, magicalDefence: spellOnly };
+  });
+}
+
+// Hit points: a hit die per level to 9th, then a flat gain, and Constitution
+// applies per die only while the dice are still rolling.
+function adndHitPoints(character) {
+  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  const die = cls.hit || 6;
+  const level = characterTotalLevel(character);
+  const con = adndAbilityRow(ADND_CONSTITUTION, character.CON);
+  const conBonus = adndClassGroup(character) === "warrior"
+    ? Number(con.warriorHp || 0) : Math.min(2, Number(con.hp || 0));
+  const rolled = Math.min(level, 9);
+  const average = Math.floor(die / 2) + 1;
+  let hp = rolled * (average + conBonus);
+  if (level > 9) hp += (level - 9) * Number(cls.hpAfter9 || 1);
+  return Math.max(1, hp);
+}
+
+function adndThiefSkills(character) {
+  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  if (!cls.thiefSkills) return [];
+  const race = ADND_THIEF_RACIAL[character.species] || {};
+  const dex = Math.max(3, Math.min(18, Number(character.DEX) || 10));
+  const spent = character.thiefSkillPoints || {};
+  return Object.entries(ADND_THIEF_SKILLS).map(([name, rule]) => {
+    let dexAdj = 0;
+    Object.keys(rule.dex || {}).map(Number).sort((a, b) => a - b)
+      .forEach(threshold => { if (dex >= threshold) dexAdj = rule.dex[threshold]; });
+    const racial = Number(race[name] || 0);
+    const allocated = Number(spent[name] || 0);
+    return { name, base: rule.base, dex: dexAdj, racial, allocated,
+      total: Math.max(0, Math.min(95, rule.base + dexAdj + racial + allocated)) };
+  });
+}
+
+// 30 discretionary points a level.
+function adndThiefPointBudget(character) {
+  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  if (!cls.thiefSkills) return 0;
+  return characterTotalLevel(character) * 30;
+}
+
+function adndSpellSlots(character) {
+  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  if (!cls.caster) return [];
+  const level = characterTotalLevel(character);
+  // Paladins and rangers start casting late and count from an offset.
+  const effective = cls.casterOffset ? level - cls.casterOffset : level;
+  if (effective < 1) return [];
+  const table = ADND_SPELL_SLOTS[cls.caster] || [];
+  const row = table[Math.min(table.length, Math.max(1, effective)) - 1] || [];
+  const wisdom = cls.caster === "priest" ? adndAbilityRow(ADND_WISDOM, character.WIS) : null;
+  const bonus = wisdom && wisdom.bonus ? wisdom.bonus : [];
+  return row.map((count, index) => ({
+    level: index + 1,
+    base: count,
+    bonus: Number(bonus[index] || 0),
+    total: count + Number(bonus[index] || 0)
+  }));
+}
+
+// The level a race may reach in a class. Humans have none.
+function adndLevelLimit(character, className) {
+  const race = ADND_RACES[character.species] || {};
+  const limit = (race.limits || {})[className || primaryClassName(character)];
+  return limit || null;
+}
+
+function adndDerived(character) {
+  const strength = adndStrength(character);
+  const level = characterTotalLevel(character);
+  const group = adndClassGroup(character);
+  const ac = adndArmorClass(character);
+  const dex = adndAbilityRow(ADND_DEXTERITY, character.DEX);
+  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  return {
+    thac0: adndThac0(group, level),
+    ac: ac.value, acSource: ac.source, acBreakdown: ac.breakdown,
+    hp: Number(character.hpOverride) || adndHitPoints(character),
+    saves: adndSaves(character),
+    strength,
+    hitAdj: Number(strength.hit || 0),
+    damageAdj: Number(strength.dmg || 0),
+    missileAdj: Number(dex.missile || 0),
+    reactionAdj: Number(dex.reaction || 0),
+    group,
+    xpNext: (cls.xp || [])[level] || null,
+    levelLimit: adndLevelLimit(character),
+    thiefSkills: adndThiefSkills(character),
+    spellSlots: adndSpellSlots(character)
+  };
+}
+
+// What a d20 must reach to hit a given Armor Class.
+function adndTargetFor(thac0, targetAc) {
+  return thac0 - Number(targetAc || 0);
+}
+
 function isD35(data) { return (data?.edition || data) === "d35"; }
 
 // Base attack bonus is summed per class, not taken from total level, which is
@@ -8445,6 +8660,89 @@ function renderD35Spellbook(c, sectionClassName) {
   </section>`;
 }
 
+// The 2E header. THAC0 replaces an attack bonus, Armor Class counts down, and
+// the five saving throw categories each get their own target number.
+function renderAdndCoreStats(c, currentHp, maximumHp) {
+  const d = adndDerived(c);
+  const save = row => `<button data-sheet-roll="${escapeHtml(row.short)} save" data-modifier="0">
+    <small>${escapeHtml(row.short).toUpperCase()}</small><strong>${row.target}</strong></button>`;
+  return `<div class="sheet-core adnd-core">
+    <button data-sheet-roll="Attack" data-modifier="0"><small>THAC0</small><strong>${d.thac0}</strong></button>
+    <button data-stat-breakdown="ac" data-character="${c.id}" title="How is this calculated?"><small>ARMOR CLASS</small><strong>${d.ac}</strong><i class="stat-info">i</i></button>
+    <button data-sheet-section-jump="overview"><small>HIT POINTS</small><strong>${currentHp}/${maximumHp}</strong></button>
+    <button data-sheet-section-jump="overview"><small>STRENGTH</small><strong>${escapeHtml(d.strength.display)}</strong></button>
+    ${d.saves.map(save).join("")}
+  </div>
+  <div class="adnd-strip">
+    <span><small>To hit</small><strong>${signed(d.hitAdj)}</strong></span>
+    <span><small>Damage</small><strong>${signed(d.damageAdj)}</strong></span>
+    <span><small>Missile</small><strong>${signed(d.missileAdj)}</strong></span>
+    <span><small>Reaction</small><strong>${signed(d.reactionAdj)}</strong></span>
+    ${d.levelLimit ? `<span class="adnd-limit"><small>Level limit</small><strong>${d.levelLimit}</strong></span>` : ""}
+    ${d.xpNext ? `<span><small>Next level at</small><strong>${d.xpNext.toLocaleString()} xp</strong></span>` : ""}
+  </div>`;
+}
+
+// A 2E attack is read off THAC0: the number needed against each Armor Class
+// from 10 down. Showing the row saves the arithmetic at the table.
+function renderAdndAttacks(c, sectionClassName) {
+  if (!isAdnd(c)) return "";
+  const d = adndDerived(c);
+  const targets = [10, 8, 6, 4, 2, 0, -2, -4];
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Attack matrix</h2><span>Roll this or higher on a d20 to hit that Armor Class.</span></div>
+    <div class="adnd-matrix">
+      <div class="adnd-matrix-row adnd-matrix-head">
+        <span>Target AC</span>${targets.map(ac => `<span>${ac}</span>`).join("")}
+      </div>
+      <div class="adnd-matrix-row">
+        <span>Need</span>${targets.map(ac => {
+          const need = adndTargetFor(d.thac0, ac) - d.hitAdj;
+          return `<span>${need <= 1 ? "1" : need > 20 ? "-" : need}</span>`;
+        }).join("")}
+      </div>
+    </div>
+    <p class="attack-hint">THAC0 ${d.thac0}, with a ${signed(d.hitAdj)} Strength adjustment already applied. A natural 20 always hits.</p>
+  </section>`;
+}
+
+function renderAdndThiefSkills(c, sectionClassName) {
+  if (!isAdnd(c)) return "";
+  const skills = adndThiefSkills(c);
+  if (!skills.length) return "";
+  const budget = adndThiefPointBudget(c);
+  const spent = skills.reduce((total, skill) => total + skill.allocated, 0);
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Thief skills</h2><span>${spent} of ${budget} discretionary points assigned.</span></div>
+    <div class="adnd-skill-list">
+      ${skills.map(skill => `<button type="button" class="adnd-skill" data-sheet-roll="${escapeHtml(skill.name)}" data-modifier="0" data-roll-percent="${skill.total}">
+        <span>${escapeHtml(skill.name)}<small>base ${skill.base}${skill.racial ? ` \u00b7 race ${signed(skill.racial)}` : ""}${skill.dex ? ` \u00b7 dex ${signed(skill.dex)}` : ""}${skill.allocated ? ` \u00b7 spent ${skill.allocated}` : ""}</small></span>
+        <strong>${skill.total}%</strong>
+      </button>`).join("")}
+    </div>
+  </section>`;
+}
+
+function renderAdndSpells(c, sectionClassName) {
+  if (!isAdnd(c)) return "";
+  const slots = adndSpellSlots(c);
+  if (!slots.length) return "";
+  const cls = ADND_CLASSES[primaryClassName(c)] || {};
+  const intel = cls.caster === "wizard" ? adndAbilityRow(ADND_INTELLIGENCE, c.INT) : null;
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Spell slots</h2><span>${cls.caster === "wizard"
+      ? `Memorised from a spellbook${intel ? ` \u00b7 up to level ${intel.maxSpellLevel}, ${intel.learn}% to learn a spell` : ""}`
+      : "Prayed for each day, with bonus slots from Wisdom"}</span></div>
+    <div class="adnd-slot-grid">
+      ${slots.map(slot => `<div class="adnd-slot">
+        <small>Level ${slot.level}</small>
+        <strong>${slot.total}</strong>
+        ${slot.bonus ? `<em>${slot.base} +${slot.bonus} wis</em>` : ""}
+      </div>`).join("")}
+    </div>
+  </section>`;
+}
+
 function renderD35CoreStats(c, currentHp, maximumHp) {
   const d = d35Derived(c);
   const attacks = d.attacks.map(bonus => signed(bonus)).join(" / ");
@@ -8730,6 +9028,7 @@ function classHitDie(className, rulesEdition) {
 }
 
 function editionLabel(rulesEdition) {
+  if (rulesEdition === "adnd2e") return "AD&D 2e";
   if (rulesEdition === "d35") return "3.5e";
   if (rulesEdition === "2024") return "5.5e · 2024";
   if (rulesEdition === "sw5e") return "SW5E";
@@ -10604,7 +10903,7 @@ function renderSheet() {
   sheet.innerHTML = `<div class="sheet-header">
     <div class="sheet-portrait">${c.portrait ? `<img src="${escapeHtml(c.portrait)}" alt="">` : escapeHtml(characterDisplayName(c).charAt(0))}</div>
     <div><span class="eyebrow">${c._campaignShared ? "CAMPAIGN SHEET · " : ""}${editionLabel(c.edition)} RULES</span><h1>${escapeHtml(c.name)}</h1><p>Level ${characterTotalLevel(c)} ${escapeHtml(c.species)} ${escapeHtml(classSummary(c))}</p>${subclassLines.length ? `<small class="sheet-source">${escapeHtml(subclassLines.join(" · "))}</small>` : ""}${c._campaignShared ? `<small class="sheet-source">DM access: changes sync to the player's shared sheet.</small>` : ""}</div>
-    ${isD35(c) ? renderD35CoreStats(c, currentHp, maximumHp) : `<div class="sheet-core">
+    ${isAdnd(c) ? renderAdndCoreStats(c, currentHp, maximumHp) : isD35(c) ? renderD35CoreStats(c, currentHp, maximumHp) : `<div class="sheet-core">
       <button data-sheet-roll="Initiative" data-roll-mode="${d.initiativeAdvantage ? "advantage" : "normal"}" data-modifier="${d.initiative}"><small>INITIATIVE${helpChip("initiative")}</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong><i class="stat-info" data-stat-breakdown="initiative" data-character="${c.id}" title="How is this calculated?">i</i></button>
       <button data-stat-breakdown="ac" data-character="${c.id}" title="How is this calculated?"><small>ARMOR CLASS${helpChip("ac")}</small><strong>${d.ac}</strong><i class="stat-info">i</i></button>
       <button data-sheet-section-jump="overview"><small>HIT POINTS${helpChip("hp")}</small><strong>${currentHp}/${maximumHp}</strong><i class="stat-info" data-stat-breakdown="hp" data-character="${c.id}" title="How is this calculated?">i</i></button>
@@ -10650,7 +10949,7 @@ function renderSheet() {
         return `<button type="button" data-sheet-roll="${ability} saving throw" data-modifier="${saveModifier}"><span class="${proficient ? "proficient" : ""}">${ability}</span><strong>${signed(saveModifier)}</strong></button>`;
       }).join("")}</div>
     </section>
-    <section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${skillsForEdition(c.edition).map(skill => { const ability = SKILLS[skill];
+    ${isAdnd(c) ? "" : `<section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${skillsForEdition(c.edition).map(skill => { const ability = SKILLS[skill];
       const proficient = proficientSkills(c).has(skill);
       const expertise = expertiseSkills(c).has(skill);
       const value = skillModifier(c, skill);
@@ -10664,16 +10963,19 @@ function renderSheet() {
         return `<button class="skill-roll${d35.untrained ? " skill-untrained" : ""}" data-sheet-roll="${skill}" data-modifier="${d35.total}"><span class="${d35.ranks ? "proficient" : ""}">${skill} <small>(${d35.ability}) ${note}</small></span><strong>${signed(d35.total)}</strong></button>`;
       }
       return `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${value}"><span class="${proficient ? "proficient" : ""}">${skill} <small>(${ability})${expertise ? " · Expertise" : ""}</small></span><strong>${signed(value)}</strong></button>`;
-    }).join("")}</div></section>
+    }).join("")}</div></section>`}
     ${renderAttacksPanel(c, sectionClass("overview"))}
     <section class="sheet-panel sheet-wide ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <div class="combat-stat-grid">
         <div class="combat-stat"><small>Speed</small><strong>${walkSpeed} ft</strong></div>
         <div class="combat-stat"><small>Initiative</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></div>
-        <div class="combat-stat"><small>${isD35(c) ? "Base Attack" : "Proficiency"}</small><strong>${signed(d.prof)}</strong></div>
+        <div class="combat-stat"><small>${isAdnd(c) ? "THAC0" : isD35(c) ? "Base Attack" : "Proficiency"}</small><strong>${isAdnd(c) ? d.prof : signed(d.prof)}</strong></div>
         <div class="combat-stat"><small>Hit Dice</small><strong>${escapeHtml(hitDice)}</strong></div>
-        ${isD35(c) ? `<div class="combat-stat"><small>Passive Spot</small><strong>${d.passive}</strong></div>
+        ${isAdnd(c) ? `<div class="combat-stat"><small>Hit adjustment</small><strong>${signed(d.adnd.hitAdj)}</strong></div>
+        <div class="combat-stat"><small>Damage adjustment</small><strong>${signed(d.adnd.damageAdj)}</strong></div>
+        <div class="combat-stat"><small>Rear Armor Class</small><strong>${adndArmorClass(c).rearAc}</strong></div>`
+        : isD35(c) ? `<div class="combat-stat"><small>Passive Spot</small><strong>${d.passive}</strong></div>
         <div class="combat-stat"><small>Grapple</small><strong>${signed(d35GrappleModifier(c))}</strong></div>
         <div class="combat-stat"><small>Size</small><strong>${escapeHtml(c.size || (D35_RACES[c.species] || {}).size || "Medium")}</strong></div>`
         : `<div class="combat-stat"><small>Passive Perception</small><strong>${d.passive}</strong></div>
@@ -10684,7 +10986,10 @@ function renderSheet() {
       <div class="combat-detail-grid">
         <div class="combat-detail"><small>Armor Class</small><span>${escapeHtml(d.acSource)}</span></div>
         <div class="combat-detail"><small>Initiative bonus</small><span>${escapeHtml(d.initiativeSource)}${d.initiativeAdvantage ? " · advantage" : ""}</span></div>
-        ${isD35(c) ? `<div class="combat-detail"><small>Saving throws</small><span>Fort ${signed(d35SaveBonus(c, "fort").total)} · Ref ${signed(d35SaveBonus(c, "ref").total)} · Will ${signed(d35SaveBonus(c, "will").total)}</span></div>
+        ${isAdnd(c) ? `<div class="combat-detail"><small>Saving throws</small><span>${adndSaves(c).map(row => `${row.short} ${row.target}`).join(" · ")}</span></div>
+        <div class="combat-detail"><small>Class group</small><span>${escapeHtml(adndClassGroup(c))}</span></div>
+        <div class="combat-detail"><small>Level limit</small><span>${adndLevelLimit(c) || "None -- humans are unlimited"}</span></div>`
+        : isD35(c) ? `<div class="combat-detail"><small>Saving throws</small><span>Fort ${signed(d35SaveBonus(c, "fort").total)} · Ref ${signed(d35SaveBonus(c, "ref").total)} · Will ${signed(d35SaveBonus(c, "will").total)}</span></div>
         <div class="combat-detail"><small>Skill ranks spent</small><span>${Object.entries(c.skillRanks || {}).filter(([, n]) => Number(n) > 0).map(([skill, n]) => `${skill} ${n}`).join(", ") || "None spent"}</span></div>
         <div class="combat-detail"><small>Racial traits</small><span>${escapeHtml(((typeof D35_RACE_TRAITS !== "undefined" && D35_RACE_TRAITS[c.species]) || []).map(([name]) => name).join(", ") || "None")}</span></div>`
         : `<div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
@@ -10700,6 +11005,9 @@ function renderSheet() {
       <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
+    ${renderAdndAttacks(c, sectionClass("overview"))}
+    ${renderAdndThiefSkills(c, sectionClass("overview"))}
+    ${renderAdndSpells(c, sectionClass("overview"))}
     ${renderD35Attacks(c, sectionClass("overview"))}
     ${renderD35Domains(c, sectionClass("features"))}
     ${renderD35Spellbook(c, sectionClass("overview"))}
@@ -10805,6 +11113,7 @@ function subclassLevel(className, rulesEdition) {
   // 3.5 core classes have no subclasses at all, so nothing ever unlocks one.
   // Returning a level past 20 keeps every "have you reached it yet" check false
   // without each caller needing to know about the edition.
+  if (rulesEdition === "adnd2e") return Infinity;
   if (rulesEdition === "d35") return Infinity;
   if (rulesEdition === "2024") return 3;
   if (["Cleric", "Sorcerer", "Warlock"].includes(className)) return 1;
@@ -13736,6 +14045,7 @@ function init() {
   // data file, so it registers once app.js has loaded and before first render.
   if (typeof registerSw5eRuntime === "function") registerSw5eRuntime();
   if (typeof registerD35Runtime === "function") registerD35Runtime();
+  if (typeof registerAdndRuntime === "function") registerAdndRuntime();
   seedDemo(); buildAbilities(); populateRules(); resetPortrait(); initDice(); initTheme(); initEvents(); updatePreview(); updateAccount(); renderCards(); setStep(1); navigate(routeViewFromHash(), { replace: true });
   initCloud();
 }

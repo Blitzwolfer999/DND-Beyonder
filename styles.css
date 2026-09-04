@@ -3982,3 +3982,49 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 /* ===== Compendium tabs & magic items ===== */
 .compendium-tabs { margin-bottom: 12px; }
 .magic-item-summary { margin: 0; color: var(--muted); font: 500 12px/1.5 system-ui, sans-serif; }
+
+/* ===== AD&D 2E sheet =====
+   2E carries THAC0, a descending Armor Class and five save categories, so the
+   header runs wider than the 5e grid and wraps. */
+.sheet-core.adnd-core { grid-template-columns: repeat(3, 96px); }
+.sheet-core.adnd-core strong { font-size: 20px; }
+.sheet-core.adnd-core button { padding: 10px 4px; }
+.adnd-strip {
+  /* The header is a three-column grid, so without this the strip drops into the
+     narrow portrait column and the numbers collapse to nothing. */
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; gap: 18px; margin-top: 10px; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.adnd-strip span { display: grid; gap: 1px; }
+.adnd-strip small { color: var(--muted); font: 700 9px/1.4 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em; }
+.adnd-strip strong { font: 700 14px/1.2 Cinzel, serif; font-variant-numeric: tabular-nums; }
+.adnd-strip .adnd-limit strong { color: #a4552a; }
+.adnd-matrix { display: grid; gap: 4px; overflow-x: auto; }
+.adnd-matrix-row { display: grid; grid-template-columns: 88px repeat(8, minmax(38px, 1fr)); gap: 4px; }
+.adnd-matrix-row span {
+  padding: 6px 2px; text-align: center; border: 1px solid var(--line); border-radius: 7px;
+  font: 600 13px/1.2 system-ui, sans-serif; font-variant-numeric: tabular-nums;
+}
+.adnd-matrix-row span:first-child { text-align: left; padding-left: 9px; color: var(--muted); font-weight: 700; }
+.adnd-matrix-head span { background: var(--panel); font-weight: 800; }
+.adnd-skill-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 7px; }
+.adnd-skill {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: inherit; cursor: pointer; text-align: left;
+}
+.adnd-skill:hover { border-color: var(--gold, #c9a227); }
+.adnd-skill small { display: block; color: var(--muted); font: 500 10px/1.4 system-ui, sans-serif; }
+.adnd-skill strong { font: 700 15px/1.2 Cinzel, serif; }
+.adnd-slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.adnd-slot {
+  padding: 9px 6px; text-align: center; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--panel);
+}
+.adnd-slot small { display: block; color: var(--muted); font: 700 10px/1.4 system-ui, sans-serif; }
+.adnd-slot strong { display: block; font: 700 20px/1.2 Cinzel, serif; }
+.adnd-slot em { font-style: normal; color: var(--muted); font: 600 10px/1.4 system-ui, sans-serif; }
+@media (max-width: 620px) {
+  .adnd-matrix-row { grid-template-columns: 74px repeat(8, 40px); }
+}

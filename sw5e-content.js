@@ -27,6 +27,9 @@ function skillsForEdition(rulesEdition) {
   // 3.5 has its own skill list -- Spot and Listen rather than Perception, Hide
   // and Move Silently rather than Stealth -- so it never falls back to the 5e
   // names, which would otherwise show skills the edition does not have.
+  // 2E has no ability-keyed skill list at all: a thief has percentage skills
+  // and everyone else has nonweapon proficiencies, both handled elsewhere.
+  if (rulesEdition === "adnd2e") return [];
   if (rulesEdition === "d35" && typeof D35_SKILLS !== "undefined") return Object.keys(D35_SKILLS);
   if (rulesEdition !== "sw5e") {
     return all.filter(name => !SW5E_SKILLS[name]
