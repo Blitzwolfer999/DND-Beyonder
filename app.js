@@ -3944,7 +3944,7 @@ function applyD35SkillRank(input) {
   updatePreview();
 }
 
-function resetD35SkillDraft() { d35SkillRankDraft = {}; selectedD35Domains = new Set(); }
+function resetD35SkillDraft() { d35SkillRankDraft = {}; selectedD35Domains = new Set(); adndThiefDraft = {}; }
 
 function setGameSetting(setting, options = {}) {
   const target = setting === "starwars" ? "sw5e" : (lastDndEdition || "2014");
@@ -6415,6 +6415,77 @@ function renderD35FeatChoices() {
     }).join("");
 }
 
+// 2E gives a thief 30 discretionary points a level to raise the eight skills,
+// on top of the racial and Dexterity adjustments already baked in.
+let adndThiefDraft = {};
+
+function adndBuilderCharacter() {
+  const level = Number(form.elements.level?.value || 1);
+  const abilities = Object.fromEntries(ABILITIES.map(ability =>
+    [ability, Number(form.elements[ability]?.value || 10)]));
+  return {
+    edition: "adnd2e", className: selectedClass, level,
+    classes: [{ name: selectedClass, level }],
+    species: $("#species-select")?.value || "Human",
+    strPercentile: Number(form.elements.strPercentile?.value || 0),
+    thiefSkillPoints: adndThiefDraft,
+    inventory: [], ...abilities
+  };
+}
+
+function renderAdndThiefBuilder() {
+  const section = $("#adnd-thief-section");
+  const list = $("#adnd-thief-list");
+  if (!section || !list) return;
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[selectedClass]) || {};
+  const show = edition === "adnd2e" && Boolean(cls.thiefSkills);
+  section.classList.toggle("hidden", !show);
+  if (!show) return;
+  const character = adndBuilderCharacter();
+  const budget = adndThiefPointBudget(character);
+  const spent = Object.values(adndThiefDraft).reduce((total, n) => total + Number(n || 0), 0);
+  const remaining = budget - spent;
+  const meter = $("#adnd-thief-budget");
+  if (meter) {
+    meter.textContent = `${remaining} of ${budget} points left`;
+    meter.classList.toggle("over", remaining < 0);
+  }
+  list.innerHTML = adndThiefSkills(character).map(skill => `<label class="adnd-thief-row">
+    <span class="adnd-thief-name">${escapeHtml(skill.name)}
+      <small>base ${skill.base}${skill.racial ? ` \u00b7 race ${signed(skill.racial)}` : ""}${skill.dex ? ` \u00b7 dex ${signed(skill.dex)}` : ""}</small></span>
+    <input type="number" min="0" max="95" value="${skill.allocated}" data-adnd-thief="${escapeHtml(skill.name)}" inputmode="numeric">
+    <span class="adnd-thief-total">${skill.total}%</span>
+  </label>`).join("");
+}
+
+function applyAdndThiefPoints(input) {
+  const skill = input.dataset.adndThief;
+  const value = Math.max(0, Math.min(95, Math.round(Number(input.value) || 0)));
+  if (value) adndThiefDraft[skill] = value; else delete adndThiefDraft[skill];
+  input.value = value;
+  renderAdndThiefBuilder();
+  updatePreview();
+}
+
+// Exceptional Strength is a warrior-only percentile rolled on a Strength of 18.
+function renderAdndStrengthField() {
+  const wrap = $("#adnd-strength-wrap");
+  if (!wrap) return;
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[selectedClass]) || {};
+  const score = Number(form.elements.STR?.value || 10);
+  const show = edition === "adnd2e" && Boolean(cls.exceptionalStrength) && score === 18;
+  wrap.classList.toggle("hidden", !show);
+  if (!show) return;
+  const note = $("#adnd-strength-note");
+  if (note) {
+    const character = adndBuilderCharacter();
+    const strength = adndStrength(character);
+    note.textContent = strength.percentile
+      ? `${strength.display} \u00b7 ${signed(strength.hit)} to hit, ${signed(strength.dmg)} damage`
+      : "Roll d100. Warriors with Strength 18 fight better the higher they roll.";
+  }
+}
+
 function renderD35SkillChoices() {
   const section = $("#d35-skills-section");
   const list = $("#d35-skill-list");
@@ -6458,6 +6529,8 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   renderD35SkillChoices();
   renderD35FeatChoices();
   renderD35DomainChoices();
+  renderAdndThiefBuilder();
+  renderAdndStrengthField();
   $$("select[data-asi-mode]").forEach(select => {
     selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
     selectedAsi[select.dataset.asiMode].mode = select.value;
@@ -6833,6 +6906,16 @@ function formData() {
       ? kit.filter((item, index) => selectedEquipment.has(String(index)))
       : kit;
     data.currency = existing?.currency || { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 };
+  }
+  if (edition === "adnd2e") {
+    data.thiefSkillPoints = { ...adndThiefDraft };
+    data.strPercentile = Number(data.strPercentile || 0);
+    // 2E has none of the 5e choice fields.
+    data.skillProficiencies = [];
+    data.backgroundSkills = [];
+    data.expertise = [];
+    data.feats = [];
+    data.originFeat = "";
   }
   if (edition === "d35") {
     data.skillRanks = { ...d35SkillRankDraft };
@@ -8090,9 +8173,12 @@ function adndArmorClass(character) {
   let ac = 10;
   let shield = 0;
   equippedItems(character).forEach(item => {
-    const rating = Number(item.acRating || 0);
+    // Armour is looked up by name in the 2E table; an item may also carry its
+    // own rating, which covers homebrew and magical pieces.
+    const rule = (typeof ADND_ARMOR !== "undefined" && ADND_ARMOR[item.baseArmor || item.name]) || null;
+    const rating = Number(item.acRating || (rule ? rule.rating : 0));
     if (!rating) return;
-    if (/shield/i.test(item.name || "")) { shield += rating; return; }
+    if ((rule && rule.shield) || /shield|buckler/i.test(item.name || "")) { shield += rating; return; }
     ac = Math.min(ac, 10 - rating);
     parts.push({ label: `${item.name}`, value: -rating });
   });
@@ -8662,6 +8748,47 @@ function renderD35Spellbook(c, sectionClassName) {
 
 // The 2E header. THAC0 replaces an attack bonus, Armor Class counts down, and
 // the five saving throw categories each get their own target number.
+// A 2E attack line: the number needed against Armor Class 0 after adjustments,
+// with the damage split by target size and the speed factor that decides who
+// strikes first inside an initiative count.
+function adndWeaponAttacks(character) {
+  if (typeof ADND_WEAPONS === "undefined") return [];
+  const d = adndDerived(character);
+  return equippedItems(character).map(item => {
+    const rule = ADND_WEAPONS[item.baseWeapon || item.name];
+    if (!rule) return null;
+    const missile = Boolean(rule.missile);
+    const adj = missile ? d.missileAdj : d.hitAdj;
+    const magic = magicItemBonus(item);
+    return {
+      name: item.name, group: rule.group,
+      thac0: Math.max(1, d.thac0 - adj - magic),
+      dmgSM: rule.dmgSM, dmgL: rule.dmgL,
+      damageAdj: missile ? 0 : d.damageAdj + magic,
+      speed: rule.speed, range: rule.range || "",
+      twoHanded: Boolean(rule.twoHanded)
+    };
+  }).filter(Boolean);
+}
+
+function renderAdndWeapons(c, sectionClassName) {
+  if (!isAdnd(c)) return "";
+  const attacks = adndWeaponAttacks(c);
+  if (!attacks.length) return "";
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Weapons</h2><span>Adjusted THAC0, damage by target size, and speed factor.</span></div>
+    <div class="adnd-weapon-list">
+      ${attacks.map(attack => `<article class="adnd-weapon">
+        <div><strong>${escapeHtml(attack.name)}</strong><small>${escapeHtml(attack.group)}${attack.twoHanded ? " \u00b7 two-handed" : ""}${attack.range ? ` \u00b7 range ${escapeHtml(attack.range)}` : ""}</small></div>
+        <button type="button" data-sheet-roll="${escapeHtml(attack.name)}" data-modifier="0"><small>THAC0</small>${attack.thac0}</button>
+        <span><small>vs S/M</small>${escapeHtml(attack.dmgSM)}${attack.damageAdj ? signed(attack.damageAdj) : ""}</span>
+        <span><small>vs L</small>${escapeHtml(attack.dmgL)}${attack.damageAdj ? signed(attack.damageAdj) : ""}</span>
+        <span><small>Speed</small>${attack.speed}</span>
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
 function renderAdndCoreStats(c, currentHp, maximumHp) {
   const d = adndDerived(c);
   const save = row => `<button data-sheet-roll="${escapeHtml(row.short)} save" data-modifier="0">
@@ -11005,6 +11132,7 @@ function renderSheet() {
       <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
+    ${renderAdndWeapons(c, sectionClass("overview"))}
     ${renderAdndAttacks(c, sectionClass("overview"))}
     ${renderAdndThiefSkills(c, sectionClass("overview"))}
     ${renderAdndSpells(c, sectionClass("overview"))}
@@ -11069,6 +11197,7 @@ function editCharacter(id) {
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
   selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
   d35SkillRankDraft = { ...(c.skillRanks || {}) };
+  adndThiefDraft = { ...(c.thiefSkillPoints || {}) };
   selectedD35Domains = new Set(c.domains || []);
   showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
@@ -13035,11 +13164,14 @@ function initEvents() {
     }
   });
   form.addEventListener("input", event => {
+    if (event.target.name === "strPercentile") { renderAdndStrengthField(); updatePreview(); return; }
+    if (event.target.dataset?.adndThief) { applyAdndThiefPoints(event.target); return; }
     if (event.target.dataset?.d35Skill) { applyD35SkillRank(event.target); return; }
     if (ABILITIES.includes(event.target.name)) {
       enforceAbilityCaps();
       updateAbilityMethodStatus();
       renderTalentChoices();
+      renderAdndStrengthField();
     }
     updatePreview();
     if (event.target.name === "level") {
@@ -13068,6 +13200,7 @@ function initEvents() {
       updatePreview();
       return;
     }
+    if (event.target.dataset.adndThief) { applyAdndThiefPoints(event.target); return; }
     if (event.target.dataset.d35Domain) {
       const name = event.target.dataset.d35Domain;
       if (event.target.checked) selectedD35Domains.add(name); else selectedD35Domains.delete(name);
