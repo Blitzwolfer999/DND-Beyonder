@@ -4032,7 +4032,7 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 /* ===== 2E weapons and builder controls ===== */
 .adnd-weapon-list { display: grid; gap: 7px; }
 .adnd-weapon {
-  display: grid; grid-template-columns: 1fr auto auto auto auto; align-items: center; gap: 12px;
+  display: grid; grid-template-columns: 1fr auto auto auto auto auto; align-items: center; gap: 12px;
   padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
 }
 .adnd-weapon small { display: block; color: var(--muted); font: 500 10px/1.4 system-ui, sans-serif; }
@@ -4052,6 +4052,13 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .adnd-thief-row input { width: 100%; text-align: center; }
 .adnd-thief-total { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
 .adnd-strength-note { margin: 6px 0 0; color: var(--muted); font: 500 12px/1.5 system-ui, sans-serif; }
+.adnd-monk-feature {
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.adnd-monk-feature span { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.adnd-monk-feature strong { font: 600 13px/1.3 system-ui, sans-serif; }
+.adnd-monk-feature small { color: var(--muted); font: 700 9px/1.4 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.adnd-monk-feature p { margin: 5px 0 0; color: var(--muted); font: 500 12px/1.55 system-ui, sans-serif; }
 @media (max-width: 620px) {
   .adnd-weapon { grid-template-columns: 1fr auto; gap: 6px; }
 }

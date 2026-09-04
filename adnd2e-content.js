@@ -105,6 +105,16 @@ const ADND_CLASSES = {
     hpAfter9: 1,
     summary: "A priest of the natural world who shapechanges, charms animals and answers to the balance rather than a deity."
   },
+  Monk: {
+    icon: "\u262f", group: "priest", hit: 8, prime: ["WIS"],
+    minimums: { STR: 9, DEX: 13, WIS: 9 }, alignment: "Lawful evil",
+    races: ["Human"], monk: true, monkSkills: true, origin: "The Scarlet Brotherhood",
+    xp: [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000, 450000, 675000,
+         900000, 1125000, 1350000, 1575000, 1800000, 2025000, 2250000, 2475000, 2700000],
+    hpAfter9: 2,
+    note: "The published table and the surrounding text disagree over when the +2 open hand and astral projection arrive. The table's levels are used here.",
+    summary: "A martial ascetic who fights barehanded, grows harder to hit every other level, and adds a new bodily discipline almost every level after that. The 2E Player's Handbook left the class out; it returned in a 1999 supplement."
+  },
   Mage: {
     icon: "✶", group: "wizard", hit: 4, prime: ["INT"], minimums: { INT: 9 },
     races: ["Human", "Elf", "Half-Elf"], caster: "wizard",
@@ -157,6 +167,146 @@ const ADND_RACES = {
     limits: { Fighter: 10, Cleric: 4, Thief: 8 },
     summary: "Powerfully built and widely mistrusted, which most of them have stopped minding." }
 };
+
+// The eight schools a wizard may specialise in. Lesser divination is missing
+// from the list on purpose: those spells are the trade's common ground and stay
+// open to every wizard, specialist or not.
+const ADND_WIZARD_SCHOOLS = {
+  "Abjuration": "Wards, bindings and dispellings -- magic that keeps things out or shuts them down.",
+  "Conjuration/Summoning": "Fetching matter and creatures here from somewhere else.",
+  "Greater Divination": "Prising loose knowledge the caster has no ordinary way to reach.",
+  "Enchantment/Charm": "Bending a mind, or investing an object with power.",
+  "Illusion": "Images, phantasms and shadow-stuff that argue with the senses.",
+  "Invocation/Evocation": "Raw energy shaped into force, fire and lightning.",
+  "Necromancy": "Life force, death, and the bodies left behind.",
+  "Alteration": "Changing what a thing is -- its shape, its size, its nature."
+};
+
+// A specialist trades breadth for depth: an extra spell of their own school at
+// every spell level, better odds of learning inside it and worse outside, a
+// save modifier both ways, and the schools opposite theirs closed off entirely.
+const ADND_SPECIALIST_BENEFITS = [
+  "One extra spell slot at every spell level, which must hold a spell of the specialist's school.",
+  "+1 on saves against school spells cast by other wizards; targets take -1 saving against the specialist's own.",
+  "+15% to learn a spell of the school, -15% to learn any spell outside it.",
+  "One free school spell added to the book on reaching each new spell level, with no roll to learn it.",
+  "Research inside the school is treated as one spell level easier."
+];
+
+const ADND_SPECIALISTS = {
+  Abjurer: { icon: "\u26e8", school: "Abjuration", ability: { WIS: 15 }, races: ["Human"],
+    opposition: ["Alteration", "Illusion"],
+    summary: "Turns magic aside for a living. Buys that safety by giving up the schools that change things and the schools that lie." },
+  Conjurer: { icon: "\u25ce", school: "Conjuration/Summoning", ability: { CON: 15 }, races: ["Human", "Half-Elf"],
+    opposition: ["Greater Divination", "Invocation/Evocation"],
+    summary: "Brings matter and creatures in from elsewhere, and needs the constitution to keep hold of what answers." },
+  Diviner: { icon: "\u25c9", school: "Greater Divination", ability: { WIS: 16 }, races: ["Human", "Half-Elf", "Elf"],
+    opposition: ["Conjuration/Summoning"],
+    summary: "Knows things. Loses the least to specialisation and gains the least in a fight -- worth consulting before an adventure rather than during one." },
+  Enchanter: { icon: "\u2765", school: "Enchantment/Charm", ability: { CHA: 16 }, races: ["Human", "Half-Elf", "Elf"],
+    opposition: ["Invocation/Evocation", "Necromancy"],
+    summary: "Works on minds and on objects, and gives up every spell that solves a problem by destroying it." },
+  Illusionist: { icon: "\u25d0", school: "Illusion", ability: { DEX: 16 }, races: ["Human", "Gnome"],
+    opposition: ["Necromancy", "Invocation/Evocation", "Abjuration"],
+    summary: "Persuades the senses rather than the world. Pays the steepest price -- three closed schools -- and is the one specialty a gnome can take." },
+  Invoker: { icon: "\u26a1", school: "Invocation/Evocation", ability: { CON: 16 }, races: ["Human"],
+    opposition: ["Enchantment/Charm", "Conjuration/Summoning"],
+    summary: "The artillery. Trades every spell that talks its way out of trouble for the ones that end it." },
+  Necromancer: { icon: "\u2620", school: "Necromancy", ability: { WIS: 16 }, races: ["Human"],
+    opposition: ["Illusion", "Enchantment/Charm"],
+    summary: "Studies life force and what remains after it. Rare, mistrusted, and shut out of every spell that works by persuasion." },
+  Transmuter: { icon: "\u27f3", school: "Alteration", ability: { DEX: 15 }, races: ["Human", "Half-Elf"],
+    opposition: ["Abjuration", "Necromancy"],
+    summary: "Changes what things are. The broadest specialty, closed off from warding magic and from the dead." }
+};
+
+// Each specialist is a mage underneath: same hit die, same THAC0 and saves,
+// same experience table. Only the entry requirements and the school change.
+Object.entries(ADND_SPECIALISTS).forEach(([name, spec]) => {
+  ADND_CLASSES[name] = {
+    ...ADND_CLASSES.Mage,
+    icon: spec.icon,
+    minimums: { INT: 9, ...spec.ability },
+    races: [...spec.races],
+    specialist: spec.school,
+    opposition: [...spec.opposition],
+    origin: "Specialist wizard",
+    summary: spec.summary
+  };
+  // Level limits follow the mage's, except for gnomes -- who cannot be mages at
+  // all, but may study illusion as far as 15th level.
+  spec.races.forEach(raceName => {
+    const race = ADND_RACES[raceName];
+    if (!race) return;
+    const limit = raceName === "Gnome" ? 15 : (race.limits || {}).Mage;
+    if (limit) race.limits[name] = limit;
+  });
+});
+
+// The monk's progression. Unarmed attacks are printed as they are in play:
+// "3/2" means three attacks every two rounds. The Armor Class column is a bonus
+// against a descending scale, so it is subtracted from 10.
+const ADND_MONK_TABLE = [
+  { level: 1, move: 12, attacks: "1", damage: "1d4", ac: 1 },
+  { level: 2, move: 12, attacks: "1", damage: "1d4", ac: 2 },
+  { level: 3, move: 12, attacks: "1", damage: "1d6", ac: 2 },
+  { level: 4, move: 15, attacks: "3/2", damage: "1d6", ac: 3 },
+  { level: 5, move: 15, attacks: "3/2", damage: "1d6", ac: 3 },
+  { level: 6, move: 15, attacks: "3/2", damage: "1d6+1", ac: 4 },
+  { level: 7, move: 18, attacks: "2", damage: "1d6+1", ac: 4 },
+  { level: 8, move: 18, attacks: "2", damage: "1d6+1", ac: 5 },
+  { level: 9, move: 18, attacks: "2", damage: "1d8", ac: 5 },
+  { level: 10, move: 21, attacks: "5/2", damage: "1d8", ac: 6 },
+  { level: 11, move: 21, attacks: "5/2", damage: "1d8", ac: 6 },
+  { level: 12, move: 21, attacks: "5/2", damage: "1d8+1", ac: 7 },
+  { level: 13, move: 24, attacks: "3", damage: "1d8+1", ac: 7 },
+  { level: 14, move: 24, attacks: "3", damage: "1d8+1", ac: 8 },
+  { level: 15, move: 24, attacks: "3", damage: "1d10", ac: 8 },
+  { level: 16, move: 27, attacks: "7/2", damage: "1d10", ac: 9 },
+  { level: 17, move: 27, attacks: "7/2", damage: "1d10", ac: 9 },
+  { level: 18, move: 27, attacks: "7/2", damage: "1d12", ac: 10 },
+  { level: 19, move: 30, attacks: "4", damage: "1d12", ac: 10 },
+  { level: 20, move: 30, attacks: "4", damage: "1d12", ac: 10 }
+];
+
+function adndMonkRow(level) {
+  const lvl = Math.max(1, Math.min(ADND_MONK_TABLE.length, Number(level) || 1));
+  return ADND_MONK_TABLE[lvl - 1];
+}
+
+// A monk's percentile skills. Shorter list than a thief's, different bases, and
+// no racial adjustments -- the class is open to humans only.
+const ADND_MONK_SKILLS = {
+  "Climb Walls": { base: 50, dex: {} },
+  "Find Traps": { base: 5, dex: {} },
+  "Hear Noise": { base: 10, dex: {} },
+  "Hide in Shadows": { base: 5, dex: {} },
+  "Move Silently": { base: 5, dex: {} }
+};
+
+const ADND_MONK_FEATURES = [
+  { level: 1, name: "Open hand", text: "Hands and feet do lethal damage on their own, on the progression in the monk table. Armour is forbidden; Armor Class improves with level instead." },
+  { level: 1, name: "Anatomical strike", text: "Against a creature built along familiar lines -- bone, muscle, joints -- a weapon in the monk's hands does extra damage equal to half the monk's level, rounded up. Slimes and gaseous things are unmoved by it." },
+  { level: 1, name: "Stunning blow", text: "Once a day per level, declare a stun before rolling. On a hit the target saves against paralyzation or loses its action and its Dexterity bonus for a round." },
+  { level: 1, name: "Missile deflection", text: "Forgo everything else in the round and save against petrification to knock aside one arrow, bolt or thrown weapon." },
+  { level: 1, name: "Perfect evasion", text: "Any attack the monk saves against does no damage at all, not half -- a fireball included." },
+  { level: 2, name: "Killing blow", text: "A stunning strike may be pressed further: the stunned target saves against paralyzation at +4 or dies." },
+  { level: 3, name: "Guarded mind", text: "A save against death magic at +2 shuts out ESP and other attempts to read the monk's thoughts." },
+  { level: 4, name: "Slow fall (20 feet)", text: "Within a foot of a wall or something equally solid, a 20-foot fall costs nothing." },
+  { level: 5, name: "Iron constitution", text: "Immune to disease, and to haste and slow alike." },
+  { level: 6, name: "Slow fall (30 feet)", text: "Within four feet of a wall, the safe distance grows to 30 feet." },
+  { level: 7, name: "Inner healing", text: "Once a day the monk knits 2 hit points per level back together." },
+  { level: 8, name: "Master of Dragons", text: "Slow fall reaches 50 feet within six feet of a wall, and initiative rolls improve by 1." },
+  { level: 9, name: "Master of the North Wind", text: "A save against wands shrugs off charm effects outright; only if it fails do the normal saves apply." },
+  { level: 10, name: "Master of the East Wind", text: "Open-hand strikes count as +1 weapons against creatures only magic can wound." },
+  { level: 11, name: "Master of the South Wind", text: "Immune to poison." },
+  { level: 12, name: "Master of the West Wind", text: "The initiative bonus improves to 2." },
+  { level: 13, name: "Master of Winter", text: "Quivering palm: once a week, declared before an open-hand strike, against a man-sized or smaller creature of lower level. The blow does normal damage, and at any point within a day per level the monk may will the target dead -- it saves against death magic to survive." },
+  { level: 14, name: "Master of Autumn", text: "A saving throw against a magical attack is always allowed, even where none normally is." },
+  { level: 15, name: "Master of Summer", text: "A 90% chance of a premonition 1-4 turns before death or serious harm." },
+  { level: 17, name: "Master of Spring", text: "Open-hand strikes count as +2 weapons against creatures only magic can wound." },
+  { level: 19, name: "Grand Master of Flowers", text: "Once a week the monk may leave their body for the Astral Plane and stay as long as they like. The body left behind still needs feeding." }
+];
 
 // Ability score effects. Scores run 3 to 18, and warriors may roll exceptional
 // Strength as a percentile above 18.
@@ -304,6 +454,13 @@ if (typeof window !== "undefined") {
   window.ADND_THIEF_SKILLS = ADND_THIEF_SKILLS;
   window.ADND_THIEF_RACIAL = ADND_THIEF_RACIAL;
   window.ADND_SPELL_SLOTS = ADND_SPELL_SLOTS;
+  window.ADND_WIZARD_SCHOOLS = ADND_WIZARD_SCHOOLS;
+  window.ADND_SPECIALISTS = ADND_SPECIALISTS;
+  window.ADND_SPECIALIST_BENEFITS = ADND_SPECIALIST_BENEFITS;
+  window.ADND_MONK_TABLE = ADND_MONK_TABLE;
+  window.ADND_MONK_SKILLS = ADND_MONK_SKILLS;
+  window.ADND_MONK_FEATURES = ADND_MONK_FEATURES;
+  window.adndMonkRow = adndMonkRow;
   window.adndThac0 = adndThac0;
   window.adndSaveTargets = adndSaveTargets;
 }
