@@ -4071,12 +4071,56 @@ function syncRulesetToggles() {
   });
   const editionToggle = $(".edition-toggle");
   if (editionToggle) editionToggle.classList.toggle("single", setting === "starwars");
+  syncCreationMethods();
 }
+
+// Both the theme builder and the premade heroes are built on a 5e subclass:
+// "Battle Master", "Circle of the Moon". 2E and 3.5 have no subclasses, so the
+// choice was being offered and then stripped, and the character you got was not
+// the one the card described. Those two methods step aside instead.
+const SUBCLASS_LED_METHODS = ["theme", "premade"];
+
+function syncCreationMethods() {
+  const subclassLess = EDITIONS_WITHOUT_5E_CHOICES.has(edition);
+  SUBCLASS_LED_METHODS.forEach(method => {
+    $$(`#creation-methods [data-creation-method="${method}"]`).forEach(card =>
+      card.classList.toggle("hidden", subclassLess));
+  });
+  $("#prebuild-subclass-field")?.classList.toggle("hidden", subclassLess);
+}
+// 2E's Mage, Thief and eight specialists have no 5e namesake, so they have no
+// quick-build profile. quickOrigin read profile.abilities straight off and
+// threw, which meant ten of the seventeen 2E classes could not be quick-built
+// at all. Falling back to the fighter's profile would be worse than a crash in
+// its own way -- it would hand a mage a 15 in Strength -- so the priorities are
+// taken from the class's own prime requisites.
+function synthesizedQuickProfile(className, rulesEdition) {
+  const base = QUICK_BUILD_PROFILES.Fighter || {};
+  let primes = [];
+  let tagline = "";
+  if (rulesEdition === "adnd2e" && typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[className]) {
+    primes = ADND_CLASSES[className].prime || [];
+    tagline = ADND_CLASSES[className].summary || "";
+  } else if (rulesEdition === "d35" && typeof D35_CLASSES !== "undefined" && D35_CLASSES[className]) {
+    primes = [D35_CLASSES[className].primary, D35_CLASSES[className].castingAbility].filter(Boolean);
+  }
+  const abilities = [...new Set([...primes, "CON", "DEX", "WIS", "STR", "INT", "CHA"])].slice(0, 6);
+  return {
+    ...base, abilities, role: className, tagline: tagline || base.tagline || "",
+    skills: [], masteries: [], spells: [], fightingStyle: "", backgrounds: {}
+  };
+}
+
 function quickBuildProfileFor(className, rulesEdition = edition) {
   if (rulesEdition === "sw5e" && typeof sw5eQuickProfile === "function") {
     return sw5eQuickProfile(className) || QUICK_BUILD_PROFILES[className];
   }
-  return QUICK_BUILD_PROFILES[className];
+  const profile = QUICK_BUILD_PROFILES[className];
+  if (profile) return profile;
+  // Never undefined: callers read .abilities and .backgrounds straight off, and
+  // the quick builder can hold a 2E class name for a moment after the edition
+  // has switched back to 5e.
+  return synthesizedQuickProfile(className, rulesEdition);
 }
 function prebuildAsiCount(className, level) {
   const baseLevels = [4, 8, 12, 16, 19];
@@ -5175,6 +5219,11 @@ function initializePrebuildBuilder() {
 }
 
 function showCreationMethod(method) {
+  if (SUBCLASS_LED_METHODS.includes(method) && EDITIONS_WITHOUT_5E_CHOICES.has(edition)) {
+    toast(`${editionLabel(edition)} has no subclasses, so that builder does not apply. Try Quick Build or the Full Builder.`);
+    showCreationMethod("choose");
+    return;
+  }
   if (method === "random") {
     initializeQuickBuilder();
     createRandomCharacter();
@@ -5250,8 +5299,19 @@ function surpriseQuickBuild() {
   setQuickStep(3);
 }
 
+// A 3.5 cleric, druid, paladin or ranger has its whole list available and
+// prepares from it each day: there is no set of spells to pick at build time.
+// Measured against the 5e "did you choose enough" rule they looked permanently
+// short by two hundred spells, and the generator refused to create them.
+function spellSelectionRequired(className, rulesEdition) {
+  if (rulesEdition !== "d35") return true;
+  if (typeof D35_SPELLS_KNOWN !== "undefined" && D35_SPELLS_KNOWN[className]) return true;
+  return className === "Wizard";
+}
+
 function generatedSpellIssue(character) {
   const className = primaryClassName(character);
+  if (!spellSelectionRequired(className, character.edition)) return "";
   const level = classLevel(character, className) || Number(character.level || 0);
   const subclass = classSubclassName(character, className);
   const lists = spellListsFor(character.edition, className, subclass);
@@ -6373,6 +6433,7 @@ function selectedSpellCounts() {
 function spellSelectionIssue(data) {
   const lists = spellListsFor(data.edition, data.className, data.subclass);
   if (!lists) return "";
+  if (!spellSelectionRequired(data.className, data.edition)) return "";
   const level = Number(data.level || 1);
   const allowed = maxSpellLevel(data.className, level, data.edition, data.subclass);
   const cantripLimit = cantripLimitFor(data.className, level, data.edition, data.subclass);
@@ -8938,11 +8999,42 @@ function finalizeAdndCharacter(character) {
     built.featBonuses = Object.fromEntries(ABILITIES.map(a => [a, 0]));
     built.adndRaceApplied = true;
   }
+  // 2E characters are rolled, not arrayed. A paladin needs Charisma 17 and a
+  // specialist a 15 or 16 in a second ability -- neither is reachable from the
+  // 5e standard array, so a generated character is raised to what its class
+  // actually demands rather than arriving illegal.
+  Object.entries(cls.minimums || {}).forEach(([ability, minimum]) => {
+    if (Number(built[ability] || 0) < Number(minimum)) built[ability] = Number(minimum);
+  });
   built.size = (ADND_RACES[built.species] || {}).size || "Medium";
   built.speed = (ADND_RACES[built.species] || {}).speed || 12;
   if (!cls.exceptionalStrength || Number(built.STR) !== 18) built.strPercentile = 0;
   if (cls.alignment) built.alignment = cls.alignment;
   built.spells = cls.caster ? (built.spells || []) : [];
+  // Spend the discretionary points, so a generated thief or monk is playable
+  // rather than arriving flagged incomplete.
+  if ((cls.thiefSkills || cls.monkSkills) && !Object.keys(built.thiefSkillPoints || {}).length) {
+    const skills = adndThiefSkills(built);
+    const cap = adndSkillPointCap(built);
+    let remaining = adndThiefPointBudget(built);
+    const spread = {};
+    // Two passes: an even share first, then whatever is left goes to the
+    // skills that can still take it.
+    const share = Math.floor(remaining / Math.max(1, skills.length));
+    skills.forEach(skill => {
+      const room = Math.min(cap, 95 - (skill.total - skill.allocated));
+      const give = Math.max(0, Math.min(share, room, remaining));
+      if (give) { spread[skill.name] = give; remaining -= give; }
+    });
+    skills.forEach(skill => {
+      if (remaining <= 0) return;
+      const already = spread[skill.name] || 0;
+      const room = Math.min(cap, 95 - (skill.total - skill.allocated)) - already;
+      const give = Math.max(0, Math.min(room, remaining));
+      if (give) { spread[skill.name] = already + give; remaining -= give; }
+    });
+    built.thiefSkillPoints = spread;
+  }
   return built;
 }
 
@@ -9008,6 +9100,15 @@ function finalizeD35Character(character) {
     const rank = Math.min(cap, affordable);
     if (rank > 0) { ranks[skill] = rank; budget -= rank * cost; }
   });
+  // A cleric chooses two domains; without them the character is flagged
+  // incomplete the moment it is generated.
+  if (classLevel(built, "Cleric") && (built.domains || []).length !== 2
+      && typeof D35_DOMAINS !== "undefined") {
+    const available = Object.keys(D35_DOMAINS);
+    const preferred = ["Healing", "Protection", "Good", "Strength", "War", "Luck"]
+      .filter(name => available.includes(name));
+    built.domains = [...new Set([...(built.domains || []), ...preferred, ...available])].slice(0, 2);
+  }
   built.skillRanks = ranks;
   built.skillProficiencies = [];
   built.backgroundSkills = [];
