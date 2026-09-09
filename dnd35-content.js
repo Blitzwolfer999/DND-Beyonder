@@ -258,11 +258,16 @@ function registerD35Runtime() {
   Object.entries(D35_SKILLS).forEach(([name, ability]) => { if (!SKILLS[name]) SKILLS[name] = ability; });
   RULES.species[ED] = Object.keys(D35_RACES);
   RULES.backgrounds[ED] = D35_BACKGROUNDS;
-  if (typeof FEATS !== "undefined") FEATS[ED] = D35_FEATS.map(feat => ({
+  // dnd35-feats.js carries the full SRD list; the shorter one in this file is a
+  // fallback for when that file has not loaded. Registration runs from init(),
+  // by which point the larger list is available.
+  const featSource = (typeof D35_FEAT_LIST !== "undefined" && D35_FEAT_LIST.length)
+    ? D35_FEAT_LIST : D35_FEATS;
+  if (typeof FEATS !== "undefined") FEATS[ED] = featSource.map(feat => ({
     name: feat.name, source: "3.5 SRD", category: "General", expanded: false, prerequisite: feat.prereq
   }));
   if (typeof CONTENT_SUMMARIES !== "undefined") {
-    D35_FEATS.forEach(feat => { if (!CONTENT_SUMMARIES.feats[feat.name]) CONTENT_SUMMARIES.feats[feat.name] = feat.summary; });
+    featSource.forEach(feat => { if (!CONTENT_SUMMARIES.feats[feat.name]) CONTENT_SUMMARIES.feats[feat.name] = feat.summary; });
     Object.entries(D35_RACES).forEach(([name, race]) => {
       if (!CONTENT_SUMMARIES.species[name]) CONTENT_SUMMARIES.species[name] = race.summary;
     });

@@ -3404,6 +3404,27 @@ function featAbilityBonuses(featNames = selectedFeatNames) {
   return bonuses;
 }
 
+// 3.5 and 2E share nothing with the 5e advancement furniture: no fighting
+// styles, no weapon mastery, no invocations, no expertise, no subclasses.
+const EDITIONS_WITHOUT_5E_CHOICES = new Set(["d35", "adnd2e"]);
+
+// Hit points gained on reaching a level, in that edition's own terms. 2E rolls
+// the class die with a Constitution bonus only warriors get in full, and stops
+// rolling after 9th level in favour of a flat gain.
+function levelHpGain(character, className, targetLevel) {
+  const rulesEdition = character.edition || edition;
+  const die = classHitDie(className, rulesEdition);
+  if (rulesEdition === "adnd2e") {
+    const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[className]) || {};
+    if (Number(targetLevel) > 9) return Math.max(1, Number(cls.hpAfter9 || 1));
+    const con = adndAbilityRow(ADND_CONSTITUTION, character.CON);
+    const bonus = adndClassGroup(character) === "warrior"
+      ? Number(con.warriorHp || 0) : Math.min(2, Number(con.hp || 0));
+    return Math.max(1, Math.floor(die / 2) + 1 + bonus);
+  }
+  return Math.max(1, Math.ceil(die / 2) + 1 + modifier(character.CON));
+}
+
 function advancementLevelsFor(className) {
   return className === "Fighter" ? [4, 6, 8, 12, 14, 16, 19]
     : className === "Rogue" ? [4, 8, 10, 12, 16, 19]
@@ -3760,6 +3781,14 @@ function quickOrigin(className, species, background, abilityOrder = null) {
       originFeatChoice: variant.featChoice ? "Tough" : ""
     };
   }
+  if (edition === "d35" || edition === "adnd2e") {
+    // The same trap as originAbilityBonuses: the quick builder was handing 3.5
+    // and 2E characters 5.5e background bonuses and a 5e origin feat.
+    return {
+      originBonuses: raceAbilityAdjustments(edition, species) || bonuses,
+      originFeat: "", originFeatChoice: ""
+    };
+  }
   const rule = BACKGROUND_RULES_2024[background] || {
     abilities: priorities.slice(0, 3),
     feat: "Skilled"
@@ -4039,36 +4068,42 @@ function prebuildSubclassChoices(subclass, level) {
   return choices;
 }
 
-function prebuildClassChoices(className, level, profile) {
-  const masteryCount = weaponMasteryCount(className, level, edition);
+// The rules edition has to be passed in: this runs during level-up on a
+// character whose edition may not be the one currently selected in the builder,
+// and reading the global handed a 3.5 fighter a 5e Fighting Style.
+function prebuildClassChoices(className, level, profile, rulesEdition = edition) {
+  const masteryCount = weaponMasteryCount(className, level, rulesEdition);
   const weaponMastery = [...(profile.masteries || []), ...weaponMasteryOptions(className)]
     .filter((name, index, names) => names.indexOf(name) === index)
     .slice(0, masteryCount);
-  const invocationCount = Object.entries(LEVEL_CHOICE_RULES[edition]?.Warlock?.invocations || {})
+  const invocationCount = Object.entries(LEVEL_CHOICE_RULES[rulesEdition]?.Warlock?.invocations || {})
     .reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0);
   const invocationPreferences = [
     "Agonizing Blast", "Eldritch Mind", "Repelling Blast",
-    ...(edition === "2024" ? ["Pact of the Tome"] : []),
+    ...(rulesEdition === "2024" ? ["Pact of the Tome"] : []),
     "Fiendish Vigor", "Devil's Sight", "Armor of Shadows", "Eldritch Sight", "Eldritch Spear", "Lifedrinker"
   ];
-  const invocations = [...invocationPreferences, ...(PROGRESSION_OPTIONS.invocations[edition] || [])]
+  const invocations = [...invocationPreferences, ...(PROGRESSION_OPTIONS.invocations[rulesEdition] || [])]
     .filter((name, index, names) => names.indexOf(name) === index)
     .slice(0, invocationCount);
-  const metamagicCount = Object.entries(LEVEL_CHOICE_RULES[edition]?.Sorcerer?.metamagic || {})
+  const metamagicCount = Object.entries(LEVEL_CHOICE_RULES[rulesEdition]?.Sorcerer?.metamagic || {})
     .reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0);
   const metamagicPreferences = ["Careful Spell", "Quickened Spell", "Twinned Spell", "Subtle Spell", "Empowered Spell", "Heightened Spell"];
-  const metamagic = [...metamagicPreferences, ...(PROGRESSION_OPTIONS.metamagic[edition] || [])]
+  const metamagic = [...metamagicPreferences, ...(PROGRESSION_OPTIONS.metamagic[rulesEdition] || [])]
     .filter((name, index, names) => names.indexOf(name) === index)
     .slice(0, metamagicCount);
   return {
     weaponMastery,
-    fightingStyle: ["Fighter", "Paladin", "Ranger"].includes(className) && level >= (className === "Fighter" ? 1 : 2) ? profile.fightingStyle || "Defense" : "",
+    // Fighting styles are a 5e idea. 3.5 has feats instead and 2E has neither.
+    fightingStyle: EDITIONS_WITHOUT_5E_CHOICES.has(rulesEdition) ? ""
+      : ["Fighter", "Paladin", "Ranger"].includes(className) && level >= (className === "Fighter" ? 1 : 2)
+        ? profile.fightingStyle || "Defense" : "",
     fightingStyles: [],
-    pactBoon: className === "Warlock" && edition === "2014" && level >= 3 ? "Pact of the Tome" : "",
-    divineOrder: edition === "2024" && className === "Cleric" ? "Protector" : "",
-    primalOrder: edition === "2024" && className === "Druid" ? "Magician" : "",
-    blessedStrikes: edition === "2024" && className === "Cleric" && level >= 7 ? "Divine Strike" : "",
-    elementalFury: edition === "2024" && className === "Druid" && level >= 7 ? "Potent Spellcasting" : "",
+    pactBoon: className === "Warlock" && rulesEdition === "2014" && level >= 3 ? "Pact of the Tome" : "",
+    divineOrder: rulesEdition === "2024" && className === "Cleric" ? "Protector" : "",
+    primalOrder: rulesEdition === "2024" && className === "Druid" ? "Magician" : "",
+    blessedStrikes: rulesEdition === "2024" && className === "Cleric" && level >= 7 ? "Divine Strike" : "",
+    elementalFury: rulesEdition === "2024" && className === "Druid" && level >= 7 ? "Potent Spellcasting" : "",
     invocations: className === "Warlock" ? invocations : [],
     metamagic: className === "Sorcerer" ? metamagic : []
   };
@@ -4131,6 +4166,19 @@ function applyAutoFeat(character, className, classLevelValue, choices) {
 }
 
 function applyAutoAdvancement(character, className, classLevelValue, choices) {
+  const rulesEdition = character.edition || edition;
+  // 2E has neither ability score increases nor feats.
+  if (rulesEdition === "adnd2e") return;
+  if (rulesEdition === "d35") {
+    // 3.5 raises a single ability by one at every fourth character level, and
+    // grants feats on its own schedule, which the reconcile pass rebuilds.
+    if (characterTotalLevel(character) % 4 !== 0) return;
+    character.asi = character.asi && Object.keys(character.asi).length
+      ? JSON.parse(JSON.stringify(character.asi)) : asiStateFromBonuses(character.asiBonuses);
+    const raised = applyAutoAbilityIncrease(character, className, choices);
+    if (raised) character.asi[nextAsiSlotKey(character.asi)] = { mode: "asi", one: raised, two: "" };
+    return;
+  }
   if (!advancementLevelsFor(className).includes(classLevelValue)) return;
   if (character.edition === "2024" && classLevelValue >= 19 && applyAutoFeat(character, className, classLevelValue, choices)) return;
   character.asi = character.asi && Object.keys(character.asi).length ? JSON.parse(JSON.stringify(character.asi)) : asiStateFromBonuses(character.asiBonuses);
@@ -4453,7 +4501,7 @@ function buildPrebuiltCharacter(preview = false) {
   character.currentHp = derived(character).hp;
   // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
   // for every other edition.
-  return finalizeD35Character(character);
+  return finalizeForEdition(character);
 }
 
 function renderPrebuildOptions(resetBackground = false) {
@@ -4814,7 +4862,7 @@ function buildThemedCharacter(preview = false) {
   character.currentHp = derived(character).hp;
   // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
   // for every other edition.
-  return finalizeD35Character(character);
+  return finalizeForEdition(character);
 }
 
 function renderThemeSummary() {
@@ -4980,7 +5028,7 @@ function buildQuickCharacter(preview = false, overrides = null) {
   character.currentHp = derived(character).hp;
   // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
   // for every other edition.
-  return finalizeD35Character(character);
+  return finalizeForEdition(character);
 }
 
 function renderQuickClasses() {
@@ -5290,7 +5338,7 @@ function buildPremadeCharacter(hero, preview = false) {
   character.currentHp = derived(character).hp;
   // 3.5 needs ranks, legal feats and no subclass. The finisher is a no-op
   // for every other edition.
-  return finalizeD35Character(character);
+  return finalizeForEdition(character);
 }
 
 function renderPremadeHeroes() {
@@ -5392,17 +5440,29 @@ function selectedSpeciesVariant(raw = originFormValues()) {
   return rule.variants.find(variant => variant.name === raw.speciesVariant) || rule.variants[0];
 }
 
+// 3.5 and 2E both put ability adjustments on the race rather than a background,
+// both allow negative ones, and neither has an origin feat.
+function raceAbilityAdjustments(rulesEdition, species) {
+  const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
+  const table = rulesEdition === "d35" ? (typeof D35_RACES !== "undefined" ? D35_RACES : null)
+    : rulesEdition === "adnd2e" ? (typeof ADND_RACES !== "undefined" ? ADND_RACES : null)
+    : null;
+  if (!table) return null;
+  const race = table[species] || {};
+  const source = rulesEdition === "d35" ? race.bonuses : race.adjust;
+  Object.entries(source || {}).forEach(([ability, amount]) => { bonuses[ability] += Number(amount); });
+  return bonuses;
+}
+
 function originAbilityBonuses(raw = originFormValues()) {
   const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
   // 3.5 puts ability adjustments on the race, and they can be negative. Without
   // this the edition fell through to the 2024 background rules, found nothing
   // for a 3.5 background, and every race came out flat.
-  if (edition === "d35") {
-    const race = D35_RACES[raw.species || $("#species-select")?.value] || {};
-    Object.entries(race.bonuses || {}).forEach(([ability, amount]) => {
-      bonuses[ability] += Number(amount);
-    });
-    return bonuses;
+  // Without this, 2E fell through to the 2024 background rules and a dwarf
+  // soldier collected +2 Strength and +1 Dexterity from 5.5e.
+  if (edition === "d35" || edition === "adnd2e") {
+    return raceAbilityAdjustments(edition, raw.species || $("#species-select")?.value) || bonuses;
   }
   if (edition === "2014") {
     const variant = selectedSpeciesVariant(raw);
@@ -8203,8 +8263,12 @@ function adndStrength(character) {
 
 function adndAbilityRow(table, score) {
   const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
-  const value = Math.max(keys[0], Math.min(keys[keys.length - 1], Number(score) || 10));
-  return table[value] || table[keys[0]];
+  const raw = Number(score) || 10;
+  // Some 2E tables only start where the benefit does -- Wisdom's bonus spells at
+  // 13, Intelligence's spell limits at 9. A score below that earns nothing, so
+  // clamping up to the first row invented a bonus the character never had.
+  if (raw < keys[0]) return {};
+  return table[Math.min(keys[keys.length - 1], raw)] || {};
 }
 
 // Armor Class descends from 10. Armour and shields lower it, and a high
@@ -8619,6 +8683,83 @@ const D35_FEAT_PREFERENCES = {
   Wizard: ["Combat Casting", "Iron Will", "Improved Initiative", "Skill Focus", "Alertness"]
 };
 
+// Levelling runs through the 5e machinery, so after each gain the edition's own
+// rules get the last word: 5e-only choices are cleared and the feat count is
+// brought up to what the new level allows. Unlike finalizeD35Character this
+// keeps the player's own skill ranks -- rebuilding those would throw away every
+// choice they had made.
+function reconcileEditionAfterLevel(character) {
+  const rulesEdition = character.edition || edition;
+  if (!EDITIONS_WITHOUT_5E_CHOICES.has(rulesEdition)) return character;
+  character.subclass = "";
+  character.customSubclass = "";
+  character.classes = (character.classes || []).map(entry => ({ ...entry, subclass: "", customSubclass: "" }));
+  character.fightingStyle = "";
+  character.fightingStyles = [];
+  character.weaponMastery = [];
+  character.invocations = [];
+  character.metamagic = [];
+  character.pactBoon = "";
+  character.expertise = [];
+  ["divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "originFeat", "originFeatChoice"]
+    .forEach(field => { character[field] = ""; });
+  if (rulesEdition === "adnd2e") {
+    character.feats = [];
+    character.skillProficiencies = [];
+    character.backgroundSkills = [];
+    return character;
+  }
+  // 3.5: top the feat list up to what this level allows, without disturbing the
+  // ones already chosen.
+  const legal = new Set((typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : []).map(feat => feat.name));
+  const kept = (character.feats || []).filter(name => d35FeatIsLegal(name, legal));
+  const target = d35FeatCount(character);
+  const feats = [...new Set(kept)];
+  (D35_FEAT_PREFERENCES[primaryClassName(character)] || D35_FEAT_PREFERENCES.Fighter || [])
+    .forEach(name => { if (feats.length < target && !feats.includes(name)) feats.push(name); });
+  character.feats = feats.slice(0, target);
+  character.skillProficiencies = [];
+  character.backgroundSkills = [];
+  return character;
+}
+
+// Generation entry points hand their output to the edition that asked for it.
+function finalizeForEdition(character) {
+  if (!character) return character;
+  if (character.edition === "d35") return finalizeD35Character(character);
+  if (character.edition === "adnd2e") return finalizeAdndCharacter(character);
+  return character;
+}
+
+// The generators speak 5e. This turns their output into a legal 2E character:
+// no subclass, no feats, no skill proficiencies, and an alignment 2E recognises.
+function finalizeAdndCharacter(character) {
+  if (!character || character.edition !== "adnd2e") return character;
+  const built = reconcileEditionAfterLevel({ ...character });
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[primaryClassName(built)]) || {};
+  if (!built.adndRaceApplied) {
+    // Scores arrive with 5e species and background increases baked in; take
+    // those back out and apply the 2E racial adjustment instead.
+    const race = (typeof ADND_RACES !== "undefined" && ADND_RACES[built.species]) || {};
+    ABILITIES.forEach(ability => {
+      const fiveE = Number((built.originBonuses || {})[ability] || 0)
+        + Number((built.featBonuses || {})[ability] || 0);
+      const racial = Number((race.adjust || {})[ability] || 0);
+      built[ability] = Math.max(3, Math.min(18, Number(built[ability] || 10) - fiveE + racial));
+    });
+    built.originBonuses = Object.fromEntries(ABILITIES.map(a =>
+      [a, Number(((ADND_RACES[built.species] || {}).adjust || {})[a] || 0)]));
+    built.featBonuses = Object.fromEntries(ABILITIES.map(a => [a, 0]));
+    built.adndRaceApplied = true;
+  }
+  built.size = (ADND_RACES[built.species] || {}).size || "Medium";
+  built.speed = (ADND_RACES[built.species] || {}).speed || 12;
+  if (!cls.exceptionalStrength || Number(built.STR) !== 18) built.strPercentile = 0;
+  if (cls.alignment) built.alignment = cls.alignment;
+  built.spells = cls.caster ? (built.spells || []) : [];
+  return built;
+}
+
 function finalizeD35Character(character) {
   if (!character || character.edition !== "d35") return character;
   const built = { ...character };
@@ -9010,7 +9151,7 @@ function renderAdndSpells(c, sectionClassName) {
   const learn = intel ? intel.learn + (cls.specialist ? 15 : 0) : 0;
   return `<section class="sheet-panel sheet-wide ${sectionClassName}">
     <div class="resource-toolbar"><h2>Spell slots</h2><span>${cls.caster === "wizard"
-      ? `Memorised from a spellbook${intel ? ` \u00b7 up to level ${intel.maxSpellLevel}, ${Math.min(95, learn)}% to learn a spell${cls.specialist ? " of the school" : ""}` : ""}`
+      ? `Memorised from a spellbook${intel && intel.maxSpellLevel ? ` \u00b7 up to level ${intel.maxSpellLevel}, ${Math.min(95, learn)}% to learn a spell${cls.specialist ? " of the school" : ""}` : ""}`
       : "Prayed for each day, with bonus slots from Wisdom"}</span></div>
     ${cls.specialist ? `<p class="attack-hint">Specialist in ${escapeHtml(cls.specialist)}. The extra slot at each level must hold a spell of that school. ${escapeHtml((cls.opposition || []).join(", "))} ${(cls.opposition || []).length === 1 ? "is" : "are"} closed off entirely, and learning outside the school is 15% harder.</p>` : ""}
     <div class="adnd-slot-grid">
@@ -11811,9 +11952,8 @@ function autoLevelCharacter(id, targetClass = "") {
   const before = progressionSnapshot(character);
   const updated = characterWithClassLevelGain(character, levelClass);
   const targetClassLevel = classLevel(updated, levelClass);
-  const cls = RULES.classes[levelClass];
   const previousHp = derived(character).hp;
-  const fixedGain = Math.max(1, Math.ceil(cls.hit / 2) + 1 + modifier(character.CON));
+  const fixedGain = levelHpGain(character, levelClass, targetLevel);
   const choices = { autoLevel: true };
   updated.level = targetLevel;
   if (character.hpOverride) updated.hpOverride = previousHp + fixedGain;
@@ -11840,8 +11980,8 @@ function autoLevelCharacter(id, targetClass = "") {
     if (levelClass === updated.className) updated.subclassChoices = subclassChoices;
     choices.subclassChoices = { ...subclassChoices };
   }
-  const profile = quickBuildProfileFor(levelClass) || QUICK_BUILD_PROFILES.Fighter;
-  const classChoices = prebuildClassChoices(levelClass, targetClassLevel, profile);
+  const profile = quickBuildProfileFor(levelClass, updated.edition) || QUICK_BUILD_PROFILES.Fighter;
+  const classChoices = prebuildClassChoices(levelClass, targetClassLevel, profile, updated.edition);
   const masteryTarget = weaponMasteryCount(levelClass, targetClassLevel, updated.edition);
   const masteryPool = [...(profile.masteries || []), ...weaponMasteryOptions(levelClass)];
   const mastery = [...new Set([...(updated.weaponMastery || []), ...masteryPool])].slice(0, masteryTarget);
@@ -11890,6 +12030,7 @@ function autoLevelCharacter(id, targetClass = "") {
     updated.spells = [...(updated.spells || []), ...spellAdditions];
     choices.spells = spellAdditions.map(spell => spell.name);
   }
+  reconcileEditionAfterLevel(updated);
   reconcilePreparedSpells(updated, character);
   const gained = levelFeatures(character, targetLevel, levelClass).map(feature => `${feature.source}: ${feature.name}`);
   updated.progressionHistory = [...(updated.progressionHistory || []), {
@@ -11933,9 +12074,8 @@ function completeLevelUp(event) {
   }
   const before = progressionSnapshot(character);
   const updated = characterWithClassLevelGain(character, levelClass);
-  const cls = RULES.classes[levelClass];
   const previousHp = derived(character).hp;
-  const fixedGain = Math.max(1, Math.ceil(cls.hit / 2) + 1 + modifier(character.CON));
+  const fixedGain = levelHpGain(character, levelClass, targetLevel);
   const hpMethod = formValues.get("hpMethod") || `Fixed (+${fixedGain} HP)`;
   updated.level = targetLevel;
   if (hpMethod === "Roll Hit Die") {
@@ -12064,6 +12204,7 @@ function completeLevelUp(event) {
     choices.spells = addedSpells;
     if (arcanum) choices.mysticArcanum = arcanum;
   }
+  reconcileEditionAfterLevel(updated);
   reconcilePreparedSpells(updated, character);
   const gained = levelFeatures(character, targetLevel, levelClass).map(feature => `${feature.source}: ${feature.name}`);
   updated.progressionHistory = [...(updated.progressionHistory || []), {
