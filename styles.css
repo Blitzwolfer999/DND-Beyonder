@@ -4055,6 +4055,12 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .adnd-thief-row input { width: 100%; text-align: center; }
 .adnd-thief-total { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
 .adnd-strength-note { margin: 6px 0 0; color: var(--muted); font: 500 12px/1.5 system-ui, sans-serif; }
+.ability-roll-panel {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  margin: 10px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+}
+.ability-roll-panel label { flex: 1 1 200px; margin: 0; }
+.ability-roll-panel button { flex: 0 0 auto; }
 .adnd-monk-feature {
   padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
 }

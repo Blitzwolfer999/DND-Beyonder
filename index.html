@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=playtest-78">
+  <link rel="stylesheet" href="styles.css?v=roller-79">
 </head>
 <body>
   <div class="app-shell">
@@ -351,6 +351,14 @@
                 <label class="ability-method active"><input type="radio" name="abilityMethod" value="standard" checked> Standard Array <small>Assign 15, 14, 13, 12, 10, and 8 once each.</small></label>
                 <label class="ability-method"><input type="radio" name="abilityMethod" value="pointbuy"> Point Buy <small>Spend 27 points. Scores start at 8 and cap at 15 before bonuses.</small></label>
                 <label class="ability-method"><input type="radio" name="abilityMethod" value="manual"> Manual Entry <small>Type custom base scores directly.</small></label>
+                <label class="ability-method"><input type="radio" name="abilityMethod" value="roll"> Roll Dice <small>The traditional method, and the only way to reach a paladin's Charisma 17.</small></label>
+              </div>
+              <div class="ability-roll-panel hidden" id="ability-roll-panel">
+                <label>Dice method<select id="ability-roll-method">
+                  <option value="4d6-drop">4d6, drop the lowest</option>
+                  <option value="3d6">3d6 straight</option>
+                </select></label>
+                <button type="button" class="button small" id="ability-roll-button">Roll six scores</button>
               </div>
               <div class="ability-method-status" id="ability-method-status" aria-live="polite"></div>
               <div class="ability-editor" id="ability-editor"></div>
@@ -839,6 +847,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=playtest-131"></script>
+  <script src="app.js?v=roller-135"></script>
 </body>
 </html>

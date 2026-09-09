@@ -6953,8 +6953,59 @@ function standardArrayValid(values = abilityScoreValues()) {
   return scores.length === STANDARD_ARRAY.length && scores.every((score, index) => score === STANDARD_ARRAY[index]);
 }
 
+// Rolling is how 2E and 3.5 characters were made, and it is the only way to
+// reach the scores their steeper classes ask for -- a paladin's Charisma 17 is
+// not in the standard array at all. Two methods: four dice dropping the lowest,
+// which is what 3.5 prints and 2E offers as an alternative, and three straight,
+// which is 2E's first method.
+const ABILITY_ROLL_METHODS = {
+  "4d6-drop": { label: "4d6, drop the lowest", dice: 4, keep: 3 },
+  "3d6": { label: "3d6 straight", dice: 3, keep: 3 }
+};
+let abilityRollMethod = "4d6-drop";
+let lastAbilityRolls = null;
+
+function rollOneAbility(rule) {
+  const rolls = Array.from({ length: rule.dice }, () => 1 + Math.floor(Math.random() * 6));
+  const kept = rolls.slice().sort((a, b) => b - a).slice(0, rule.keep);
+  return { rolls, kept, total: kept.reduce((sum, die) => sum + die, 0) };
+}
+
+// A warrior who rolls an 18 also rolls the percentile, which is where
+// exceptional Strength comes from. Halflings are excluded by their own rule.
+function rollExceptionalStrength() {
+  if (edition !== "adnd2e") return 0;
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[selectedClass]) || {};
+  const race = (typeof ADND_RACES !== "undefined" && ADND_RACES[$("#species-select")?.value]) || {};
+  if (!cls.exceptionalStrength || race.noExceptionalStrength) return 0;
+  if (Number(form.elements.STR?.value || 0) !== 18) return 0;
+  return 1 + Math.floor(Math.random() * 100);
+}
+
+function rollAbilityScores() {
+  const rule = ABILITY_ROLL_METHODS[abilityRollMethod] || ABILITY_ROLL_METHODS["4d6-drop"];
+  const rolled = ABILITIES.map(() => rollOneAbility(rule));
+  // Highest score to the class's first prime requisite, and so on down. The
+  // player can still retype any of them: this is a starting arrangement, not a
+  // restriction.
+  const order = preferredAbilityOrder(selectedClass);
+  const totals = rolled.map(entry => entry.total).sort((a, b) => b - a);
+  const scores = {};
+  order.forEach((ability, index) => { if (index < totals.length) scores[ability] = totals[index]; });
+  lastAbilityRolls = { rule: rule.label, detail: rolled.map(entry => entry.rolls.join("+")) };
+  setAbilityScores(scores, { silent: true });
+  const percentile = rollExceptionalStrength();
+  if (form.elements.strPercentile) {
+    form.elements.strPercentile.value = percentile;
+    form.elements.strPercentile.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  renderAdndStrengthField();
+  updateAbilityMethodStatus();
+  updatePreview();
+}
+
 function setAbilityMethod(method, options = {}) {
-  abilityMethod = ["standard", "pointbuy", "manual"].includes(method) ? method : "standard";
+  abilityMethod = ["standard", "pointbuy", "manual", "roll"].includes(method) ? method : "standard";
   $$("[name='abilityMethod']").forEach(input => {
     input.checked = input.value === abilityMethod;
     input.closest(".ability-method")?.classList.toggle("active", input.checked);
@@ -6963,6 +7014,8 @@ function setAbilityMethod(method, options = {}) {
     if (abilityMethod === "standard") setAbilityScores(Object.fromEntries(ABILITIES.map((ability, index) => [ability, STANDARD_ARRAY[index]])), { silent: true });
     if (abilityMethod === "pointbuy") setAbilityScores(Object.fromEntries(ABILITIES.map(ability => [ability, 8])), { silent: true });
   }
+  $("#ability-roll-panel")?.classList.toggle("hidden", abilityMethod !== "roll");
+  if (abilityMethod === "roll" && !lastAbilityRolls && !options.keepScores) rollAbilityScores();
   buildAbilities({ keepScores: true });
   updateAbilityMethodStatus();
   updatePreview();
@@ -7027,6 +7080,13 @@ function updateAbilityMethodStatus() {
     status.innerHTML = missing.length
       ? `<strong>Standard Array:</strong> use each score exactly once: ${STANDARD_ARRAY.join(", ")}.`
       : `<strong>Standard Array:</strong> all six scores are assigned once.`;
+    return;
+  }
+  if (abilityMethod === "roll") {
+    status.classList.remove("error");
+    status.innerHTML = lastAbilityRolls
+      ? `<strong>Rolled:</strong> ${escapeHtml(lastAbilityRolls.rule)} &middot; ${escapeHtml(lastAbilityRolls.detail.join(" &nbsp; ").replace(/&nbsp;/g, " "))}. Rearrange any of them by typing.`
+      : `<strong>Roll:</strong> choose a method and roll six scores. They are placed on the class's prime requisites first, and you can rearrange them.`;
     return;
   }
   status.classList.remove("error");
@@ -8964,6 +9024,11 @@ function reconcileEditionAfterLevel(character) {
   const feats = [...new Set(kept)];
   (D35_FEAT_PREFERENCES[primaryClassName(character)] || D35_FEAT_PREFERENCES.Fighter || [])
     .forEach(name => { if (feats.length < target && !feats.includes(name)) feats.push(name); });
+  // A fighter earns more feats than any preference list is long, so fall back to
+  // the rest of the legal list rather than leaving the character short.
+  (typeof D35_FEAT_LIST !== "undefined" ? D35_FEAT_LIST : []).forEach(feat => {
+    if (feats.length < target && !feats.includes(feat.name) && !feat.prereq) feats.push(feat.name);
+  });
   character.feats = feats.slice(0, target);
   character.skillProficiencies = [];
   character.backgroundSkills = [];
@@ -12107,10 +12172,18 @@ function openLevelUp(id, targetClass = "") {
   if (!character) return;
   if (!canControlCharacter(character)) { toast("Only the owner or campaign DM can level this sheet"); return; }
   if (characterTotalLevel(character) >= 20) { toast("This character is already level 20"); return; }
+  // The remembered class is only meaningful while levelling the same character
+  // -- a multiclass hero being taken up one class repeatedly. Carried across
+  // characters it silently offered the previous hero's class, so levelling a
+  // fighter right after a wizard opened on "Wizard progression, class level
+  // 0 to 1" and would have added the level to the wrong class.
+  const sameCharacter = levelingCharacterId === id;
   levelingCharacterId = id;
   const currentClasses = classBreakdown(character);
   const availableClasses = classesForEdition(character.edition || edition);
-  levelUpClassName = targetClass && availableClasses.includes(targetClass) ? targetClass : levelUpClassName && availableClasses.includes(levelUpClassName) ? levelUpClassName : primaryClassName(character);
+  levelUpClassName = targetClass && availableClasses.includes(targetClass) ? targetClass
+    : sameCharacter && levelUpClassName && availableClasses.includes(levelUpClassName) ? levelUpClassName
+    : primaryClassName(character);
   const currentTotalLevel = characterTotalLevel(character);
   const targetLevel = currentTotalLevel + 1;
   const currentClassLevel = classLevel(character, levelUpClassName);
@@ -12123,7 +12196,7 @@ function openLevelUp(id, targetClass = "") {
     <optgroup label="Add multiclass">${availableClasses.filter(name => !currentClasses.some(entry => entry.name === name)).map(name => `<option value="${escapeHtml(name)}" ${name === levelUpClassName ? "selected" : ""}>Add ${escapeHtml(name)} 1</option>`).join("")}</optgroup>
   </select><small>Total character level ${currentTotalLevel} → ${targetLevel}. New multiclass levels do not grant starting saving throws.</small></label>`;
   $("#level-up-title").textContent = `${character.name} reaches level ${targetLevel}`;
-  $("#level-up-subtitle").textContent = `${character.edition} ${levelUpClassName} progression · class level ${currentClassLevel} → ${targetClassLevel}.`;
+  $("#level-up-subtitle").textContent = `${editionLabel(character.edition)} ${levelUpClassName} progression · class level ${currentClassLevel} → ${targetClassLevel}.`;
   $("#level-track").innerHTML = `<div class="level-node">${currentTotalLevel}</div><span>→</span><div class="level-node current">${targetLevel}</div>`;
   $("#level-up-content").innerHTML = `
     <section class="advancement-section">
@@ -12373,7 +12446,14 @@ function completeLevelUp(event) {
   updated.level = targetLevel;
   if (hpMethod === "Roll Hit Die") {
     const rolled = Math.max(1, Number(formValues.get("hpRoll") || 1));
-    updated.hpOverride = previousHp + Math.max(1, rolled + modifier(character.CON));
+    // 2E's Constitution bonus is its own table, and only warriors get the top
+    // of it -- the 5e modifier would give a rogue with Constitution 16 a +3.
+    const conBonus = updated.edition === "adnd2e"
+      ? (adndClassGroup(updated) === "warrior"
+          ? Number(adndAbilityRow(ADND_CONSTITUTION, character.CON).warriorHp || 0)
+          : Math.min(2, Number(adndAbilityRow(ADND_CONSTITUTION, character.CON).hp || 0)))
+      : modifier(character.CON);
+    updated.hpOverride = previousHp + Math.max(1, rolled + conBonus);
   } else if (character.hpOverride) {
     updated.hpOverride = previousHp + fixedGain;
   }
@@ -13004,6 +13084,7 @@ function initEvents() {
     if (mapTableMode && activeMapId) setTimeout(() => fitCampaignMap(activeMapId), 80);
   });
   document.addEventListener("click", event => {
+    if (event.target.closest("#ability-roll-button")) { rollAbilityScores(); return; }
     const creationMethod = event.target.closest("[data-creation-method]");
     if (creationMethod) {
       showCreationMethod(creationMethod.dataset.creationMethod);
@@ -13773,6 +13854,7 @@ function initEvents() {
   });
   form.addEventListener("input", event => {
     if (event.target.name === "strPercentile") { renderAdndStrengthField(); updatePreview(); return; }
+    if (event.target.id === "ability-roll-method") { abilityRollMethod = event.target.value; return; }
     if (event.target.dataset?.adndThief) { applyAdndThiefPoints(event.target); return; }
     if (event.target.dataset?.d35Skill) { applyD35SkillRank(event.target); return; }
     if (ABILITIES.includes(event.target.name)) {
