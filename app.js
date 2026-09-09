@@ -3416,7 +3416,9 @@ function levelHpGain(character, className, targetLevel) {
   const die = classHitDie(className, rulesEdition);
   if (rulesEdition === "adnd2e") {
     const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[className]) || {};
-    if (Number(targetLevel) > 9) return Math.max(1, Number(cls.hpAfter9 || 1));
+    const lastDie = (typeof ADND_LAST_HIT_DIE_LEVEL !== "undefined"
+      && ADND_LAST_HIT_DIE_LEVEL[adndClassGroup(character)]) || 9;
+    if (Number(targetLevel) > lastDie) return Math.max(1, Number(cls.hpAfter9 || 1));
     const con = adndAbilityRow(ADND_CONSTITUTION, character.CON);
     const bonus = adndClassGroup(character) === "warrior"
       ? Number(con.warriorHp || 0) : Math.min(2, Number(con.hp || 0));
@@ -3461,6 +3463,12 @@ function asiStateFromBonuses(bonuses = {}) {
 }
 
 function spellDescription(name, rulesEdition, source = "") {
+  // 3.5 keeps its own one-line summaries; the 5e description sets describe a
+  // different version of the same spell.
+  if (rulesEdition === "d35" && typeof D35_SPELL_INDEX !== "undefined") {
+    const entry = D35_SPELL_INDEX[String(name).toLowerCase()];
+    if (entry && entry.desc) return entry.desc;
+  }
   return descriptionMatch(RULE_DESCRIPTIONS.spells[rulesEdition], name)
     || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.spells[2014], name) : "")
     || contentSummary("spells", name)
@@ -3646,6 +3654,22 @@ function speciesTraitCards(character) {
         : character.edition === "d35" ? "Racial ability adjustments" : "Species ability bonuses",
       description: `${bonusText}. These increases are already included in the ability scores shown on the sheet.`
     });
+  }
+  if (character.edition === "adnd2e") {
+    // Without this a 2E human collected the 2024 "Resourceful" trait.
+    const race = (typeof ADND_RACES !== "undefined" && ADND_RACES[speciesName]) || null;
+    if (race) {
+      cards.push({ name: "Size and movement", source: speciesName,
+        description: `${race.size} size, movement rate ${race.speed}.${race.infravision ? ` Infravision ${race.infravision} feet.` : ""}` });
+      const limits = Object.entries(race.limits || {});
+      cards.push({ name: "Class and level limits", source: speciesName,
+        description: limits.length
+          ? limits.map(([className, cap]) => `${className} to ${cap}`).join(", ") + "."
+          : "Every class is open, with no level limit." });
+    }
+    ((typeof ADND_RACE_TRAITS !== "undefined" && ADND_RACE_TRAITS[speciesName]) || [])
+      .forEach(([name, description]) => cards.push({ name, source: speciesName, description }));
+    return cards;
   }
   if (character.edition === "d35") {
     // 3.5 races have their own traits; the 5e tables would hand a half-orc
@@ -3978,13 +4002,33 @@ function gameSettingFor(rulesEdition) {
 }
 // Ranks are clamped to the skill's cap on the way in, so typing 99 into a
 // cross-class box settles at what the level actually allows.
+// The rank and point allocators redraw their whole list to refresh the totals,
+// which throws away the very input being typed into: after one keystroke the
+// node was gone and focus had fallen to the body, so a two-digit number could
+// not be entered at all. Put the caret back where it was.
+function preservingAllocatorFocus(render) {
+  const active = document.activeElement;
+  const data = (active && active.dataset) || {};
+  const selector = data.adndThief ? `[data-adnd-thief="${CSS.escape(data.adndThief)}"]`
+    : data.d35Skill ? `[data-d35-skill="${CSS.escape(data.d35Skill)}"]`
+    : "";
+  render();
+  if (!selector) return;
+  const restored = document.querySelector(selector);
+  if (!restored) return;
+  restored.focus();
+  // Number inputs refuse setSelectionRange in some browsers; landing the caret
+  // at the end is fine, so a refusal is not worth reporting.
+  try { restored.setSelectionRange(restored.value.length, restored.value.length); } catch (error) { /* ignore */ }
+}
+
 function applyD35SkillRank(input) {
   const skill = input.dataset.d35Skill;
   const cap = Number(input.max || 0);
   const value = Math.max(0, Math.min(cap, Math.round(Number(input.value) || 0)));
   if (value) d35SkillRankDraft[skill] = value; else delete d35SkillRankDraft[skill];
   input.value = value;
-  renderD35SkillChoices();
+  preservingAllocatorFocus(renderD35SkillChoices);
   updatePreview();
 }
 
@@ -5862,6 +5906,20 @@ function renderClassFeaturePreview() {
 }
 
 function populateSubclasses() {
+  // Neither 3.5 nor 2E has subclasses, so the field and its homebrew twin are
+  // hidden rather than offering 5e archetypes that would never be applied.
+  const hasSubclasses = !EDITIONS_WITHOUT_5E_CHOICES.has(edition);
+  $("#subclass-field")?.classList.toggle("hidden", !hasSubclasses);
+  $("#custom-subclass-field")?.classList.toggle("hidden", !hasSubclasses);
+  if (!hasSubclasses) {
+    $("#subclass-select").innerHTML = `<option value="">None</option>`;
+    $("#subclass-select").value = "";
+    if (form.elements.customSubclass) form.elements.customSubclass.value = "";
+    updateSubclassMeta();
+    renderStartingClassOptions();
+    renderClassFeaturePreview();
+    return;
+  }
   const current = $("#subclass-select").value;
   const entries = subclassEntries();
   const native = entries.filter(item => item.rules === edition);
@@ -5956,6 +6014,12 @@ function normalizeCharacterData(character, options = {}) {
 
 function maxSpellLevel(className, level, rulesEdition, subclass = "") {
   if (!spellListsFor(rulesEdition, className, subclass)) return -1;
+  if (rulesEdition === "d35") {
+    const table = (typeof D35_SPELLS_PER_DAY !== "undefined" && D35_SPELLS_PER_DAY[className]) || null;
+    if (!table) return -1;
+    const row = table[Math.max(0, Math.min(19, Number(level || 1) - 1))] || [];
+    return row.length - 1;
+  }
   // SW5E casters use their class's Max Power Level column.
   if (rulesEdition === "sw5e") return typeof sw5eMaxPowerLevel === "function" ? sw5eMaxPowerLevel(className, level) : 0;
   if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) {
@@ -5984,7 +6048,27 @@ function baseCantripCount(className, rulesEdition) {
   return Number(QUICK_SPELL_COUNTS[className]?.[0] || 0);
 }
 
+// 3.5's 0-level spells are orisons and cantrips. A sorcerer or bard knows a
+// fixed number of them; everyone else prepares from the whole list.
+function d35KnownRow(className, level) {
+  const table = (typeof D35_SPELLS_KNOWN !== "undefined" && D35_SPELLS_KNOWN[className]) || null;
+  if (!table) return null;
+  return table[Math.max(0, Math.min(19, Number(level || 1) - 1))] || [];
+}
+
+function d35ListSize(className, fromLevel = 0) {
+  const list = (typeof D35_SPELL_LISTS !== "undefined" && D35_SPELL_LISTS[className]) || {};
+  return Object.entries(list).reduce((total, [spellLevel, entries]) =>
+    Number(spellLevel) >= fromLevel ? total + entries.length : total, 0);
+}
+
 function cantripLimitFor(className, level, rulesEdition, subclass = "") {
+  if (rulesEdition === "d35") {
+    const known = d35KnownRow(className, level);
+    // A spellbook or a full-list caster is limited by what it can cast per day,
+    // not by how many 0-level spells it may write down.
+    return known ? Number(known[0] || 0) : d35ListSize(className, 0) - d35ListSize(className, 1);
+  }
   const targetLevel = Number(level || 1);
   let total = baseCantripCount(className, rulesEdition);
   Object.entries(CANTRIP_PROGRESSION[rulesEdition]?.[className] || {}).forEach(([unlock, count]) => {
@@ -6023,6 +6107,17 @@ function spellProgressionFor(rulesEdition, className, subclass = "") {
 }
 
 function spellLimitFor(className, level, rulesEdition, subclass = "", data = {}) {
+  if (rulesEdition === "d35") {
+    const known = d35KnownRow(className, level);
+    if (known) return known.slice(1).reduce((total, count) => total + Number(count || 0), 0);
+    // A wizard starts with three spells plus one per point of Intelligence
+    // modifier, and adds two to the book at every level after.
+    if (className === "Wizard") {
+      return Math.max(1, 3 + modifier(data.INT)) + 2 * Math.max(0, Number(level || 1) - 1);
+    }
+    // Clerics, druids, paladins and rangers prepare from their entire list.
+    return d35ListSize(className, 1);
+  }
   const targetLevel = Number(level || 1);
   if (rulesEdition === "2014" && className === "Artificer") {
     return Math.max(1, Math.floor(targetLevel / 2) + modifier(data.INT));
@@ -6042,6 +6137,10 @@ function spellLimitFor(className, level, rulesEdition, subclass = "", data = {})
 }
 
 function spellLimitLabel(className, rulesEdition, subclass = "") {
+  if (rulesEdition === "d35") {
+    if (typeof D35_SPELLS_KNOWN !== "undefined" && D35_SPELLS_KNOWN[className]) return "Spells known";
+    return className === "Wizard" ? "Spellbook" : "Prepared from the full list";
+  }
   const progression = spellProgressionFor(rulesEdition, className, subclass);
   if (progression?.mode === "spellbook") return "Spellbook";
   if (progression?.mode === "known") return "Known spells";
@@ -6447,8 +6546,10 @@ let selectedD35Domains = new Set();
 
 function renderD35FeatChoices() {
   // The 5e feat browser lists feats that do not exist in 3.5, so it steps aside.
+  // The 5e feat browser lists feats that exist in neither edition: 3.5 has its
+  // own picker below, and 2E has no feats at all.
   const fiveE = $("#feat-list")?.closest(".choice-section");
-  if (fiveE) fiveE.classList.toggle("hidden", edition === "d35");
+  if (fiveE) fiveE.classList.toggle("hidden", EDITIONS_WITHOUT_5E_CHOICES.has(edition));
   const section = $("#d35-feats-section");
   const list = $("#d35-feat-list");
   if (!section || !list) return;
@@ -6550,7 +6651,7 @@ function applyAdndThiefPoints(input) {
   const value = Math.max(0, Math.min(cap || 95, Math.round(Number(input.value) || 0)));
   if (value) adndThiefDraft[skill] = value; else delete adndThiefDraft[skill];
   input.value = value;
-  renderAdndThiefBuilder();
+  preservingAllocatorFocus(renderAdndThiefBuilder);
   updatePreview();
 }
 
@@ -6671,9 +6772,16 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
 
   const selectedSubclass = $("#subclass-select")?.value || "";
   const lists = spellListsFor(edition, selectedClass, selectedSubclass);
-  $("#spell-choice-section").classList.toggle("hidden", !lists);
-  $("#non-caster-note").classList.toggle("hidden", Boolean(lists));
-  if (!lists) return;
+  // A 3.5 paladin or ranger has a spell list but reaches no spell level until
+  // 4th, so the picker stays away rather than showing an empty grid.
+  const reachedFirstSpell = maxSpellLevel(selectedClass, level, edition, selectedSubclass) >= 0;
+  const offerSpells = Boolean(lists) && reachedFirstSpell;
+  $("#spell-choice-section").classList.toggle("hidden", !offerSpells);
+  $("#non-caster-note").classList.toggle("hidden", offerSpells);
+  if (lists && !reachedFirstSpell) {
+    $("#non-caster-note").textContent = `${selectedClass}s gain their first spells later; come back once this character has levelled.`;
+  }
+  if (!offerSpells) return;
   const allowed = maxSpellLevel(selectedClass, level, edition, selectedSubclass);
   $("#spell-guidance").textContent = `${selectedClass} spell list · spell levels through ${allowed} are available at character level ${level}.`;
   const { cantripLimit, nextCantripLevel, spellLimit, spellLabel } = spellLimitContext();
@@ -6686,7 +6794,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
     $("#spell-guidance").textContent += ` These spells normally change on a ${selectedClass} level-up; Direct Edit can correct the saved sheet.`;
   }
   $("#spell-level-tabs").innerHTML = Object.keys(lists).filter(key => lists[key].length).map(key =>
-    `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? "Cantrip" : key}</button>`
+    `<button type="button" data-spell-level="${key}" class="${Number(key) === selectedSpellLevel ? "active" : ""}">${key === "0" ? (edition === "d35" ? "0-level" : "Cantrip") : key}</button>`
   ).join("");
   renderSpellList();
 }
@@ -7025,11 +7133,81 @@ function formData() {
 // Everything still outstanding before a character counts as finished, gathered
 // as a list rather than a single early return so a part-built character can
 // report all of it at once and still be saved.
+// 2E checks what 2E actually requires: the class's ability minimums, whether
+// the race may take the class at all, the level limit demihumans run into, and
+// the discretionary points a thief or monk has to spend.
+function adndCompletionIssues(data, add) {
+  const className = primaryClassName(data);
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[className]) || {};
+  Object.entries(cls.minimums || {}).forEach(([ability, minimum]) => {
+    if (Number(data[ability] || 0) < Number(minimum)) {
+      add(4, `${className} requires ${ability} ${minimum} or better`);
+    }
+  });
+  if ((cls.races || []).length && !cls.races.includes(data.species)) {
+    add(3, `${data.species} cannot be a ${className}; the class is open to ${cls.races.join(", ")}`);
+  }
+  const limit = adndLevelLimit(data, className);
+  const level = characterTotalLevel(data);
+  if (limit && level > limit) {
+    add(2, `A ${data.species} ${className} may not pass level ${limit}`);
+  }
+  const budget = adndThiefPointBudget(data);
+  if (budget) {
+    const spent = Object.values(data.thiefSkillPoints || {})
+      .reduce((total, points) => total + Number(points || 0), 0);
+    const noun = (ADND_CLASSES[primaryClassName(data)] || {}).monkSkills ? "monk skill" : "thief skill";
+    if (spent > budget) add(5, `${spent - budget} too many ${noun} points assigned`);
+    if (spent < budget) add(5, `${budget - spent} ${noun} point${budget - spent === 1 ? "" : "s"} still to assign`);
+    const cap = adndSkillPointCap(data);
+    const over = Object.entries(data.thiefSkillPoints || {})
+      .filter(([, points]) => Number(points || 0) > cap).map(([skill]) => skill);
+    if (over.length) add(5, `No more than ${cap} points in one skill (${over.join(", ")})`);
+  }
+}
+
+// 3.5 buys skills with ranks rather than picking proficiencies, so the checks
+// are budget and cap rather than "choose N of these".
+function d35CompletionIssues(data, add) {
+  const ranks = data.skillRanks || {};
+  let spent = 0;
+  const overCap = [];
+  Object.entries(ranks).forEach(([skill, rank]) => {
+    const value = Number(rank || 0);
+    if (!value) return;
+    spent += value * (d35IsClassSkill(data, skill) ? 1 : 2);
+    if (value > d35MaxRanks(data, skill)) overCap.push(skill);
+  });
+  const budget = d35SkillPointTotal(data);
+  if (spent > budget) add(5, `${spent - budget} more skill points spent than earned`);
+  // Unspent points are as incomplete as overspent ones -- a 3.5 character who
+  // has bought no ranks is not finished.
+  if (spent < budget) add(5, `${budget - spent} skill point${budget - spent === 1 ? "" : "s"} still to spend`);
+  if (overCap.length) add(5, `Over the rank cap in ${overCap.join(", ")}`);
+  const featTarget = d35FeatCount(data);
+  const feats = (data.feats || []).length;
+  if (feats > featTarget) add(5, `${feats - featTarget} more feats than this character has earned`);
+  if (feats < featTarget) add(5, `Choose ${featTarget - feats} more feat${featTarget - feats === 1 ? "" : "s"}`);
+  if (classLevel(data, "Cleric") && (data.domains || []).length !== 2) {
+    add(5, "Choose two cleric domains");
+  }
+}
+
 function characterCompletionIssues(data) {
   const issues = [];
   const add = (step, message) => issues.push({ step, message });
   if (!String(data.name || "").trim()) add(1, "Give your character a name");
   if (!validateAbilityScoresQuiet()) add(4, "Finish assigning ability scores");
+  // The remaining checks below are 5e's -- skill proficiencies, background
+  // skills, expertise, weapon mastery. None of those exist in 2E or 3.5, so a
+  // character in either edition was flagged incomplete for ever.
+  if (data.edition === "adnd2e") { adndCompletionIssues(data, add); return issues; }
+  if (data.edition === "d35") {
+    d35CompletionIssues(data, add);
+    const d35Spells = spellSelectionIssue(data);
+    if (d35Spells) add(5, d35Spells);
+    return issues;
+  }
   if (!validateOriginChoices()) add(3, "Complete the origin ability and feat choices");
   const primaryEditLevel = classLevel(data, data.className) || data.level;
   const skillRule = classSkillRuleAtLevel(data.className, primaryEditLevel, data.edition, data.subclass);
@@ -7618,6 +7796,10 @@ function renderSpellAttackRow(spell, character) {
   </article>`;
 }
 function renderAttacksPanel(character, sectionClassName) {
+  // 3.5 resolves attacks off Base Attack Bonus and 2E off THAC0; each has its
+  // own panel, and the 5e one sat alongside quoting a to-hit bonus that means
+  // nothing in either -- and an Extra Attack the character never had.
+  if (EDITIONS_WITHOUT_5E_CHOICES.has(character.edition)) return "";
   const attacks = weaponAttacks(character);
   const rows = attacks.map(attack => {
     const damageButtons = [];
@@ -8252,7 +8434,8 @@ function adndStrength(character) {
   const score = Math.max(1, Math.min(19, Number(character.STR) || 10));
   const percentile = Number(character.strPercentile || 0);
   const cls = ADND_CLASSES[primaryClassName(character)] || {};
-  if (score === 18 && percentile > 0 && cls.exceptionalStrength) {
+  const race = (typeof ADND_RACES !== "undefined" && ADND_RACES[character.species]) || {};
+  if (score === 18 && percentile > 0 && cls.exceptionalStrength && !race.noExceptionalStrength) {
     const band = ADND_EXCEPTIONAL_STRENGTH.find(entry => percentile <= entry.max)
       || ADND_EXCEPTIONAL_STRENGTH[ADND_EXCEPTIONAL_STRENGTH.length - 1];
     return { ...band, score, percentile, display: band.label };
@@ -8329,10 +8512,13 @@ function adndHitPoints(character) {
   const con = adndAbilityRow(ADND_CONSTITUTION, character.CON);
   const conBonus = adndClassGroup(character) === "warrior"
     ? Number(con.warriorHp || 0) : Math.min(2, Number(con.hp || 0));
-  const rolled = Math.min(level, 9);
+  // Warriors and priests roll nine hit dice; wizards and rogues roll ten.
+  const lastDie = (typeof ADND_LAST_HIT_DIE_LEVEL !== "undefined"
+    && ADND_LAST_HIT_DIE_LEVEL[adndClassGroup(character)]) || 9;
+  const rolled = Math.min(level, lastDie);
   const average = Math.floor(die / 2) + 1;
   let hp = rolled * (average + conBonus);
-  if (level > 9) hp += (level - 9) * Number(cls.hpAfter9 || 1);
+  if (level > lastDie) hp += (level - lastDie) * Number(cls.hpAfter9 || 1);
   return Math.max(1, hp);
 }
 
@@ -9399,9 +9585,9 @@ function startNewCharacter() {
 function d35ResourceDefinitions(character) {
   const resources = [];
   classBreakdown(character).forEach(entry => {
-    const die = classHitDie(entry.name, "d35");
-    resources.push({ id: `${entry.name.toLowerCase()}-hit-dice`, name: `${entry.name} Hit Dice · d${die}`,
-      max: entry.level, recovery: "long", group: "class" });
+    // No hit-dice pool here. Spending hit dice to heal is a 5e mechanic; a 3.5
+    // character recovers a hit point per level for a night's rest, so a
+    // spendable bank that "resets on a long rest" would be inventing a rule.
     let best = {};
     classFeatureRows(entry.name, "d35")
       .filter(([level]) => level <= entry.level)
@@ -10734,6 +10920,10 @@ function resourceDefinitions(character) {
   // belong on a 3.5 sheet. 3.5 tracks its per-day uses through class features
   // instead, so only the shared hit dice and spell slots carry over.
   if (isD35(character)) return d35ResourceDefinitions(character);
+  // 2E's per-day counts live in their own panels: stuns on the monk's open hand
+  // card, spell slots on the spell panel. Left to the 5e path, a 2E monk
+  // collected Ki Points and a bank of spendable hit dice.
+  if (isAdnd(character)) return [];
   const entries = classBreakdown(character);
   if (entries.length > 1) {
     const classResources = entries.flatMap(entry => singleClassResourceDefinitions(withClassContext(character, entry.name, entry.level)).map(resource => ({
@@ -11303,7 +11493,9 @@ function renderSheet() {
   });
   const resources = resourceDefinitions(c);
   const spellcastingClasses = classEntries.filter(entry => spellListsFor(c.edition, entry.name, classSubclassName(c, entry.name)));
-  const hasSpellcasting = Boolean(spellcastingClasses.length);
+  // 3.5 shows its spellbook panel and 2E its slot panel; the 5e spellcasting
+  // block restated both with a 5e save DC and 5e slot levels.
+  const hasSpellcasting = Boolean(spellcastingClasses.length) && !EDITIONS_WITHOUT_5E_CHOICES.has(c.edition);
   if (activeSheetSection === "spells" && !hasSpellcasting) activeSheetSection = "overview";
   const sectionClass = section => activeSheetSection === section ? "" : "hidden";
   const maximumHp = d.hp;
@@ -11383,12 +11575,12 @@ function renderSheet() {
     <section class="sheet-panel ${sectionClass("overview")}"><h2>Abilities${helpChip("ability")}</h2><div class="sheet-abilities">${ABILITIES.map(a =>
       `<button class="sheet-ability" data-sheet-roll="${a} check" data-modifier="${modifier(eff[a]) + itemCheckBonus}"><small>${a}</small><strong>${signed(modifier(eff[a]) + itemCheckBonus)}</strong><span>${eff[a]}${eff[a] !== c[a] ? "*" : ""}</span></button>`
     ).join("")}</div>
-      <h2 class="subsection-title">Saving throws${helpChip("save")}</h2>
+      ${EDITIONS_WITHOUT_5E_CHOICES.has(c.edition) ? "" : `<h2 class="subsection-title">Saving throws${helpChip("save")}</h2>
       <div class="saving-throw-list">${ABILITIES.map(ability => {
         const proficient = savingThrowProficiencies(c).has(ability);
         const saveModifier = savingThrowModifier(c, ability);
         return `<button type="button" data-sheet-roll="${ability} saving throw" data-modifier="${saveModifier}"><span class="${proficient ? "proficient" : ""}">${ability}</span><strong>${signed(saveModifier)}</strong></button>`;
-      }).join("")}</div>
+      }).join("")}</div>`}
     </section>
     ${isAdnd(c) ? "" : `<section class="sheet-panel ${sectionClass("overview")}"><h2>Skills${helpChip("skill")}</h2><div class="skill-list">${skillsForEdition(c.edition).map(skill => { const ability = SKILLS[skill];
       const proficient = proficientSkills(c).has(skill);
@@ -11473,13 +11665,13 @@ function renderSheet() {
         `<article class="feature-card${choice.warning ? " choice-warning" : ""}"><small>${escapeHtml(choice.source)}</small><strong>${escapeHtml(choice.name)}</strong>${choice.warning ? `<span class="choice-warning-note">${escapeHtml(choice.warning)}</span>` : ""}${ruleDetails(choice.description)}</article>`
       ).join("")}</div>
     </section>` : ""}
-    <section class="sheet-panel sheet-wide ${sectionClass("features")}">
+    ${isAdnd(c) ? "" : `<section class="sheet-panel sheet-wide ${sectionClass("features")}">
       <h2>Feats</h2>
       <div class="tag-list">${feats.map(feat => {
         const featRecord = (FEATS[c.edition] || []).find(item => item.name === feat) || { name: feat };
         return `<div class="tag">${escapeHtml(feat)}${ruleDetails(featDescription(featRecord, c.edition))}</div>`;
       }).join("") || "<p>No feats selected.</p>"}</div>
-    </section>
+    </section>`}
     ${hasSpellcasting ? `<section class="sheet-panel sheet-wide ${sectionClass("spells")}">
       <h2>Spellcasting</h2>
       <div class="sheet-spell-summary">${spellcastingClasses.map(entry => {

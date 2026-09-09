@@ -150,10 +150,12 @@ const D35_SPELLS_PER_DAY = {
   Sorcerer: [[5,3],[6,4],[6,5],[6,6,3],[6,6,4],[6,6,5,3],[6,6,6,4],[6,6,6,5,3],[6,6,6,6,4],[6,6,6,6,5,3],
     [6,6,6,6,6,4],[6,6,6,6,6,5,3],[6,6,6,6,6,6,4],[6,6,6,6,6,6,5,3],[6,6,6,6,6,6,6,4],[6,6,6,6,6,6,6,5,3],
     [6,6,6,6,6,6,6,6,4],[6,6,6,6,6,6,6,6,5,3],[6,6,6,6,6,6,6,6,6,4],[6,6,6,6,6,6,6,6,6,6]],
-  Paladin: [[],[],[],[0],[0,1],[1,1],[1,1],[1,1,0],[1,1,1],[1,1,1],[1,1,1,0],[1,1,1,1],[1,1,1,1],
-    [2,1,1,1],[2,2,1,1],[2,2,2,1],[2,2,2,1],[3,2,2,1],[3,3,3,2],[3,3,3,3]],
-  Ranger: [[],[],[],[0],[0,1],[1,1],[1,1],[1,1,0],[1,1,1],[1,1,1],[1,1,1,0],[1,1,1,1],[1,1,1,1],
-    [2,1,1,1],[2,2,1,1],[2,2,2,1],[2,2,2,1],[3,2,2,1],[3,3,3,2],[3,3,3,3]]
+  Paladin: [[], [], [], [0, 0], [0, 0], [0, 1], [0, 1], [0, 1, 0], [0, 1, 0], [0, 1, 1],
+    [0, 1, 1, 0], [0, 1, 1, 1], [0, 1, 1, 1], [0, 2, 1, 1, 0], [0, 2, 1, 1, 1], [0, 2, 2, 1, 1],
+    [0, 2, 2, 2, 1], [0, 3, 2, 2, 1], [0, 3, 3, 3, 2], [0, 3, 3, 3, 3]],
+  Ranger: [[], [], [], [0, 0], [0, 0], [0, 1], [0, 1], [0, 1, 0], [0, 1, 0], [0, 1, 1],
+    [0, 1, 1, 0], [0, 1, 1, 1], [0, 1, 1, 1], [0, 2, 1, 1, 0], [0, 2, 1, 1, 1], [0, 2, 2, 1, 1],
+    [0, 2, 2, 2, 1], [0, 3, 2, 2, 1], [0, 3, 3, 3, 2], [0, 3, 3, 3, 3]]
 };
 
 // Sorcerers and bards know a fixed list rather than preparing from a book.
@@ -266,6 +268,14 @@ function registerD35Runtime() {
   if (typeof FEATS !== "undefined") FEATS[ED] = featSource.map(feat => ({
     name: feat.name, source: "3.5 SRD", category: "General", expanded: false, prerequisite: feat.prereq
   }));
+  // The shared registry wants plain names keyed by spell level; the 3.5 lists
+  // carry a description alongside each name, which the spell picker reads back
+  // out of D35_SPELL_INDEX.
+  if (typeof SPELL_LISTS !== "undefined" && typeof D35_SPELL_LISTS !== "undefined") {
+    SPELL_LISTS[ED] = Object.fromEntries(Object.entries(D35_SPELL_LISTS).map(([className, byLevel]) =>
+      [className, Object.fromEntries(Object.entries(byLevel).map(([spellLevel, entries]) =>
+        [spellLevel, entries.map(entry => (entry && entry.name) || entry)]))]));
+  }
   if (typeof CONTENT_SUMMARIES !== "undefined") {
     featSource.forEach(feat => { if (!CONTENT_SUMMARIES.feats[feat.name]) CONTENT_SUMMARIES.feats[feat.name] = feat.summary; });
     Object.entries(D35_RACES).forEach(([name, race]) => {

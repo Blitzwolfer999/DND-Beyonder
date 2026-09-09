@@ -16,6 +16,10 @@ const ADND_EDITION = "adnd2e";
 
 // THAC0 -- "to hit Armor Class 0". Lower is better, and each class group
 // improves at its own rate.
+// The level at which a group stops rolling hit dice and starts taking a flat
+// gain. Warriors and priests stop after nine; wizards and rogues after ten.
+const ADND_LAST_HIT_DIE_LEVEL = { warrior: 9, priest: 9, wizard: 10, rogue: 10 };
+
 const ADND_THAC0_RATES = {
   warrior: level => 21 - level,                          // 1 point per level
   priest: level => 20 - Math.floor((level - 1) / 3) * 2, // 2 points per 3 levels
@@ -102,7 +106,7 @@ const ADND_CLASSES = {
     races: ["Human", "Half-Elf"], caster: "priest",
     xp: [0, 2000, 4000, 7500, 12500, 20000, 35000, 60000, 90000, 125000, 200000,
          300000, 750000, 1500000, 3000000, 3500000, 4000000, 4500000, 5000000, 5500000],
-    hpAfter9: 1,
+    hpAfter9: 2,
     summary: "A priest of the natural world who shapechanges, charms animals and answers to the balance rather than a deity."
   },
   Monk: {
@@ -148,20 +152,20 @@ const ADND_CLASSES = {
 const ADND_RACES = {
   Human: { adjust: {}, size: "Medium", speed: 12, infravision: 0, limits: {},
     summary: "No adjustments, no level limits, and every class open. That freedom is the human advantage." },
-  Dwarf: { adjust: { CON: 1, CHA: -1 }, size: "Medium", speed: 6, infravision: 60,
+  Dwarf: { adjust: { CON: 1, CHA: -1 }, size: "Medium", speed: 6, infravision: 60, constitutionSaves: true,
     limits: { Fighter: 15, Cleric: 10, Thief: 12 },
     summary: "Stout and hard to poison, with an eye for stonework and a deep suspicion of magic." },
   Elf: { adjust: { DEX: 1, CON: -1 }, size: "Medium", speed: 12, infravision: 60,
     limits: { Fighter: 12, Ranger: 15, Cleric: 12, Mage: 15, Thief: 12 },
     summary: "Graceful and long-lived, resistant to sleep and charm, at ease with sword and bow." },
-  Gnome: { adjust: { INT: 1, WIS: -1 }, size: "Small", speed: 6, infravision: 60,
+  Gnome: { adjust: { INT: 1, WIS: -1 }, size: "Small", speed: 6, infravision: 60, constitutionSaves: true,
     limits: { Fighter: 11, Cleric: 9, Thief: 13 },
     summary: "Small, inventive tinkers with a gift for illusion and a rapport with burrowing animals." },
   "Half-Elf": { adjust: {}, size: "Medium", speed: 12, infravision: 60,
-    limits: { Fighter: 14, Ranger: 16, Cleric: 14, Druid: 9, Mage: 12, Thief: 12, Bard: 14 },
+    limits: { Fighter: 14, Ranger: 16, Cleric: 14, Druid: 9, Mage: 12, Thief: 12 },
     summary: "At home in two worlds and neither, with elven senses and human adaptability." },
-  Halfling: { adjust: { DEX: 1, STR: -1 }, size: "Small", speed: 6, infravision: 30,
-    limits: { Fighter: 9, Cleric: 8, Thief: 15 },
+  Halfling: { adjust: { DEX: 1, STR: -1 }, size: "Small", speed: 6, infravision: 30, constitutionSaves: true,
+    limits: { Fighter: 9, Cleric: 8, Thief: 15 }, noExceptionalStrength: true,
     summary: "Cheerful, startlingly hard to frighten, and quietly the best thieves in the game." },
   "Half-Orc": { adjust: { STR: 1, CON: 1, CHA: -2 }, size: "Medium", speed: 12, infravision: 60,
     limits: { Fighter: 10, Cleric: 4, Thief: 8 },
@@ -308,6 +312,67 @@ const ADND_MONK_FEATURES = [
   { level: 19, name: "Grand Master of Flowers", text: "Once a week the monk may leave their body for the Astral Plane and stay as long as they like. The body left behind still needs feeding." }
 ];
 
+
+// What each race can actually do, beyond its ability adjustment. Dwarves,
+// gnomes and halflings all improve their saves as Constitution rises, on the
+// same +1 per three and a half points; the table is shared.
+const ADND_CONSTITUTION_SAVE_BONUS = [
+  { max: 3, bonus: 0 }, { max: 6, bonus: 1 }, { max: 10, bonus: 2 },
+  { max: 13, bonus: 3 }, { max: 17, bonus: 4 }, { max: 19, bonus: 5 }
+];
+
+function adndRacialSaveBonus(species, score) {
+  const race = ADND_RACES[species] || {};
+  if (!race.constitutionSaves) return 0;
+  const value = Math.max(3, Math.min(19, Number(score) || 10));
+  const row = ADND_CONSTITUTION_SAVE_BONUS.find(entry => value <= entry.max);
+  return row ? row.bonus : 0;
+}
+
+const ADND_RACE_TRAITS = {
+  Human: [
+    ["Unrestricted", "Every class is open, and no level limit ever applies. That freedom is the whole of the human advantage."]
+  ],
+  Dwarf: [
+    ["Infravision", "See warm shapes in the dark out to 60 feet."],
+    ["Hardy against magic", "Saves against wands, staves, rods and spells improve by +1 for every three and a half points of Constitution, and poison saves with them."],
+    ["Ancestral enemies", "+1 to hit orcs, half-orcs, goblins and hobgoblins. Ogres, trolls, ogre magi, giants and titans suffer -4 to hit a dwarf."],
+    ["Stonework sense", "Detect a slope or grade, or new construction, on 1-5 in 6; shifting walls on 1-4; stonework traps or your depth underground on 1-3."],
+    ["Magical malfunction", "A magical item not made for the dwarf's own class has a 20% chance of misbehaving each time it is used. Weapons, shields, armour, gauntlets and girdles are exempt."]
+  ],
+  Elf: [
+    ["Infravision", "See warm shapes in the dark out to 60 feet."],
+    ["Resistance to sleep and charm", "90% resistant to sleep and charm spells; a failed check still allows whatever save the spell normally offers."],
+    ["Secret doors", "Notice a secret door in passing on a 1 in 6; find one on 1-2 when searching a ten-foot square; find a concealed portal on 1-3."],
+    ["Trained with blade and bow", "+1 to hit with any bow other than a crossbow, and with a short or long sword."]
+  ],
+  Gnome: [
+    ["Infravision", "See warm shapes in the dark out to 60 feet."],
+    ["Hardy against magic", "Saves against wands, staves, rods and spells improve by +1 for every three and a half points of Constitution."],
+    ["Small and quick", "+1 to hit kobolds and goblins. Gnolls, bugbears, ogres, trolls, giants and titans suffer -4 to hit a gnome."],
+    ["Underground sense", "Detect a slope on 1-5 in 6; unsafe walls, ceilings or floors on 1-7 in 10; depth on 1-4 in 6; direction on 1-3 in 6."],
+    ["Magical malfunction", "A magical item not made for the gnome's own class has a 20% chance of misbehaving; weapons, armour and shields are exempt."]
+  ],
+  "Half-Elf": [
+    ["Infravision", "See warm shapes in the dark out to 60 feet."],
+    ["Resistance to sleep and charm", "30% resistant to sleep and charm spells."],
+    ["Secret doors", "Notice a secret door in passing on a 1 in 6; find one on 1-2 when searching; find a concealed portal on 1-3."],
+    ["No bardic ceiling", "Alone among the demihumans, a half-elf bard has no level limit."]
+  ],
+  Halfling: [
+    ["Infravision", "Roughly one halfling in six sees warm shapes out to 60 feet; another quarter manage 30."],
+    ["Hardy against magic and poison", "Saves against wands, staves, rods, spells and poison improve by +1 for every three and a half points of Constitution."],
+    ["Deadly aim", "+1 to hit with a sling or any thrown weapon."],
+    ["Quiet in the wild", "Out of metal armour and ninety feet from anyone but an elf similarly unarmoured, opponents take -4 on their surprise roll; -2 if a door must be opened."],
+    ["No exceptional Strength", "A halfling fighter with Strength 18 does not roll the percentile."],
+    ["Underground sense", "Detect a slope on 1-3 in 4, and direction underground on 1-3 in 6."]
+  ],
+  "Half-Orc": [
+    ["Infravision", "See warm shapes in the dark out to 60 feet."],
+    ["Not a Player's Handbook race", "Half-orcs reached 2E through a later supplement rather than the core book, so tables vary on what they may become and how far."]
+  ]
+};
+
 // Ability score effects. Scores run 3 to 18, and warriors may roll exceptional
 // Strength as a percentile above 18.
 const ADND_STRENGTH = {
@@ -419,7 +484,7 @@ const ADND_THIEF_RACIAL = {
   Elf: { "Pick Pockets": 5, "Open Locks": -5, "Move Silently": 5, "Hide in Shadows": 10, "Detect Noise": 5 },
   Gnome: { "Open Locks": 5, "Find/Remove Traps": 10, "Move Silently": 5, "Hide in Shadows": 5,
     "Detect Noise": 10, "Climb Walls": -15 },
-  "Half-Elf": { "Pick Pockets": 10, "Detect Noise": 5 },
+  "Half-Elf": { "Pick Pockets": 10, "Hide in Shadows": 5 },
   Halfling: { "Pick Pockets": 5, "Open Locks": 5, "Find/Remove Traps": 5, "Move Silently": 10,
     "Hide in Shadows": 15, "Detect Noise": 5, "Climb Walls": -15, "Read Languages": -5 },
   "Half-Orc": { "Open Locks": 5, "Find/Remove Traps": 5, "Climb Walls": 5, "Read Languages": -10 }
@@ -454,6 +519,10 @@ if (typeof window !== "undefined") {
   window.ADND_THIEF_SKILLS = ADND_THIEF_SKILLS;
   window.ADND_THIEF_RACIAL = ADND_THIEF_RACIAL;
   window.ADND_SPELL_SLOTS = ADND_SPELL_SLOTS;
+  window.ADND_LAST_HIT_DIE_LEVEL = ADND_LAST_HIT_DIE_LEVEL;
+  window.ADND_RACE_TRAITS = ADND_RACE_TRAITS;
+  window.ADND_CONSTITUTION_SAVE_BONUS = ADND_CONSTITUTION_SAVE_BONUS;
+  window.adndRacialSaveBonus = adndRacialSaveBonus;
   window.ADND_WIZARD_SCHOOLS = ADND_WIZARD_SCHOOLS;
   window.ADND_SPECIALISTS = ADND_SPECIALISTS;
   window.ADND_SPECIALIST_BENEFITS = ADND_SPECIALIST_BENEFITS;

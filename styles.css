@@ -608,7 +608,10 @@ textarea { resize: vertical; }
 .choice-option span, .choice-option strong, .choice-option small { display: block; }
 .choice-option small { margin-top: 3px; color: var(--muted); font-weight: 400; }
 .spell-level-tabs { display: flex; gap: 5px; margin-bottom: 10px; overflow-x: auto; }
-.spell-level-tabs button { min-width: 38px; padding: 7px 9px; border: 1px solid var(--line); background: #f8f4ed; cursor: pointer; font-size: 11px; }
+/* The strip scrolls, so a tab must keep its own width rather than being
+   squeezed until its label is cut in half -- "Cantrip" was clipped on a
+   phone with no scrollbar of its own to reveal the rest. */
+.spell-level-tabs button { flex: 0 0 auto; min-width: 38px; padding: 7px 9px; border: 1px solid var(--line); background: #f8f4ed; cursor: pointer; font-size: 11px; white-space: nowrap; }
 .spell-level-tabs button.active { color: white; border-color: var(--green); background: var(--green); }
 .non-caster-note { padding: 20px; color: var(--muted); border: 1px dashed var(--line); background: #f7f2e9; text-align: center; }
 .selection-details { margin-top: 22px; padding: 18px; border: 1px solid var(--line); border-left: 3px solid var(--green); background: #f8f4ed; }
