@@ -403,6 +403,49 @@ function adndSpecialistAttackRow(level) {
   return ADND_SPECIALIST_ATTACKS.find(row => lvl <= row.max) || ADND_SPECIALIST_ATTACKS[2];
 }
 
+
+// Nonweapon proficiencies are 2E's skill system: a check succeeds on a d20 roll
+// at or under the relevant ability score plus the proficiency's own modifier.
+//
+// This is the set the source consulted attributes to the Player's Handbook, and
+// it is not the whole of that book's list. The builder therefore also takes a
+// typed entry, so a proficiency that is missing here can still be recorded
+// rather than being quietly unavailable.
+const ADND_NONWEAPON_PROFICIENCIES = {
+  "Agriculture": { slots: 1, ability: "INT", modifier: 0 },
+  "Animal Handling": { slots: 1, ability: "WIS", modifier: -1 },
+  "Animal Training": { slots: 1, ability: "WIS", modifier: 0 },
+  "Artistic Ability": { slots: 1, ability: "WIS", modifier: 0 },
+  "Blacksmithing": { slots: 1, ability: "STR", modifier: 0 },
+  "Brewing": { slots: 1, ability: "INT", modifier: 0 },
+  "Carpentry": { slots: 1, ability: "STR", modifier: 0 },
+  "Cobbling": { slots: 1, ability: "DEX", modifier: 0 },
+  "Cooking": { slots: 1, ability: "INT", modifier: 0 },
+  "Dancing": { slots: 1, ability: "DEX", modifier: 0 },
+  "Direction Sense": { slots: 1, ability: "WIS", modifier: 1 },
+  "Etiquette": { slots: 1, ability: "CHA", modifier: 0 },
+  "Fire-building": { slots: 1, ability: "WIS", modifier: -1 },
+  "Fishing": { slots: 1, ability: "WIS", modifier: -1 },
+  "Heraldry": { slots: 1, ability: "INT", modifier: 0 },
+  "Languages, Modern": { slots: 1, ability: "INT", modifier: 0 },
+  "Leatherworking": { slots: 1, ability: "INT", modifier: 0 },
+  "Mining": { slots: 2, ability: "WIS", modifier: -3 },
+  "Pottery": { slots: 1, ability: "DEX", modifier: -2 },
+  "Riding, Airborne": { slots: 2, ability: "WIS", modifier: -2 },
+  "Riding, Land-Based": { slots: 1, ability: "WIS", modifier: 3 },
+  "Rope Use": { slots: 1, ability: "DEX", modifier: 0 },
+  "Seamanship": { slots: 1, ability: "DEX", modifier: 1 },
+  "Seamstress/Tailor": { slots: 1, ability: "DEX", modifier: -1 },
+  "Singing": { slots: 1, ability: "CHA", modifier: 0 },
+  "Stonemasonry": { slots: 1, ability: "STR", modifier: -2 },
+  "Swimming": { slots: 1, ability: "STR", modifier: 0 },
+  "Weather Sense": { slots: 1, ability: "WIS", modifier: -1 },
+  "Weaving": { slots: 1, ability: "INT", modifier: -1 }
+};
+
+const ADND_NONWEAPON_NOTE =
+  "A check succeeds on a d20 roll at or under the ability score plus the proficiency's modifier. This list is the Player's Handbook set the source confirms; anything missing can be typed in below.";
+
 // Racial adjustments and the class level limits that made demihumans a
 // short-term investment.
 const ADND_RACES = {
@@ -786,6 +829,8 @@ if (typeof window !== "undefined") {
   window.ADND_TURN_UNDEAD_TARGETS = ADND_TURN_UNDEAD_TARGETS;
   window.ADND_CLASS_FEATURES = ADND_CLASS_FEATURES;
   window.ADND_PROFICIENCY_SLOTS = ADND_PROFICIENCY_SLOTS;
+  window.ADND_NONWEAPON_PROFICIENCIES = ADND_NONWEAPON_PROFICIENCIES;
+  window.ADND_NONWEAPON_NOTE = ADND_NONWEAPON_NOTE;
   window.ADND_SPECIALIST_ATTACKS = ADND_SPECIALIST_ATTACKS;
   window.adndWeaponSlots = adndWeaponSlots;
   window.adndNonweaponSlots = adndNonweaponSlots;

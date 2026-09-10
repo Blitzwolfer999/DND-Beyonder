@@ -4079,6 +4079,10 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .adnd-turn-row.destroy strong { color: #a4552a; }
 .death-saves-note { display: grid; gap: 4px; }
 .death-saves-note span { color: var(--muted); font: 500 12px/1.55 system-ui, sans-serif; }
+.adnd-skill-custom { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 11px; border: 1px dashed var(--line); border-radius: 9px; background: var(--panel);
+  font: 500 12px/1.4 system-ui, sans-serif; }
+.adnd-skill-custom small { display: block; color: var(--muted); font-size: 11px; }
 .adnd-untrained small { color: #a4552a; }
 .adnd-untrained { color: #a4552a; }
 .session-rest-note {

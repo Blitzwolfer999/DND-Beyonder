@@ -4044,6 +4044,7 @@ function resetD35SkillDraft() {
   selectedD35Domains = new Set();
   adndThiefDraft = {};
   adndWeaponProficiencyDraft = new Set();
+  adndNonweaponProficiencyDraft = new Set();
 }
 
 function setGameSetting(setting, options = {}) {
@@ -6670,6 +6671,7 @@ function renderD35FeatChoices() {
 // on top of the racial and Dexterity adjustments already baked in.
 let adndThiefDraft = {};
 let adndWeaponProficiencyDraft = new Set();
+let adndNonweaponProficiencyDraft = new Set();
 
 function adndBuilderCharacter() {
   const level = Number(form.elements.level?.value || 1);
@@ -6682,6 +6684,8 @@ function adndBuilderCharacter() {
     strPercentile: Number(form.elements.strPercentile?.value || 0),
     thiefSkillPoints: adndThiefDraft,
     weaponProficiencies: [...adndWeaponProficiencyDraft],
+    nonweaponProficiencies: [...adndNonweaponProficiencyDraft],
+    customNonweapon: form.elements.customNonweapon?.value || "",
     inventory: [], ...abilities
   };
 }
@@ -6773,6 +6777,51 @@ function applyAdndWeaponProficiency(input) {
   updatePreview();
 }
 
+// The slots a character has spent on nonweapon proficiencies, counting the ones
+// that cost two.
+function adndNonweaponSlotsSpent(character) {
+  if (typeof ADND_NONWEAPON_PROFICIENCIES === "undefined") return 0;
+  return (character.nonweaponProficiencies || []).reduce((total, name) =>
+    total + Number((ADND_NONWEAPON_PROFICIENCIES[name] || {}).slots || 1), 0);
+}
+
+function renderAdndNonweaponProficiencies() {
+  const section = $("#adnd-nonweapon-section");
+  const list = $("#adnd-nonweapon-list");
+  if (!section || !list) return;
+  const show = edition === "adnd2e" && typeof ADND_NONWEAPON_PROFICIENCIES !== "undefined";
+  section.classList.toggle("hidden", !show);
+  if (!show) return;
+  const character = adndBuilderCharacter();
+  const slots = adndNonweaponSlots(adndClassGroup(character), characterTotalLevel(character));
+  const spent = adndNonweaponSlotsSpent(character);
+  const meter = $("#adnd-nonweapon-budget");
+  if (meter) {
+    meter.textContent = `${spent} of ${slots} slots spent`;
+    meter.classList.toggle("over", spent > slots);
+  }
+  const note = $("#adnd-nonweapon-note");
+  if (note && typeof ADND_NONWEAPON_NOTE !== "undefined") note.textContent = ADND_NONWEAPON_NOTE;
+  const chosen = new Set(character.nonweaponProficiencies || []);
+  list.innerHTML = Object.entries(ADND_NONWEAPON_PROFICIENCIES).map(([name, rule]) => {
+    const checked = chosen.has(name);
+    const full = !checked && spent + rule.slots > slots;
+    const score = Number(character[rule.ability] || 10);
+    return `<label class="choice-option ${full ? "locked" : ""}">
+      <input type="checkbox" data-adnd-nonweapon="${escapeHtml(name)}" ${checked ? "checked" : ""} ${full ? "disabled" : ""}>
+      <span><strong>${escapeHtml(name)}</strong><small>${rule.ability} ${signed(rule.modifier)} \u00b7 succeeds on ${Math.max(1, score + rule.modifier)} or less${rule.slots > 1 ? ` \u00b7 ${rule.slots} slots` : ""}</small></span>
+    </label>`;
+  }).join("");
+}
+
+function applyAdndNonweaponProficiency(input) {
+  const name = input.dataset.adndNonweapon;
+  if (input.checked) adndNonweaponProficiencyDraft.add(name);
+  else adndNonweaponProficiencyDraft.delete(name);
+  renderAdndNonweaponProficiencies();
+  updatePreview();
+}
+
 function renderAdndStrengthField() {
   const wrap = $("#adnd-strength-wrap");
   if (!wrap) return;
@@ -6836,6 +6885,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   renderD35DomainChoices();
   renderAdndThiefBuilder();
   renderAdndWeaponProficiencies();
+  renderAdndNonweaponProficiencies();
   renderAdndStrengthField();
   $$("select[data-asi-mode]").forEach(select => {
     selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
@@ -7283,6 +7333,7 @@ function formData() {
   if (edition === "adnd2e") {
     data.thiefSkillPoints = { ...adndThiefDraft };
     data.weaponProficiencies = [...adndWeaponProficiencyDraft];
+    data.nonweaponProficiencies = [...adndNonweaponProficiencyDraft];
     data.strPercentile = Number(data.strPercentile || 0);
     // 2E has none of the 5e choice fields.
     data.skillProficiencies = [];
@@ -7339,6 +7390,12 @@ function adndCompletionIssues(data, add) {
   }
   if (weaponSlots && trained < weaponSlots) {
     add(5, `${weaponSlots - trained} weapon proficiency slot${weaponSlots - trained === 1 ? "" : "s"} still to fill`);
+  }
+  const nonweaponSlots = typeof adndNonweaponSlots === "function"
+    ? adndNonweaponSlots(adndClassGroup(data), characterTotalLevel(data)) : 0;
+  const nonweaponSpent = adndNonweaponSlotsSpent(data);
+  if (nonweaponSlots && nonweaponSpent > nonweaponSlots) {
+    add(5, `${nonweaponSpent - nonweaponSlots} more nonweapon proficiency slots spent than earned`);
   }
   const budget = adndThiefPointBudget(data);
   if (budget) {
@@ -9667,6 +9724,33 @@ function renderAdndTurning(c, sectionClassName) {
       </div>`).join("")}
     </div>
     <p class="attack-hint">A number is what a d20 must reach. "Turned" succeeds automatically; "destroyed" wipes them out rather than driving them off.</p>
+  </section>`;
+}
+
+// 2E's skill system: roll a d20 at or under the ability score plus the
+// proficiency's modifier.
+function renderAdndNonweapon(c, sectionClassName) {
+  if (!isAdnd(c) || typeof ADND_NONWEAPON_PROFICIENCIES === "undefined") return "";
+  const named = (c.nonweaponProficiencies || []);
+  const custom = String(c.customNonweapon || "").split(",").map(name => name.trim()).filter(Boolean);
+  if (!named.length && !custom.length) return "";
+  const slots = adndNonweaponSlots(adndClassGroup(c), characterTotalLevel(c));
+  const spent = adndNonweaponSlotsSpent(c);
+  const rows = named.map(name => {
+    const rule = ADND_NONWEAPON_PROFICIENCIES[name] || { ability: "INT", modifier: 0 };
+    const score = Number(c[rule.ability] || 10);
+    return { name, detail: `${rule.ability} ${score}${rule.modifier ? ` ${signed(rule.modifier)}` : ""}`,
+      target: Math.max(1, score + rule.modifier) };
+  });
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Nonweapon proficiencies</h2><span>${spent} of ${slots} slots spent \u00b7 roll a d20 at or under the target.</span></div>
+    <div class="adnd-skill-list">
+      ${rows.map(row => `<button type="button" class="adnd-skill" data-sheet-roll="${escapeHtml(row.name)}" data-modifier="0" data-roll-under="${row.target}">
+        <span>${escapeHtml(row.name)}<small>${escapeHtml(row.detail)}</small></span>
+        <strong>${row.target} or less</strong>
+      </button>`).join("")}
+      ${custom.map(name => `<div class="adnd-skill adnd-skill-custom"><span>${escapeHtml(name)}<small>recorded by hand</small></span><strong>&mdash;</strong></div>`).join("")}
+    </div>
   </section>`;
 }
 
@@ -12057,6 +12141,7 @@ function renderSheet() {
     ${renderAdndWeapons(c, sectionClass("overview"))}
     ${renderAdndAttacks(c, sectionClass("overview"))}
     ${renderAdndTurning(c, sectionClass("overview"))}
+    ${renderAdndNonweapon(c, sectionClass("overview"))}
     ${renderAdndThiefSkills(c, sectionClass("overview"))}
     ${renderAdndSpells(c, sectionClass("overview"))}
     ${renderD35Attacks(c, sectionClass("overview"))}
@@ -12122,6 +12207,7 @@ function editCharacter(id) {
   d35SkillRankDraft = { ...(c.skillRanks || {}) };
   adndThiefDraft = { ...(c.thiefSkillPoints || {}) };
   adndWeaponProficiencyDraft = new Set(c.weaponProficiencies || []);
+  adndNonweaponProficiencyDraft = new Set(c.nonweaponProficiencies || []);
   selectedD35Domains = new Set(c.domains || []);
   showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
@@ -14106,6 +14192,7 @@ function initEvents() {
   form.addEventListener("input", event => {
     if (event.target.name === "strPercentile") { renderAdndStrengthField(); updatePreview(); return; }
     if (event.target.id === "ability-roll-method") { abilityRollMethod = event.target.value; return; }
+    if (event.target.dataset?.adndNonweapon) { applyAdndNonweaponProficiency(event.target); return; }
     if (event.target.dataset?.adndWeaponProf) { applyAdndWeaponProficiency(event.target); return; }
     if (event.target.dataset?.adndThief) { applyAdndThiefPoints(event.target); return; }
     if (event.target.dataset?.d35Skill) { applyD35SkillRank(event.target); return; }
@@ -14142,6 +14229,7 @@ function initEvents() {
       updatePreview();
       return;
     }
+    if (event.target.dataset.adndNonweapon) { applyAdndNonweaponProficiency(event.target); return; }
     if (event.target.dataset.adndWeaponProf) { applyAdndWeaponProficiency(event.target); return; }
     if (event.target.dataset.adndThief) { applyAdndThiefPoints(event.target); return; }
     if (event.target.dataset.d35Domain) {
