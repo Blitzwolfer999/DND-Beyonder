@@ -4079,6 +4079,12 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .adnd-turn-row.destroy strong { color: #a4552a; }
 .death-saves-note { display: grid; gap: 4px; }
 .death-saves-note span { color: var(--muted); font: 500 12px/1.55 system-ui, sans-serif; }
+.adnd-untrained small { color: #a4552a; }
+.adnd-untrained { color: #a4552a; }
+.session-rest-note {
+  display: block; padding: 9px 12px; border: 1px dashed var(--line); border-radius: 10px;
+  color: var(--muted); font: 500 12px/1.5 system-ui, sans-serif;
+}
 @media (max-width: 620px) {
   .adnd-weapon { grid-template-columns: 1fr auto; gap: 6px; }
 }

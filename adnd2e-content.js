@@ -363,6 +363,46 @@ const ADND_CLASS_FEATURES = {
   ]
 };
 
+
+// Table 34. Proficiency is the assumed baseline in 2E, so being proficient
+// grants nothing -- it is swinging a weapon you never trained on that costs
+// you, and how much depends on the class group.
+const ADND_PROFICIENCY_SLOTS = {
+  warrior: { weapon: 4, weaponEvery: 3, penalty: -2, nonweapon: 3, nonweaponEvery: 3 },
+  wizard:  { weapon: 1, weaponEvery: 6, penalty: -5, nonweapon: 4, nonweaponEvery: 3 },
+  priest:  { weapon: 2, weaponEvery: 4, penalty: -3, nonweapon: 4, nonweaponEvery: 3 },
+  rogue:   { weapon: 2, weaponEvery: 4, penalty: -3, nonweapon: 3, nonweaponEvery: 4 }
+};
+
+function adndWeaponSlots(group, level) {
+  const rule = ADND_PROFICIENCY_SLOTS[group] || ADND_PROFICIENCY_SLOTS.rogue;
+  const lvl = Math.max(1, Number(level) || 1);
+  return rule.weapon + Math.floor(lvl / rule.weaponEvery);
+}
+
+function adndNonweaponSlots(group, level) {
+  const rule = ADND_PROFICIENCY_SLOTS[group] || ADND_PROFICIENCY_SLOTS.rogue;
+  const lvl = Math.max(1, Number(level) || 1);
+  return rule.nonweapon + Math.floor(lvl / rule.nonweaponEvery);
+}
+
+function adndNonProficiencyPenalty(group) {
+  return (ADND_PROFICIENCY_SLOTS[group] || ADND_PROFICIENCY_SLOTS.rogue).penalty;
+}
+
+// Table 35. A specialised fighter attacks more often, and the rate depends on
+// what kind of weapon it is.
+const ADND_SPECIALIST_ATTACKS = [
+  { max: 6, melee: "3/2", lightCrossbow: "1/1", heavyCrossbow: "1/2", thrownDagger: "3/1", thrownDart: "4/1", otherThrown: "3/2" },
+  { max: 12, melee: "2/1", lightCrossbow: "3/2", heavyCrossbow: "1/1", thrownDagger: "4/1", thrownDart: "5/1", otherThrown: "2/1" },
+  { max: 20, melee: "5/2", lightCrossbow: "2/1", heavyCrossbow: "3/2", thrownDagger: "5/1", thrownDart: "6/1", otherThrown: "5/2" }
+];
+
+function adndSpecialistAttackRow(level) {
+  const lvl = Math.max(1, Number(level) || 1);
+  return ADND_SPECIALIST_ATTACKS.find(row => lvl <= row.max) || ADND_SPECIALIST_ATTACKS[2];
+}
+
 // Racial adjustments and the class level limits that made demihumans a
 // short-term investment.
 const ADND_RACES = {
@@ -745,6 +785,12 @@ if (typeof window !== "undefined") {
   window.ADND_RANGER_STEALTH = ADND_RANGER_STEALTH;
   window.ADND_TURN_UNDEAD_TARGETS = ADND_TURN_UNDEAD_TARGETS;
   window.ADND_CLASS_FEATURES = ADND_CLASS_FEATURES;
+  window.ADND_PROFICIENCY_SLOTS = ADND_PROFICIENCY_SLOTS;
+  window.ADND_SPECIALIST_ATTACKS = ADND_SPECIALIST_ATTACKS;
+  window.adndWeaponSlots = adndWeaponSlots;
+  window.adndNonweaponSlots = adndNonweaponSlots;
+  window.adndNonProficiencyPenalty = adndNonProficiencyPenalty;
+  window.adndSpecialistAttackRow = adndSpecialistAttackRow;
   window.adndClassSpellRow = adndClassSpellRow;
   window.adndBackstabMultiplier = adndBackstabMultiplier;
   window.adndWarriorAttacks = adndWarriorAttacks;

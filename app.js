@@ -4039,7 +4039,12 @@ function applyD35SkillRank(input) {
   updatePreview();
 }
 
-function resetD35SkillDraft() { d35SkillRankDraft = {}; selectedD35Domains = new Set(); adndThiefDraft = {}; }
+function resetD35SkillDraft() {
+  d35SkillRankDraft = {};
+  selectedD35Domains = new Set();
+  adndThiefDraft = {};
+  adndWeaponProficiencyDraft = new Set();
+}
 
 function setGameSetting(setting, options = {}) {
   const target = setting === "starwars" ? "sw5e" : (lastDndEdition || "2014");
@@ -6664,6 +6669,7 @@ function renderD35FeatChoices() {
 // 2E gives a thief 30 discretionary points a level to raise the eight skills,
 // on top of the racial and Dexterity adjustments already baked in.
 let adndThiefDraft = {};
+let adndWeaponProficiencyDraft = new Set();
 
 function adndBuilderCharacter() {
   const level = Number(form.elements.level?.value || 1);
@@ -6675,6 +6681,7 @@ function adndBuilderCharacter() {
     species: $("#species-select")?.value || "Human",
     strPercentile: Number(form.elements.strPercentile?.value || 0),
     thiefSkillPoints: adndThiefDraft,
+    weaponProficiencies: [...adndWeaponProficiencyDraft],
     inventory: [], ...abilities
   };
 }
@@ -6726,6 +6733,46 @@ function applyAdndThiefPoints(input) {
 }
 
 // Exceptional Strength is a warrior-only percentile rolled on a Strength of 18.
+// Which weapons the character has actually trained on. Table 34 says how many
+// slots there are; the penalty for going without falls on everything else.
+function renderAdndWeaponProficiencies() {
+  const section = $("#adnd-weapon-prof-section");
+  const list = $("#adnd-weapon-prof-list");
+  if (!section || !list) return;
+  const show = edition === "adnd2e" && typeof ADND_WEAPONS !== "undefined";
+  section.classList.toggle("hidden", !show);
+  if (!show) return;
+  const character = adndBuilderCharacter();
+  const group = adndClassGroup(character);
+  const slots = adndWeaponSlots(group, characterTotalLevel(character));
+  const chosen = new Set(character.weaponProficiencies || []);
+  const meter = $("#adnd-weapon-prof-budget");
+  if (meter) {
+    meter.textContent = `${chosen.size} of ${slots} slots filled`;
+    meter.classList.toggle("over", chosen.size > slots);
+  }
+  const note = $("#adnd-weapon-prof-note");
+  if (note) {
+    note.textContent = `Proficiency grants no bonus in 2E -- the attack rolls assume it. Anything this character has not trained on is at ${signed(adndNonProficiencyPenalty(group))} to hit.`;
+  }
+  list.innerHTML = Object.keys(ADND_WEAPONS).map(name => {
+    const checked = chosen.has(name);
+    const full = !checked && chosen.size >= slots;
+    return `<label class="choice-option ${full ? "locked" : ""}">
+      <input type="checkbox" data-adnd-weapon-prof="${escapeHtml(name)}" ${checked ? "checked" : ""} ${full ? "disabled" : ""}>
+      <span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(ADND_WEAPONS[name].group)} \u00b7 speed ${ADND_WEAPONS[name].speed}</small></span>
+    </label>`;
+  }).join("");
+}
+
+function applyAdndWeaponProficiency(input) {
+  const name = input.dataset.adndWeaponProf;
+  if (input.checked) adndWeaponProficiencyDraft.add(name);
+  else adndWeaponProficiencyDraft.delete(name);
+  renderAdndWeaponProficiencies();
+  updatePreview();
+}
+
 function renderAdndStrengthField() {
   const wrap = $("#adnd-strength-wrap");
   if (!wrap) return;
@@ -6788,6 +6835,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   renderD35FeatChoices();
   renderD35DomainChoices();
   renderAdndThiefBuilder();
+  renderAdndWeaponProficiencies();
   renderAdndStrengthField();
   $$("select[data-asi-mode]").forEach(select => {
     selectedAsi[select.dataset.asiMode] = selectedAsi[select.dataset.asiMode] || { one: "", two: "" };
@@ -7234,6 +7282,7 @@ function formData() {
   }
   if (edition === "adnd2e") {
     data.thiefSkillPoints = { ...adndThiefDraft };
+    data.weaponProficiencies = [...adndWeaponProficiencyDraft];
     data.strPercentile = Number(data.strPercentile || 0);
     // 2E has none of the 5e choice fields.
     data.skillProficiencies = [];
@@ -7281,6 +7330,15 @@ function adndCompletionIssues(data, add) {
   const level = characterTotalLevel(data);
   if (limit && level > limit) {
     add(2, `A ${data.species} ${className} may not pass level ${limit}`);
+  }
+  const weaponSlots = typeof adndWeaponSlots === "function"
+    ? adndWeaponSlots(adndClassGroup(data), characterTotalLevel(data)) : 0;
+  const trained = (data.weaponProficiencies || []).length;
+  if (weaponSlots && trained > weaponSlots) {
+    add(5, `${trained - weaponSlots} more weapon proficiencies than this character has slots for`);
+  }
+  if (weaponSlots && trained < weaponSlots) {
+    add(5, `${weaponSlots - trained} weapon proficiency slot${weaponSlots - trained === 1 ? "" : "s"} still to fill`);
   }
   const budget = adndThiefPointBudget(data);
   if (budget) {
@@ -8816,6 +8874,9 @@ function adndDerived(character) {
       ? adndBackstabMultiplier(level) : 0,
     turningLevel: typeof adndTurningLevel === "function"
       ? adndTurningLevel(primaryClassName(character), level) : 0,
+    weaponSlots: typeof adndWeaponSlots === "function" ? adndWeaponSlots(group, level) : 0,
+    nonweaponSlots: typeof adndNonweaponSlots === "function" ? adndNonweaponSlots(group, level) : 0,
+    untrainedPenalty: typeof adndNonProficiencyPenalty === "function" ? adndNonProficiencyPenalty(group) : 0,
     spellSlots: adndSpellSlots(character)
   };
 }
@@ -9159,6 +9220,19 @@ function finalizeAdndCharacter(character) {
   if (!cls.exceptionalStrength || Number(built.STR) !== 18) built.strPercentile = 0;
   if (cls.alignment) built.alignment = cls.alignment;
   built.spells = cls.caster ? (built.spells || []) : [];
+  // A generated character arrives with its weapon slots filled, so it is not
+  // swinging everything at a penalty.
+  if (typeof adndWeaponSlots === "function" && typeof ADND_WEAPONS !== "undefined"
+      && !(built.weaponProficiencies || []).length) {
+    const slots = adndWeaponSlots(adndClassGroup(built), characterTotalLevel(built));
+    const carried = equippedItems(built).map(item => item.baseWeapon || item.name)
+      .filter(name => ADND_WEAPONS[name]);
+    const staples = cls.group === "wizard" ? ["Dagger", "Quarterstaff", "Dart", "Sling"]
+      : cls.group === "priest" ? ["Mace, footman's", "Warhammer", "Quarterstaff", "Sling"]
+      : cls.group === "rogue" ? ["Short sword", "Dagger", "Short bow", "Sling"]
+      : ["Long sword", "Short bow", "Dagger", "Battle axe", "Spear", "Halberd", "Two-handed sword"];
+    built.weaponProficiencies = [...new Set([...carried, ...staples, ...Object.keys(ADND_WEAPONS)])].slice(0, slots);
+  }
   // Spend the discretionary points, so a generated thief or monk is playable
   // rather than arriving flagged incomplete.
   if ((cls.thiefSkills || cls.monkSkills) && !Object.keys(built.thiefSkillPoints || {}).length) {
@@ -9415,15 +9489,22 @@ function adndWeaponAttacks(character) {
   // against anything with an ordinary skeleton.
   const monkClass = ADND_CLASSES[primaryClassName(character)] || {};
   const monkAnatomyBonus = monkClass.monk ? Math.ceil(characterTotalLevel(character) / 2) : 0;
+  // Proficiency itself grants nothing in 2E -- the combat numbers assume it.
+  // Swinging a weapon you never trained on is what costs you, by class group.
+  const proficient = new Set(character.weaponProficiencies || []);
+  const untrainedPenalty = typeof adndNonProficiencyPenalty === "function"
+    ? adndNonProficiencyPenalty(adndClassGroup(character)) : -3;
   return equippedItems(character).map(item => {
     const rule = ADND_WEAPONS[item.baseWeapon || item.name];
     if (!rule) return null;
     const missile = Boolean(rule.missile);
     const adj = missile ? d.missileAdj : d.hitAdj;
     const magic = magicItemBonus(item);
+    const trained = proficient.has(item.baseWeapon || item.name);
+    const penalty = trained ? 0 : untrainedPenalty;
     return {
-      name: item.name, group: rule.group,
-      thac0: Math.max(1, d.thac0 - adj - magic),
+      name: item.name, group: rule.group, trained, penalty,
+      thac0: Math.max(1, d.thac0 - adj - magic - penalty),
       dmgSM: rule.dmgSM, dmgL: rule.dmgL,
       damageAdj: missile ? 0 : d.damageAdj + magic,
       anatomy: monkAnatomyBonus,
@@ -9511,6 +9592,7 @@ function renderAdndWeapons(c, sectionClassName) {
         <span><small>vs L</small>${escapeHtml(adndDamageText(attack.dmgL, attack.damageAdj))}</span>
         <span><small>Speed</small>${attack.speed}</span>
         ${attack.anatomy ? `<span><small>vs anatomy</small>${signed(attack.anatomy)}</span>` : ""}
+        ${attack.trained ? "" : `<span class="adnd-untrained"><small>Untrained</small>${signed(attack.penalty)}</span>`}
       </article>`).join("")}
     </div>
   </section>`;
@@ -11468,6 +11550,36 @@ function saveSessionCharacter(character) {
   renderCampaigns();
 }
 
+// 2E measures movement as a rate rather than a distance in feet, and its races
+// see in the dark by infravision. Neither maps onto the 5e fields.
+function adndMovementRate(character) {
+  const race = (typeof ADND_RACES !== "undefined" && ADND_RACES[character.species]) || {};
+  const base = Number(race.speed || 12);
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[primaryClassName(character)]) || {};
+  // A monk outruns their own race as they advance.
+  if (cls.monk && typeof adndMonkRow === "function") {
+    return String(adndMonkRow(characterTotalLevel(character)).move || base);
+  }
+  return String(base);
+}
+
+function adndInfravision(character) {
+  const race = (typeof ADND_RACES !== "undefined" && ADND_RACES[character.species]) || {};
+  const range = Number(race.infravision || 0);
+  return range ? `${range} ft` : "None";
+}
+
+// Neither edition has short or long rests. Say what each actually does.
+function editionRecoveryNote(rulesEdition) {
+  if (rulesEdition === "d35") {
+    return "No short or long rests: a night's rest restores a hit point per character level, and complete bed rest twice that.";
+  }
+  if (rulesEdition === "adnd2e") {
+    return "No short or long rests: a day of rest restores one hit point, and a full week of bed rest three a day.";
+  }
+  return "";
+}
+
 function renderDeathSaves(character) {
   // Death saving throws are 5e's. 3.5 has a character disabled at 0 hit points,
   // dying from -1 to -9 and dead at -10; 2E drops them at 0 and kills them at
@@ -11851,11 +11963,13 @@ function renderSheet() {
       <button type="button" class="session-action heal" data-hp-action="heal" data-character="${c.id}">Heal</button>
       <button type="button" class="session-action temp" data-hp-action="temp" data-character="${c.id}">Temp HP</button>
     </div>
-    <div class="session-rests">
+    ${EDITIONS_WITHOUT_5E_CHOICES.has(c.edition) ? `<div class="session-rests session-rest-note">
+      <span>${escapeHtml(editionRecoveryNote(c.edition))}</span>
+    </div>` : `<div class="session-rests">
       <button type="button" data-rest="short" data-character="${c.id}"><span>☾</span><strong>Short Rest</strong></button>
       <button type="button" data-rest="long" data-character="${c.id}"><span>✦</span><strong>Long Rest</strong></button>
     </div>
-    <button type="button" class="inspiration-toggle ${c.inspiration ? "active" : ""}" data-inspiration data-character="${c.id}" aria-pressed="${Boolean(c.inspiration)}"><span>◆</span><strong>Inspiration</strong></button>
+    <button type="button" class="inspiration-toggle ${c.inspiration ? "active" : ""}" data-inspiration data-character="${c.id}" aria-pressed="${Boolean(c.inspiration)}"><span>◆</span><strong>Inspiration</strong></button>`}
     ${renderConditionPicker(c)}
   </div>
   <nav class="sheet-tabs" aria-label="Character sheet sections">
@@ -11896,13 +12010,17 @@ function renderSheet() {
     <section class="sheet-panel sheet-wide ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <div class="combat-stat-grid">
-        <div class="combat-stat"><small>Speed</small><strong>${walkSpeed} ft</strong></div>
+        <div class="combat-stat"><small>${isAdnd(c) ? "Movement rate" : "Speed"}</small><strong>${isAdnd(c) ? adndMovementRate(c) : `${walkSpeed} ft`}</strong></div>
         <div class="combat-stat"><small>Initiative</small><strong>${signed(d.initiative)}${d.initiativeAdvantage ? " ▲" : ""}</strong></div>
         <div class="combat-stat"><small>${isAdnd(c) ? "THAC0" : isD35(c) ? "Base Attack" : "Proficiency"}</small><strong>${isAdnd(c) ? d.prof : signed(d.prof)}</strong></div>
         <div class="combat-stat"><small>Hit Dice</small><strong>${escapeHtml(hitDice)}</strong></div>
         ${isAdnd(c) ? `<div class="combat-stat"><small>Hit adjustment</small><strong>${signed(d.adnd.hitAdj)}</strong></div>
         <div class="combat-stat"><small>Damage adjustment</small><strong>${signed(d.adnd.damageAdj)}</strong></div>
-        <div class="combat-stat"><small>Rear Armor Class</small><strong>${adndArmorClass(c).rearAc}</strong></div>`
+        <div class="combat-stat"><small>Rear Armor Class</small><strong>${adndArmorClass(c).rearAc}</strong></div>
+        <div class="combat-stat"><small>Infravision</small><strong>${escapeHtml(adndInfravision(c))}</strong></div>
+        <div class="combat-stat"><small>Weapon slots</small><strong>${(c.weaponProficiencies || []).length}/${d.adnd.weaponSlots}</strong></div>
+        <div class="combat-stat"><small>Untrained weapon</small><strong>${signed(d.adnd.untrainedPenalty)}</strong></div>
+        <div class="combat-stat"><small>Nonweapon slots</small><strong>${d.adnd.nonweaponSlots}</strong></div>`
         : isD35(c) ? `<div class="combat-stat"><small>Passive Spot</small><strong>${d.passive}</strong></div>
         <div class="combat-stat"><small>Grapple</small><strong>${signed(d35GrappleModifier(c))}</strong></div>
         <div class="combat-stat"><small>Size</small><strong>${escapeHtml(c.size || (D35_RACES[c.species] || {}).size || "Medium")}</strong></div>`
@@ -12003,6 +12121,7 @@ function editCharacter(id) {
   selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
   d35SkillRankDraft = { ...(c.skillRanks || {}) };
   adndThiefDraft = { ...(c.thiefSkillPoints || {}) };
+  adndWeaponProficiencyDraft = new Set(c.weaponProficiencies || []);
   selectedD35Domains = new Set(c.domains || []);
   showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
@@ -13987,6 +14106,7 @@ function initEvents() {
   form.addEventListener("input", event => {
     if (event.target.name === "strPercentile") { renderAdndStrengthField(); updatePreview(); return; }
     if (event.target.id === "ability-roll-method") { abilityRollMethod = event.target.value; return; }
+    if (event.target.dataset?.adndWeaponProf) { applyAdndWeaponProficiency(event.target); return; }
     if (event.target.dataset?.adndThief) { applyAdndThiefPoints(event.target); return; }
     if (event.target.dataset?.d35Skill) { applyD35SkillRank(event.target); return; }
     if (ABILITIES.includes(event.target.name)) {
@@ -14022,6 +14142,7 @@ function initEvents() {
       updatePreview();
       return;
     }
+    if (event.target.dataset.adndWeaponProf) { applyAdndWeaponProficiency(event.target); return; }
     if (event.target.dataset.adndThief) { applyAdndThiefPoints(event.target); return; }
     if (event.target.dataset.d35Domain) {
       const name = event.target.dataset.d35Domain;
