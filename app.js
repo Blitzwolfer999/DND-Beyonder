@@ -3328,6 +3328,13 @@ function featureDescriptionInEdition(rulesEdition, source, name, className) {
 }
 
 function featureDescription(rulesEdition, source, name, className = selectedClass) {
+  // 3.5 first, and before the shared summary map: a dozen 3.5 features share a
+  // name with a 5e one and mean something else by it, so left to the shared map
+  // every 3.5 sheet described the 5e version of Uncanny Dodge and Evasion.
+  if (rulesEdition === "d35" && typeof d35FeatureDescription === "function") {
+    const own = d35FeatureDescription(name);
+    if (own) return own;
+  }
   const description = openFeatureSummary(name)
     || contentSummary("features", name)
     || featureDescriptionInEdition(rulesEdition, source, name, className)
@@ -8879,17 +8886,29 @@ function d35ArmorCheckPenalty(data) {
   }, 0);
 }
 
+// Five ranks in a skill lends +2 to the ones it works with.
+function d35SynergyBonus(data, skill) {
+  if (typeof D35_SKILL_SYNERGY === "undefined") return { bonus: 0, from: [] };
+  const ranks = data.skillRanks || {};
+  const from = Object.entries(D35_SKILL_SYNERGY)
+    .filter(([source, targets]) => Number(ranks[source] || 0) >= 5 && targets.includes(skill))
+    .map(([source]) => source);
+  return { bonus: from.length * 2, from };
+}
+
 function d35SkillModifier(data, skill) {
   const eff = effectiveAbilities(data);
   const ability = D35_SKILLS[skill] || SKILLS[skill] || "INT";
   const ranks = Number((data.skillRanks || {})[skill] || 0);
-  let value = ranks + modifier(eff[ability]);
+  const synergy = d35SynergyBonus(data, skill);
+  let value = ranks + modifier(eff[ability]) + synergy.bonus;
   if (D35_ARMOR_CHECK_SKILLS.has(skill)) value += d35ArmorCheckPenalty(data);
   const feats = new Set(data.feats || []);
   if (feats.has("Alertness") && ["Listen", "Spot"].includes(skill)) value += 2;
   if (feats.has("Stealthy") && ["Hide", "Move Silently"].includes(skill)) value += 2;
   if ((data.skillFocus || []) .includes(skill)) value += 3;
   return { ranks, total: value, ability, classSkill: d35IsClassSkill(data, skill),
+    synergy: synergy.bonus, synergyFrom: synergy.from,
     untrained: ranks === 0 && D35_TRAINED_ONLY.has(skill) };
 }
 
@@ -11450,6 +11469,17 @@ function saveSessionCharacter(character) {
 }
 
 function renderDeathSaves(character) {
+  // Death saving throws are 5e's. 3.5 has a character disabled at 0 hit points,
+  // dying from -1 to -9 and dead at -10; 2E drops them at 0 and kills them at
+  // -10 if the table uses that rule. Neither rolls anything for it.
+  if (isD35(character)) {
+    return `<div class="death-saves death-saves-note"><strong>At zero and below</strong>
+      <span>Disabled at 0 hit points and able to take a single move or standard action. Dying from -1 to -9, losing a hit point each round until stabilised. Dead at -10.</span></div>`;
+  }
+  if (isAdnd(character)) {
+    return `<div class="death-saves death-saves-note"><strong>At zero and below</strong>
+      <span>A character drops at 0 hit points. Many tables use the optional rule that death comes at -10, with the character bleeding a point a round until bound up.</span></div>`;
+  }
   const saves = { successes: 0, failures: 0, ...(character.deathSaves || {}) };
   const group = (type, count) => `<div class="death-save-group"><span>${type === "successes" ? "Successes" : "Failures"}</span><div>${Array.from({ length: 3 }, (_, index) =>
     `<button type="button" class="${index < count ? "active" : ""} ${type === "failures" ? "failure" : ""}" data-death-save="${type}" data-death-index="${index}" data-character="${character.id}" aria-label="${type} ${index + 1}"></button>`
@@ -11854,7 +11884,9 @@ function renderSheet() {
         // flags the ones that cannot be tried untrained.
         const d35 = d35SkillModifier(c, skill);
         const note = [`${d35.ranks} rank${d35.ranks === 1 ? "" : "s"}`,
-          d35.classSkill ? "class skill" : "", d35.untrained ? "trained only" : ""]
+          d35.classSkill ? "class skill" : "",
+          d35.synergy ? `synergy +${d35.synergy} from ${d35.synergyFrom.join(", ")}` : "",
+          d35.untrained ? "trained only" : ""]
           .filter(Boolean).join(" · ");
         return `<button class="skill-roll${d35.untrained ? " skill-untrained" : ""}" data-sheet-roll="${skill}" data-modifier="${d35.total}"><span class="${d35.ranks ? "proficient" : ""}">${skill} <small>(${d35.ability}) ${note}</small></span><strong>${signed(d35.total)}</strong></button>`;
       }
@@ -11887,7 +11919,9 @@ function renderSheet() {
         <div class="combat-detail"><small>Level limit</small><span>${adndLevelLimit(c) || "None -- humans are unlimited"}</span></div>`
         : isD35(c) ? `<div class="combat-detail"><small>Saving throws</small><span>Fort ${signed(d35SaveBonus(c, "fort").total)} · Ref ${signed(d35SaveBonus(c, "ref").total)} · Will ${signed(d35SaveBonus(c, "will").total)}</span></div>
         <div class="combat-detail"><small>Skill ranks spent</small><span>${Object.entries(c.skillRanks || {}).filter(([, n]) => Number(n) > 0).map(([skill, n]) => `${skill} ${n}`).join(", ") || "None spent"}</span></div>
-        <div class="combat-detail"><small>Racial traits</small><span>${escapeHtml(((typeof D35_RACE_TRAITS !== "undefined" && D35_RACE_TRAITS[c.species]) || []).map(([name]) => name).join(", ") || "None")}</span></div>`
+        <div class="combat-detail"><small>Racial traits</small><span>${escapeHtml(((typeof D35_RACE_TRAITS !== "undefined" && D35_RACE_TRAITS[c.species]) || []).map(([name]) => name).join(", ") || "None")}</span></div>
+        ${typeof d35ExperienceForLevel === "function" && characterTotalLevel(c) < 20 ? `<div class="combat-detail"><small>Next level at</small><span>${d35ExperienceForLevel(characterTotalLevel(c) + 1).toLocaleString()} xp</span></div>` : ""}
+        ${typeof D35_KNOWLEDGE_SYNERGY_NOTE !== "undefined" ? `<div class="combat-detail"><small>Knowledge synergies</small><span>${escapeHtml(D35_KNOWLEDGE_SYNERGY_NOTE)}</span></div>` : ""}`
         : `<div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
         <div class="combat-detail"><small>Skill proficiencies</small><span>${[...proficientSkills(c)].sort().join(", ") || "None selected"}</span></div>
         <div class="combat-detail"><small>Defenses &amp; resistances</small><span>${escapeHtml(defenses)}</span></div>`}
@@ -14966,6 +15000,7 @@ function init() {
   // data file, so it registers once app.js has loaded and before first render.
   if (typeof registerSw5eRuntime === "function") registerSw5eRuntime();
   if (typeof registerD35Runtime === "function") registerD35Runtime();
+  if (typeof registerD35FeatureText === "function") registerD35FeatureText();
   if (typeof registerAdndRuntime === "function") registerAdndRuntime();
   seedDemo(); buildAbilities(); populateRules(); resetPortrait(); initDice(); initTheme(); initEvents(); updatePreview(); updateAccount(); renderCards(); setStep(1); navigate(routeViewFromHash(), { replace: true });
   initCloud();

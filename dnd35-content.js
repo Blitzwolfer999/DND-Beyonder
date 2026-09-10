@@ -93,6 +93,39 @@ const D35_CLASSES = {
     proficiencies: "A short staple weapon list; no armor (it risks arcane spell failure)" }
 };
 
+
+// Five ranks in one skill lends +2 to another. The published table splits
+// Knowledge into a dozen fields; this app tracks Knowledge as a single skill,
+// so only the synergies that do not depend on which field is meant are applied,
+// and the skill panel says so.
+const D35_SKILL_SYNERGY = {
+  "Bluff": ["Diplomacy", "Disguise", "Intimidate", "Sleight of Hand"],
+  "Craft": ["Appraise"],
+  "Decipher Script": ["Use Magic Device"],
+  "Escape Artist": ["Use Rope"],
+  "Handle Animal": ["Ride"],
+  "Jump": ["Tumble"],
+  "Search": ["Survival"],
+  "Sense Motive": ["Diplomacy"],
+  "Spellcraft": ["Use Magic Device"],
+  "Survival": ["Knowledge"],
+  "Tumble": ["Balance", "Jump"],
+  "Use Magic Device": ["Spellcraft"],
+  "Use Rope": ["Climb", "Escape Artist"]
+};
+
+// Knowledge's own synergies all name a field -- arcana lends to Spellcraft,
+// nature to Survival -- so they are listed apart and noted rather than applied.
+const D35_KNOWLEDGE_SYNERGY_NOTE =
+  "Knowledge is tracked as one skill here. In play its synergies depend on the field: arcana lends to Spellcraft, nature and geography to Survival, local to Gather Information, religion to turning undead.";
+
+// Experience needed to reach a level: a thousand times the triangular number,
+// so 1,000 for 2nd and 190,000 for 20th.
+function d35ExperienceForLevel(level) {
+  const n = Math.max(1, Math.min(20, Number(level) || 1));
+  return (n * (n - 1) / 2) * 1000;
+}
+
 // Skill name -> key ability. Armor check penalty applies to the flagged ones.
 const D35_SKILLS = {
   "Appraise": "INT", "Balance": "DEX", "Bluff": "CHA", "Climb": "STR", "Concentration": "CON",
@@ -332,6 +365,9 @@ if (typeof window !== "undefined") {
   window.D35_ARMOR_CHECK_SKILLS = D35_ARMOR_CHECK_SKILLS;
   window.D35_TRAINED_ONLY = D35_TRAINED_ONLY;
   window.D35_ALIGNMENTS = D35_ALIGNMENTS;
+  window.D35_SKILL_SYNERGY = D35_SKILL_SYNERGY;
+  window.D35_KNOWLEDGE_SYNERGY_NOTE = D35_KNOWLEDGE_SYNERGY_NOTE;
+  window.d35ExperienceForLevel = d35ExperienceForLevel;
   window.d35SaveProgression = d35SaveProgression;
   window.d35BabForClass = d35BabForClass;
   window.d35IterativeAttacks = d35IterativeAttacks;

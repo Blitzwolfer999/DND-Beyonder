@@ -4077,6 +4077,8 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .adnd-turn-row strong { font: 700 12px/1.2 system-ui, sans-serif; white-space: nowrap; }
 .adnd-turn-row.auto strong { color: #2f6f3e; }
 .adnd-turn-row.destroy strong { color: #a4552a; }
+.death-saves-note { display: grid; gap: 4px; }
+.death-saves-note span { color: var(--muted); font: 500 12px/1.55 system-ui, sans-serif; }
 @media (max-width: 620px) {
   .adnd-weapon { grid-template-columns: 1fr auto; gap: 6px; }
 }
