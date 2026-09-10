@@ -74,7 +74,7 @@ const ADND_CLASSES = {
     summary: "The complete warrior: the best attack progression, the most hit points, and every weapon and armour available."
   },
   Paladin: {
-    icon: "✦", group: "warrior", hit: 10, prime: ["STR", "CHA"],
+    icon: "✦", group: "warrior", hit: 10, prime: ["STR", "CHA"], ownSpellTable: "paladin", noWisdomBonus: true, turnsUndead: true, turnOffset: 2,
     minimums: { STR: 12, CON: 9, WIS: 13, CHA: 17 }, alignment: "Lawful good",
     races: ["Human"], saveBonus: 2, caster: "priest", casterOffset: 8,
     xp: [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000, 600000, 900000,
@@ -83,7 +83,7 @@ const ADND_CLASSES = {
     summary: "A holy warrior sworn to law and good, with a +2 bonus to every saving throw and priest spells from 9th level."
   },
   Ranger: {
-    icon: "➶", group: "warrior", hit: 10, prime: ["STR", "DEX", "WIS"],
+    icon: "➶", group: "warrior", hit: 10, prime: ["STR", "DEX", "WIS"], ownSpellTable: "ranger",
     minimums: { STR: 13, DEX: 13, CON: 14, WIS: 14 }, alignment: "Any good",
     races: ["Human", "Elf", "Half-Elf"], caster: "priest", casterOffset: 7,
     xp: [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000, 600000, 900000,
@@ -92,7 +92,7 @@ const ADND_CLASSES = {
     summary: "A woodland warrior who tracks, fights well with two weapons, and gains a little druidic magic later on."
   },
   Cleric: {
-    icon: "✚", group: "priest", hit: 8, prime: ["WIS"], minimums: { WIS: 9 },
+    icon: "✚", group: "priest", hit: 8, prime: ["WIS"], minimums: { WIS: 9 }, turnsUndead: true,
     races: ["Human", "Dwarf", "Elf", "Gnome", "Half-Elf", "Halfling", "Half-Orc"],
     caster: "priest",
     xp: [0, 1500, 3000, 6000, 13000, 27500, 55000, 110000, 225000, 450000, 675000,
@@ -137,14 +137,230 @@ const ADND_CLASSES = {
     summary: "A specialist in locks, stealth and backstabs, with skills rated as percentages you distribute yourself."
   },
   Bard: {
-    icon: "♪", group: "rogue", hit: 6, prime: ["DEX", "CHA"],
+    icon: "♪", group: "rogue", hit: 6, prime: ["DEX", "CHA"], bardSkills: true, ownSpellTable: "bard",
     minimums: { DEX: 12, INT: 13, CHA: 15 }, alignment: "Any neutral",
-    races: ["Human", "Half-Elf"], caster: "wizard", thiefSkills: true, bardSkills: true,
+    races: ["Human", "Half-Elf"], caster: "wizard",
     xp: [0, 1250, 2500, 5000, 10000, 20000, 40000, 70000, 110000, 160000, 220000,
          440000, 660000, 880000, 1100000, 1320000, 1540000, 1760000, 1980000, 2200000],
     hpAfter9: 2,
     summary: "A jack of all trades who inspires allies, knows a little of every legend, and casts from the wizard list."
   }
+};
+
+
+// Paladins and rangers do not simply read the priest table a few levels late:
+// each has its own progression (Table 17), and after the first couple of levels
+// the two diverge from the priest's noticeably. Index 0 of a row is spell level
+// 1 -- neither class ever gets 0-level priest spells.
+const ADND_CLASS_SPELL_TABLES = {
+  paladin: {
+    firstLevel: 9,
+    rows: { 9: [1], 10: [2], 11: [2, 1], 12: [2, 2], 13: [2, 2, 1], 14: [3, 2, 1],
+      15: [3, 2, 1, 1], 16: [3, 3, 2, 1], 17: [3, 3, 3, 1], 18: [3, 3, 3, 1],
+      19: [3, 3, 3, 2], 20: [3, 3, 3, 3] }
+  },
+  bard: {
+    firstLevel: 2,
+    rows: { 2: [1], 3: [2], 4: [2, 1], 5: [3, 1], 6: [3, 2], 7: [3, 2, 1], 8: [3, 3, 1],
+      9: [3, 3, 2], 10: [3, 3, 2, 1], 11: [3, 3, 3, 1], 12: [3, 3, 3, 2], 13: [3, 3, 3, 2, 1],
+      14: [3, 3, 3, 3, 1], 15: [3, 3, 3, 3, 2], 16: [4, 3, 3, 3, 2, 1], 17: [4, 4, 3, 3, 3, 1],
+      18: [4, 4, 4, 3, 3, 2], 19: [4, 4, 4, 4, 3, 2], 20: [4, 4, 4, 4, 4, 3] }
+  },
+  ranger: {
+    firstLevel: 8,
+    rows: { 8: [1], 9: [2], 10: [2, 1], 11: [2, 2], 12: [2, 2, 1], 13: [3, 2, 1],
+      14: [3, 2, 2], 15: [3, 3, 2], 16: [3, 3, 3], 17: [3, 3, 3], 18: [3, 3, 3],
+      19: [3, 3, 3], 20: [3, 3, 3] }
+  }
+};
+
+function adndClassSpellRow(tableName, level) {
+  const table = ADND_CLASS_SPELL_TABLES[tableName];
+  if (!table) return null;
+  const lvl = Math.max(1, Math.min(20, Number(level) || 1));
+  if (lvl < table.firstLevel) return [];
+  for (let candidate = lvl; candidate >= table.firstLevel; candidate -= 1) {
+    if (table.rows[candidate]) return table.rows[candidate];
+  }
+  return [];
+}
+
+// Table 28. The published adjustments run from Dexterity 9 (a thief's minimum)
+// up to 19, and the low end is a penalty, not a flat zero.
+const ADND_THIEF_DEX_ADJUST = {
+  "Pick Pockets":      { 9: -15, 10: -10, 11: -5, 12: 0, 17: 5, 18: 10, 19: 15 },
+  "Open Locks":        { 9: -10, 10: -5, 11: 0, 16: 5, 17: 10, 18: 15, 19: 20 },
+  "Find/Remove Traps": { 9: -10, 11: -5, 12: 0, 18: 5, 19: 10 },
+  "Move Silently":     { 9: -20, 10: -15, 11: -10, 12: -5, 13: 0, 17: 5, 18: 10, 19: 15 },
+  "Hide in Shadows":   { 9: -10, 10: -5, 11: 0, 17: 5, 18: 10, 19: 15 }
+};
+
+// Table 29. Leather is the baseline the base scores assume, so it adjusts
+// nothing; going without armour is a bonus and anything stiffer is a penalty.
+const ADND_ROGUE_ARMOR_ADJUST = {
+  none:    { "Pick Pockets": 5, "Move Silently": 10, "Hide in Shadows": 5, "Climb Walls": 10 },
+  leather: {},
+  elven:   { "Pick Pockets": -20, "Open Locks": -5, "Find/Remove Traps": -5, "Move Silently": -10,
+             "Hide in Shadows": -10, "Detect Noise": -5, "Climb Walls": -20 },
+  studded: { "Pick Pockets": -30, "Open Locks": -10, "Find/Remove Traps": -10, "Move Silently": -20,
+             "Hide in Shadows": -20, "Detect Noise": -10, "Climb Walls": -30 },
+  chain:   { "Pick Pockets": -25, "Open Locks": -10, "Find/Remove Traps": -10, "Move Silently": -15,
+             "Hide in Shadows": -15, "Detect Noise": -5, "Climb Walls": -25 }
+};
+
+// Which column of Table 29 a piece of armour sits in. A rogue is not permitted
+// anything stiffer than studded leather or elven chain, so the heavier entries
+// are marked rather than silently given a number the book never printed.
+const ADND_ROGUE_ARMOR_COLUMN = {
+  "Padded armor": "studded", "Leather armor": "leather", "Studded leather": "studded",
+  "Elven chain": "elven", "Ring mail": "chain", "Chain mail": "chain"
+};
+
+// Table 33. A bard has four of the rogue skills, with their own base scores,
+// and twenty discretionary points at first level rather than a thief's sixty.
+const ADND_BARD_SKILLS = {
+  "Climb Walls": { base: 50 },
+  "Detect Noise": { base: 20 },
+  "Pick Pockets": { base: 10 },
+  "Read Languages": { base: 5 }
+};
+
+// Table 30.
+const ADND_BACKSTAB_MULTIPLIER = [{ max: 4, times: 2 }, { max: 8, times: 3 },
+  { max: 12, times: 4 }, { max: 20, times: 5 }];
+
+function adndBackstabMultiplier(level) {
+  const lvl = Math.max(1, Number(level) || 1);
+  const row = ADND_BACKSTAB_MULTIPLIER.find(entry => lvl <= entry.max);
+  return row ? row.times : 5;
+}
+
+// Table 15. Only the warrior group gains extra melee attacks from level alone.
+function adndWarriorAttacks(level) {
+  const lvl = Math.max(1, Number(level) || 1);
+  if (lvl >= 13) return "2";
+  if (lvl >= 7) return "3/2";
+  return "1";
+}
+
+// Table 18. A ranger's stealth in natural surroundings, halved elsewhere, and
+// unavailable in anything heavier than studded leather.
+const ADND_RANGER_STEALTH = [
+  [10, 15], [15, 21], [20, 27], [25, 33], [31, 40], [37, 47], [43, 55], [49, 62],
+  [56, 70], [63, 78], [70, 86], [77, 94], [85, 99], [93, 99], [99, 99], [99, 99],
+  [99, 99], [99, 99], [99, 99], [99, 99]
+];
+
+// Table 61. The number a d20 must reach to turn that kind of undead, "T" for an
+// automatic turn and "D" for one that destroys them outright.
+const ADND_TURN_UNDEAD_TARGETS = [
+  { name: "Skeleton or 1 HD", row: [10, 7, 4, "T", "T", "D", "D", "D*", "D*", "D*", "D*", "D*"] },
+  { name: "Zombie", row: [13, 10, 7, 4, "T", "T", "D", "D", "D*", "D*", "D*", "D*"] },
+  { name: "Ghoul or 2 HD", row: [16, 13, 10, 7, 4, "T", "T", "D", "D", "D*", "D*", "D*"] },
+  { name: "Shadow or 3-4 HD", row: [19, 16, 13, 10, 7, 4, "T", "T", "D", "D", "D*", "D*"] },
+  { name: "Wight or 5 HD", row: [20, 19, 16, 13, 10, 7, 4, "T", "T", "D", "D", "D*"] },
+  { name: "Ghast", row: [null, 20, 19, 16, 13, 10, 7, 4, "T", "T", "D", "D"] },
+  { name: "Wraith or 6 HD", row: [null, null, 20, 19, 16, 13, 10, 7, 4, "T", "T", "D"] },
+  { name: "Mummy or 7 HD", row: [null, null, null, 20, 19, 16, 13, 10, 7, 4, "T", "T"] },
+  { name: "Spectre or 8 HD", row: [null, null, null, null, 20, 19, 16, 13, 10, 7, 4, "T"] },
+  { name: "Vampire or 9 HD", row: [null, null, null, null, null, 20, 19, 16, 13, 10, 7, 4] },
+  { name: "Ghost or 10 HD", row: [null, null, null, null, null, null, 20, 19, 16, 13, 10, 7] },
+  { name: "Lich or 11+ HD", row: [null, null, null, null, null, null, null, 20, 19, 16, 13, 10] },
+  { name: "Special", row: [null, null, null, null, null, null, null, null, 20, 19, 16, 13] }
+];
+
+// The table's columns are priest levels 1 to 9, then 10-11, 12-13 and 14+.
+function adndTurnColumn(level) {
+  const lvl = Number(level) || 0;
+  if (lvl < 1) return -1;
+  if (lvl >= 14) return 11;
+  if (lvl >= 12) return 10;
+  if (lvl >= 10) return 9;
+  return lvl - 1;
+}
+
+// A paladin turns as a cleric two levels lower, and only from 3rd level.
+function adndTurningLevel(className, level) {
+  const cls = ADND_CLASSES[className] || {};
+  if (!cls.turnsUndead) return 0;
+  if (cls.turnOffset) {
+    const effective = Number(level) - cls.turnOffset;
+    return effective >= 1 ? effective : 0;
+  }
+  return Math.max(0, Number(level) || 0);
+}
+
+
+// What each of the original eight classes gains, and when. Names and levels are
+// from the Player's Handbook class entries; the wording is written for this
+// project. The specialists and the monk keep their own lists elsewhere.
+const ADND_CLASS_FEATURES = {
+  Fighter: [
+    { level: 1, name: "Warrior weapon training", text: "Every weapon and every armour is open to a fighter, and the class starts with more weapon proficiencies than any other and gains them fastest." },
+    { level: 1, name: "Weapon specialisation", text: "A single-class fighter may spend proficiency slots to specialise in one weapon, improving the attack roll, the damage, and the rate of attacks with it. No other class may." },
+    { level: 7, name: "Extra attacks", text: "Melee attacks improve to three every two rounds." },
+    { level: 9, name: "Stronghold and followers", text: "A fighter who builds a stronghold and clears the land around it attracts a body of troops who serve without pay." },
+    { level: 13, name: "Two attacks a round", text: "Melee attacks improve again, to two every round." }
+  ],
+  Paladin: [
+    { level: 1, name: "Detect evil", text: "By concentrating for a round, the paladin senses evil intent within sixty feet. There is no limit on how often." },
+    { level: 1, name: "Blessed saves", text: "A +2 bonus to every saving throw, of every category." },
+    { level: 1, name: "Immune to disease", text: "No ordinary disease touches a paladin. Curses that resemble one -- lycanthropy, mummy rot -- still do." },
+    { level: 1, name: "Lay on hands", text: "Once a day, heal two hit points per level, on the paladin or on someone else." },
+    { level: 1, name: "Cure disease", text: "Once a week for every five levels: once at 1st through 5th, twice at 6th through 10th, and so on." },
+    { level: 1, name: "Aura of protection", text: "Summoned and evil creatures take -1 on their attack rolls within ten feet, whoever they are attacking. The source is obvious even through a disguise." },
+    { level: 1, name: "Holy sword", text: "Drawn and held, a holy sword throws out a ten-foot circle that dispels hostile magic up to the paladin's own level." },
+    { level: 3, name: "Turn undead and fiends", text: "As a cleric two levels lower -- so a 3rd-level paladin turns as a 1st-level cleric." },
+    { level: 4, name: "Call a war horse", text: "The paladin's bonded steed, found rather than summoned, usually at the end of a quest of its own." },
+    { level: 9, name: "Priest spells", text: "Spells of the combat, divination, healing and protective spheres, on the paladin's own progression. A high Wisdom grants no extra ones." }
+  ],
+  Ranger: [
+    { level: 1, name: "Two-weapon fighting", text: "In studded leather or lighter, a ranger fights with a weapon in each hand at no penalty. No shield, of course." },
+    { level: 1, name: "Tracking", text: "The ranger tracks without spending a proficiency slot on it, and the skill improves by +1 for every three levels." },
+    { level: 1, name: "Woodland stealth", text: "In studded leather or lighter, a ranger can hide in shadows and move silently in natural surroundings on the class percentages. Elsewhere the chance is halved; in heavier armour there is none." },
+    { level: 1, name: "Animal empathy", text: "A domestic or friendly animal is befriended automatically. A wild or attack-trained one saves against rods to resist." },
+    { level: 2, name: "Species enemy", text: "One creature the ranger hunts by preference: +4 to hit it, and -4 on encounter reactions with its kind, which is hard to hide." },
+    { level: 8, name: "Priest spells", text: "Druidic spells on the ranger's own progression, beginning with one first-level spell." },
+    { level: 10, name: "Followers", text: "A body of followers arrives, drawn by reputation rather than pay -- the roll decides what turns up." }
+  ],
+  Cleric: [
+    { level: 1, name: "Turn undead", text: "By presenting a holy symbol the cleric drives off undead, or destroys them outright at higher levels. The number needed is on the turning table." },
+    { level: 1, name: "Granted spells", text: "Spells come from the cleric's deity rather than a book, chosen fresh each day from the spheres that deity allows." },
+    { level: 1, name: "Blunt weapons", text: "Most faiths forbid edged and pointed weapons, leaving the mace, the hammer, the staff and the sling." },
+    { level: 8, name: "Followers", text: "A cleric who establishes a place of worship attracts a congregation and a guard of the faithful." }
+  ],
+  Druid: [
+    { level: 1, name: "Nature's tongue", text: "The druid knows a secret language of their order, and identifying another druid by it is how the order recognises its own." },
+    { level: 1, name: "Nonmetal restriction", text: "A druid wears leather and carries a wooden shield, and uses only the weapons the order permits." },
+    { level: 3, name: "Identify natural things", text: "Plants, animals and pure water are recognised without error." },
+    { level: 3, name: "Pass without trace", text: "Thorn, briar and tangled vine part for the druid, who leaves no trail and is not slowed." },
+    { level: 3, name: "Woodland languages", text: "One tongue of the woodland folk at 3rd level, and another at every level after." },
+    { level: 7, name: "Immune to woodland charm", text: "Dryads, nixies and their like cannot charm the druid." },
+    { level: 7, name: "Shapechange", text: "Three times a day -- once each as reptile, bird and mammal -- the druid takes the shape of a real animal from bullfrog to black bear, gaining its movement, attacks and Armor Class, and healing 10 to 60 percent of the damage taken so far." }
+  ],
+  Mage: [
+    { level: 1, name: "Spellbook", text: "A mage casts only what has been written down and memorised, and Intelligence decides both the highest spell level reachable and the odds of learning any given spell." },
+    { level: 1, name: "No armour", text: "Armour interferes with the gestures a spell needs. A mage wears none and carries a dagger, a dart, a sling or a staff." },
+    { level: 1, name: "Familiar", text: "A find familiar spell binds a small creature to the mage, which lends its senses and a share of its vitality -- and takes some of the mage's with it if it dies." },
+    { level: 9, name: "Tower and apprentices", text: "A mage of this standing can establish a tower and attract students, and begins to be sought out for the work only a wizard can do." },
+    { level: 12, name: "Spell research", text: "The mage can research entirely new spells, and craft magical items beyond scrolls and potions." }
+  ],
+  Thief: [
+    { level: 1, name: "Thieving skills", text: "Eight percentile skills, adjusted by race, by Dexterity and by armour, with sixty discretionary points to spend at first level and thirty at every level after." },
+    { level: 1, name: "Backstab", text: "Striking an unaware opponent from behind gives +4 to hit and multiplies the damage -- twice at 1st level, and higher as the thief advances." },
+    { level: 1, name: "Thieves' cant", text: "The trade's own jargon, understood by thieves everywhere and by almost nobody else." },
+    { level: 10, name: "Read scrolls", text: "A thief of this standing can puzzle out most magical scrolls, though roughly one attempt in four goes wrong in some way." },
+    { level: 10, name: "Followers", text: "A thief who sets up somewhere attracts a gang, though loyalty is a different question." }
+  ],
+  Bard: [
+    { level: 1, name: "Rogue skills", text: "Climb walls, detect noise, pick pockets and read languages, on the bard's own base scores, with twenty discretionary points at first level and fifteen at every level after." },
+    { level: 1, name: "Influence reactions", text: "Performing to a crowd that is not already fighting, the bard shifts its mood one step. Everyone listening saves against paralyzation at -1 for every three bard levels." },
+    { level: 1, name: "Inspire allies", text: "Three rounds of performance before a known threat gives allies within ten feet per level either +1 to hit, +1 on saves, or +2 morale, lasting a round per level." },
+    { level: 1, name: "Counter song", text: "Once per encounter, the bard's own music blocks a magical attack made of song or speech for everyone within thirty feet, on a successful save against spells." },
+    { level: 1, name: "Legend lore", text: "A 5% chance per level to recognise the general nature and history of a magical item on close examination -- not its exact powers." },
+    { level: 2, name: "Wizard spells", text: "The bard casts from the wizard list, learning spells the way a mage does but on the bard's own slower progression." },
+    { level: 9, name: "Followers", text: "A bard who settles attracts a body of soldiers, who arrive over time and are not replaced if they fall." }
+  ]
 };
 
 // Racial adjustments and the class level limits that made demihumans a
@@ -520,6 +736,20 @@ if (typeof window !== "undefined") {
   window.ADND_THIEF_RACIAL = ADND_THIEF_RACIAL;
   window.ADND_SPELL_SLOTS = ADND_SPELL_SLOTS;
   window.ADND_LAST_HIT_DIE_LEVEL = ADND_LAST_HIT_DIE_LEVEL;
+  window.ADND_CLASS_SPELL_TABLES = ADND_CLASS_SPELL_TABLES;
+  window.ADND_THIEF_DEX_ADJUST = ADND_THIEF_DEX_ADJUST;
+  window.ADND_ROGUE_ARMOR_ADJUST = ADND_ROGUE_ARMOR_ADJUST;
+  window.ADND_ROGUE_ARMOR_COLUMN = ADND_ROGUE_ARMOR_COLUMN;
+  window.ADND_BARD_SKILLS = ADND_BARD_SKILLS;
+  window.ADND_BACKSTAB_MULTIPLIER = ADND_BACKSTAB_MULTIPLIER;
+  window.ADND_RANGER_STEALTH = ADND_RANGER_STEALTH;
+  window.ADND_TURN_UNDEAD_TARGETS = ADND_TURN_UNDEAD_TARGETS;
+  window.ADND_CLASS_FEATURES = ADND_CLASS_FEATURES;
+  window.adndClassSpellRow = adndClassSpellRow;
+  window.adndBackstabMultiplier = adndBackstabMultiplier;
+  window.adndWarriorAttacks = adndWarriorAttacks;
+  window.adndTurnColumn = adndTurnColumn;
+  window.adndTurningLevel = adndTurningLevel;
   window.ADND_RACE_TRAITS = ADND_RACE_TRAITS;
   window.ADND_CONSTITUTION_SAVE_BONUS = ADND_CONSTITUTION_SAVE_BONUS;
   window.adndRacialSaveBonus = adndRacialSaveBonus;

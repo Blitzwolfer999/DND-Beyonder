@@ -6689,7 +6689,9 @@ function renderAdndThiefBuilder() {
   if (note) {
     note.textContent = cls.monkSkills
       ? `Thirty-five points at 1st level and fifteen a level after, on top of the class base scores.`
-      : `Sixty points at 1st level and thirty a level after, on top of racial and Dexterity adjustments. No more than ${cap} in any one skill.`;
+      : cls.bardSkills
+        ? `Twenty points at 1st level and fifteen a level after, on top of racial and Dexterity adjustments.`
+        : `Sixty points at 1st level and thirty a level after, on top of racial and Dexterity adjustments. No more than ${cap} in any one skill.`;
   }
   const spent = Object.values(adndThiefDraft).reduce((total, n) => total + Number(n || 0), 0);
   const remaining = budget - spent;
@@ -7277,7 +7279,8 @@ function adndCompletionIssues(data, add) {
   if (budget) {
     const spent = Object.values(data.thiefSkillPoints || {})
       .reduce((total, points) => total + Number(points || 0), 0);
-    const noun = (ADND_CLASSES[primaryClassName(data)] || {}).monkSkills ? "monk skill" : "thief skill";
+    const rogueCls = ADND_CLASSES[primaryClassName(data)] || {};
+    const noun = rogueCls.monkSkills ? "monk skill" : rogueCls.bardSkills ? "bard skill" : "thief skill";
     if (spent > budget) add(5, `${spent - budget} too many ${noun} points assigned`);
     if (spent < budget) add(5, `${budget - spent} ${noun} point${budget - spent === 1 ? "" : "s"} still to assign`);
     const cap = adndSkillPointCap(data);
@@ -8527,7 +8530,11 @@ function registerAdndRuntime() {
     });
     // CONTENT_SUMMARIES.features is keyed by name across every edition, so a 2E
     // entry must never overwrite a 5e one that happens to share a name.
-    (typeof ADND_MONK_FEATURES !== "undefined" ? ADND_MONK_FEATURES : []).forEach(row => {
+    const adndFeatureText = [
+      ...(typeof ADND_MONK_FEATURES !== "undefined" ? ADND_MONK_FEATURES : []),
+      ...(typeof ADND_CLASS_FEATURES !== "undefined" ? Object.values(ADND_CLASS_FEATURES).flat() : [])
+    ];
+    adndFeatureText.forEach(row => {
       if (!CONTENT_SUMMARIES.features[row.name]) CONTENT_SUMMARIES.features[row.name] = row.text;
     });
     Object.values(ADND_CLASSES).forEach(cls => {
@@ -8647,13 +8654,52 @@ function adndHitPoints(character) {
 // they come from training rather than blood -- no racial adjustments apply.
 function adndSkillTable(cls) {
   if (cls.monkSkills && typeof ADND_MONK_SKILLS !== "undefined") return ADND_MONK_SKILLS;
+  // A bard has four of the rogue skills with their own base scores, not the
+  // thief's eight -- Table 33 rather than Table 26.
+  if (cls.bardSkills && typeof ADND_BARD_SKILLS !== "undefined") return ADND_BARD_SKILLS;
   if (cls.thiefSkills) return ADND_THIEF_SKILLS;
   return null;
 }
 
+// Which column of the armour table the character's worn armour sits in.
+// Leather is the baseline the base scores already assume.
+function adndRogueArmorColumn(character) {
+  if (typeof ADND_ROGUE_ARMOR_COLUMN === "undefined") return "leather";
+  const worn = equippedItems(character)
+    .map(item => item.baseArmor || item.name)
+    .filter(name => typeof ADND_ARMOR !== "undefined" && ADND_ARMOR[name] && !ADND_ARMOR[name].shield);
+  if (!worn.length) return "none";
+  // The heaviest piece decides, and anything the class may not wear falls into
+  // the stiffest column the book prints.
+  let column = "leather";
+  const order = ["none", "leather", "elven", "studded", "chain"];
+  worn.forEach(name => {
+    const mapped = ADND_ROGUE_ARMOR_COLUMN[name] || "chain";
+    if (order.indexOf(mapped) > order.indexOf(column)) column = mapped;
+  });
+  return column;
+}
+
+// Table 28. The published rows run from Dexterity 9 up to 19 and the low end
+// is a penalty, so a low-Dexterity thief is worse at their trade, not merely
+// unimproved.
+function adndSkillDexAdjust(skill, dex) {
+  if (typeof ADND_THIEF_DEX_ADJUST === "undefined") return 0;
+  const rule = ADND_THIEF_DEX_ADJUST[skill];
+  if (!rule) return 0;
+  const score = Math.max(3, Math.min(19, Number(dex) || 10));
+  let value = 0;
+  Object.keys(rule).map(Number).sort((a, b) => a - b)
+    .forEach(threshold => { if (score >= threshold) value = rule[threshold]; });
+  // Below the lowest printed row the worst printed penalty stands.
+  const lowest = Math.min(...Object.keys(rule).map(Number));
+  if (score < lowest) value = rule[lowest];
+  return value;
+}
+
 function adndSkillLabel(character) {
   const cls = ADND_CLASSES[primaryClassName(character)] || {};
-  return cls.monkSkills ? "Monk skills" : "Thief skills";
+  return cls.monkSkills ? "Monk skills" : cls.bardSkills ? "Bard skills" : "Thief skills";
 }
 
 function adndThiefSkills(character) {
@@ -8663,14 +8709,16 @@ function adndThiefSkills(character) {
   const race = cls.monkSkills ? {} : (ADND_THIEF_RACIAL[character.species] || {});
   const dex = Math.max(3, Math.min(18, Number(character.DEX) || 10));
   const spent = character.thiefSkillPoints || {};
+  const armorColumn = cls.monkSkills ? "leather" : adndRogueArmorColumn(character);
+  const armorRow = (typeof ADND_ROGUE_ARMOR_ADJUST !== "undefined"
+    && ADND_ROGUE_ARMOR_ADJUST[armorColumn]) || {};
   return Object.entries(table).map(([name, rule]) => {
-    let dexAdj = 0;
-    Object.keys(rule.dex || {}).map(Number).sort((a, b) => a - b)
-      .forEach(threshold => { if (dex >= threshold) dexAdj = rule.dex[threshold]; });
+    const dexAdj = cls.monkSkills ? 0 : adndSkillDexAdjust(name, dex);
     const racial = Number(race[name] || 0);
     const allocated = Number(spent[name] || 0);
-    return { name, base: rule.base, dex: dexAdj, racial, allocated,
-      total: Math.max(0, Math.min(95, rule.base + dexAdj + racial + allocated)) };
+    const armor = cls.monkSkills ? 0 : Number(armorRow[name] || 0);
+    return { name, base: rule.base, dex: dexAdj, racial, allocated, armor, armorColumn,
+      total: Math.max(0, Math.min(95, rule.base + dexAdj + racial + allocated + armor)) };
   });
 }
 
@@ -8680,6 +8728,8 @@ function adndThiefPointBudget(character) {
   const cls = ADND_CLASSES[primaryClassName(character)] || {};
   const level = Math.max(1, characterTotalLevel(character));
   if (cls.monkSkills) return 35 + (level - 1) * 15;
+  // A bard gets twenty at first level and fifteen after, over four skills.
+  if (cls.bardSkills) return 20 + (level - 1) * 15;
   if (cls.thiefSkills) return 60 + (level - 1) * 30;
   return 0;
 }
@@ -8689,7 +8739,7 @@ function adndThiefPointBudget(character) {
 function adndSkillPointCap(character) {
   const cls = ADND_CLASSES[primaryClassName(character)] || {};
   const level = Math.max(1, characterTotalLevel(character));
-  if (cls.monkSkills) return adndThiefPointBudget(character);
+  if (cls.monkSkills || cls.bardSkills) return adndThiefPointBudget(character);
   if (cls.thiefSkills) return 30 + (level - 1) * 15;
   return 0;
 }
@@ -8701,9 +8751,17 @@ function adndSpellSlots(character) {
   // Paladins and rangers start casting late and count from an offset.
   const effective = cls.casterOffset ? level - cls.casterOffset : level;
   if (effective < 1) return [];
+  if (cls.ownSpellTable && typeof adndClassSpellRow === "function"
+      && !(adndClassSpellRow(cls.ownSpellTable, level) || []).length) return [];
+  // A paladin or ranger reads its own progression rather than the priest table
+  // a few levels late: past the first couple of levels the two diverge.
+  const ownRow = cls.ownSpellTable && typeof adndClassSpellRow === "function"
+    ? adndClassSpellRow(cls.ownSpellTable, level) : null;
   const table = ADND_SPELL_SLOTS[cls.caster] || [];
-  const row = table[Math.min(table.length, Math.max(1, effective)) - 1] || [];
-  const wisdom = cls.caster === "priest" ? adndAbilityRow(ADND_WISDOM, character.WIS) : null;
+  const row = ownRow || table[Math.min(table.length, Math.max(1, effective)) - 1] || [];
+  // "Unlike a priest, the paladin does not gain extra spells for a high Wisdom."
+  const wisdom = cls.caster === "priest" && !cls.noWisdomBonus
+    ? adndAbilityRow(ADND_WISDOM, character.WIS) : null;
   const bonus = wisdom && wisdom.bonus ? wisdom.bonus : [];
   // A specialist gets one more slot at each spell level, and it may only hold a
   // spell of their own school.
@@ -8745,6 +8803,12 @@ function adndDerived(character) {
     xpNext: (cls.xp || [])[level] || null,
     levelLimit: adndLevelLimit(character),
     thiefSkills: adndThiefSkills(character),
+    attacksPerRound: group === "warrior" && typeof adndWarriorAttacks === "function"
+      ? adndWarriorAttacks(level) : "1",
+    backstab: cls.thiefSkills && !cls.bardSkills && typeof adndBackstabMultiplier === "function"
+      ? adndBackstabMultiplier(level) : 0,
+    turningLevel: typeof adndTurningLevel === "function"
+      ? adndTurningLevel(primaryClassName(character), level) : 0,
     spellSlots: adndSpellSlots(character)
   };
 }
@@ -9449,6 +9513,8 @@ function renderAdndCoreStats(c, currentHp, maximumHp) {
     <span><small>Damage</small><strong>${signed(d.damageAdj)}</strong></span>
     <span><small>Missile</small><strong>${signed(d.missileAdj)}</strong></span>
     <span><small>Reaction</small><strong>${signed(d.reactionAdj)}</strong></span>
+    ${d.attacksPerRound !== "1" ? `<span><small>Melee attacks</small><strong>${escapeHtml(d.attacksPerRound)}/round</strong></span>` : ""}
+    ${d.backstab ? `<span><small>Backstab</small><strong>&times;${d.backstab}</strong></span>` : ""}
     ${d.levelLimit ? `<span class="adnd-limit"><small>Level limit</small><strong>${d.levelLimit}</strong></span>` : ""}
     ${d.xpNext ? `<span><small>Next level at</small><strong>${d.xpNext.toLocaleString()} xp</strong></span>` : ""}
   </div>`;
@@ -9477,6 +9543,32 @@ function renderAdndAttacks(c, sectionClassName) {
   </section>`;
 }
 
+// The turning table, cut down to the rows this character can actually affect.
+// A paladin turns as a cleric two levels lower, which the level already
+// accounts for.
+function renderAdndTurning(c, sectionClassName) {
+  if (!isAdnd(c) || typeof ADND_TURN_UNDEAD_TARGETS === "undefined") return "";
+  const className = primaryClassName(c);
+  const turningLevel = adndTurningLevel(className, characterTotalLevel(c));
+  if (!turningLevel) return "";
+  const column = adndTurnColumn(turningLevel);
+  const rows = ADND_TURN_UNDEAD_TARGETS
+    .map(entry => ({ name: entry.name, value: entry.row[column] }))
+    .filter(entry => entry.value !== null && entry.value !== undefined);
+  if (!rows.length) return "";
+  const describe = value => value === "T" ? "turned" : String(value).startsWith("D") ? "destroyed" : `roll ${value}+`;
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Turning undead</h2><span>Turning as a ${turningLevel}${turningLevel === 1 ? "st" : turningLevel === 2 ? "nd" : turningLevel === 3 ? "rd" : "th"}-level priest \u00b7 a success affects 2d6 of them.</span></div>
+    <div class="adnd-turn-list">
+      ${rows.map(entry => `<div class="adnd-turn-row ${entry.value === "T" ? "auto" : String(entry.value).startsWith("D") ? "destroy" : ""}">
+        <span>${escapeHtml(entry.name)}</span>
+        <strong>${escapeHtml(describe(entry.value))}</strong>
+      </div>`).join("")}
+    </div>
+    <p class="attack-hint">A number is what a d20 must reach. "Turned" succeeds automatically; "destroyed" wipes them out rather than driving them off.</p>
+  </section>`;
+}
+
 function renderAdndThiefSkills(c, sectionClassName) {
   if (!isAdnd(c)) return "";
   const skills = adndThiefSkills(c);
@@ -9487,7 +9579,7 @@ function renderAdndThiefSkills(c, sectionClassName) {
     <div class="resource-toolbar"><h2>${escapeHtml(adndSkillLabel(c))}</h2><span>${spent} of ${budget} discretionary points assigned.</span></div>
     <div class="adnd-skill-list">
       ${skills.map(skill => `<button type="button" class="adnd-skill" data-sheet-roll="${escapeHtml(skill.name)}" data-modifier="0" data-roll-percent="${skill.total}">
-        <span>${escapeHtml(skill.name)}<small>base ${skill.base}${skill.racial ? ` \u00b7 race ${signed(skill.racial)}` : ""}${skill.dex ? ` \u00b7 dex ${signed(skill.dex)}` : ""}${skill.allocated ? ` \u00b7 spent ${skill.allocated}` : ""}</small></span>
+        <span>${escapeHtml(skill.name)}<small>base ${skill.base}${skill.racial ? ` \u00b7 race ${signed(skill.racial)}` : ""}${skill.dex ? ` \u00b7 dex ${signed(skill.dex)}` : ""}${skill.armor ? ` \u00b7 armour ${signed(skill.armor)}` : ""}${skill.allocated ? ` \u00b7 spent ${skill.allocated}` : ""}</small></span>
         <strong>${skill.total}%</strong>
       </button>`).join("")}
     </div>
@@ -9504,7 +9596,9 @@ function renderAdndSpells(c, sectionClassName) {
   return `<section class="sheet-panel sheet-wide ${sectionClassName}">
     <div class="resource-toolbar"><h2>Spell slots</h2><span>${cls.caster === "wizard"
       ? `Memorised from a spellbook${intel && intel.maxSpellLevel ? ` \u00b7 up to level ${intel.maxSpellLevel}, ${Math.min(95, learn)}% to learn a spell${cls.specialist ? " of the school" : ""}` : ""}`
-      : "Prayed for each day, with bonus slots from Wisdom"}</span></div>
+      : cls.noWisdomBonus
+        ? "Prayed for each day. Unlike a priest, this class gains no extra spells from a high Wisdom"
+        : "Prayed for each day, with bonus slots from Wisdom"}</span></div>
     ${cls.specialist ? `<p class="attack-hint">Specialist in ${escapeHtml(cls.specialist)}. The extra slot at each level must hold a spell of that school. ${escapeHtml((cls.opposition || []).join(", "))} ${(cls.opposition || []).length === 1 ? "is" : "are"} closed off entirely, and learning outside the school is 15% harder.</p>` : ""}
     <div class="adnd-slot-grid">
       ${slots.map(slot => `<div class="adnd-slot">
@@ -9798,6 +9892,9 @@ function adndFeatureRows(className) {
   }
   if (cls.specialist) {
     return [[1, `${cls.specialist} specialist`], [1, `Barred: ${(cls.opposition || []).join(", ")}`]];
+  }
+  if (typeof ADND_CLASS_FEATURES !== "undefined" && ADND_CLASS_FEATURES[className]) {
+    return ADND_CLASS_FEATURES[className].map(row => [row.level, row.name]);
   }
   return [];
 }
@@ -11807,6 +11904,7 @@ function renderSheet() {
     ${renderAdndMonk(c, sectionClass("overview"))}
     ${renderAdndWeapons(c, sectionClass("overview"))}
     ${renderAdndAttacks(c, sectionClass("overview"))}
+    ${renderAdndTurning(c, sectionClass("overview"))}
     ${renderAdndThiefSkills(c, sectionClass("overview"))}
     ${renderAdndSpells(c, sectionClass("overview"))}
     ${renderD35Attacks(c, sectionClass("overview"))}

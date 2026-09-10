@@ -4068,6 +4068,15 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .adnd-monk-feature strong { font: 600 13px/1.3 system-ui, sans-serif; }
 .adnd-monk-feature small { color: var(--muted); font: 700 9px/1.4 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
 .adnd-monk-feature p { margin: 5px 0 0; color: var(--muted); font: 500 12px/1.55 system-ui, sans-serif; }
+.adnd-turn-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+.adnd-turn-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 7px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
+  font: 500 12px/1.4 system-ui, sans-serif;
+}
+.adnd-turn-row strong { font: 700 12px/1.2 system-ui, sans-serif; white-space: nowrap; }
+.adnd-turn-row.auto strong { color: #2f6f3e; }
+.adnd-turn-row.destroy strong { color: #a4552a; }
 @media (max-width: 620px) {
   .adnd-weapon { grid-template-columns: 1fr auto; gap: 6px; }
 }
