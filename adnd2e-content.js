@@ -70,7 +70,7 @@ const ADND_CLASSES = {
     races: ["Human", "Dwarf", "Elf", "Gnome", "Half-Elf", "Halfling", "Half-Orc"],
     xp: [0, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000, 500000, 750000,
          1000000, 1250000, 1500000, 1750000, 2000000, 2250000, 2500000, 2750000, 3000000],
-    hpAfter9: 3, exceptionalStrength: true,
+    hpAfter9: 3, exceptionalStrength: true, canSpecialise: true,
     summary: "The complete warrior: the best attack progression, the most hit points, and every weapon and armour available."
   },
   Paladin: {
@@ -85,7 +85,7 @@ const ADND_CLASSES = {
   Ranger: {
     icon: "➶", group: "warrior", hit: 10, prime: ["STR", "DEX", "WIS"], ownSpellTable: "ranger",
     minimums: { STR: 13, DEX: 13, CON: 14, WIS: 14 }, alignment: "Any good",
-    races: ["Human", "Elf", "Half-Elf"], caster: "priest", casterOffset: 7,
+    races: ["Human", "Elf", "Half-Elf"], caster: "priest", casterOffset: 7, rangerStealth: true,
     xp: [0, 2250, 4500, 9000, 18000, 36000, 75000, 150000, 300000, 600000, 900000,
          1200000, 1500000, 1800000, 2100000, 2400000, 2700000, 3000000, 3300000, 3600000],
     hpAfter9: 3, exceptionalStrength: true,
@@ -620,6 +620,12 @@ const ADND_CONSTITUTION_SAVE_BONUS = [
   { max: 13, bonus: 3 }, { max: 17, bonus: 4 }, { max: 19, bonus: 5 }
 ];
 
+const ADND_RACIAL_SAVE_CATEGORIES = {
+  Dwarf: { rsw: true, spell: true, poison: true },
+  Gnome: { rsw: true, spell: true },
+  Halfling: { rsw: true, spell: true, poison: true }
+};
+
 function adndRacialSaveBonus(species, score) {
   const race = ADND_RACES[species] || {};
   if (!race.constitutionSaves) return 0;
@@ -843,6 +849,7 @@ if (typeof window !== "undefined") {
   window.adndTurningLevel = adndTurningLevel;
   window.ADND_RACE_TRAITS = ADND_RACE_TRAITS;
   window.ADND_CONSTITUTION_SAVE_BONUS = ADND_CONSTITUTION_SAVE_BONUS;
+  window.ADND_RACIAL_SAVE_CATEGORIES = ADND_RACIAL_SAVE_CATEGORIES;
   window.adndRacialSaveBonus = adndRacialSaveBonus;
   window.ADND_WIZARD_SCHOOLS = ADND_WIZARD_SCHOOLS;
   window.ADND_SPECIALISTS = ADND_SPECIALISTS;

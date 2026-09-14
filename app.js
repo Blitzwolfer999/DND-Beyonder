@@ -6684,6 +6684,7 @@ function adndBuilderCharacter() {
     strPercentile: Number(form.elements.strPercentile?.value || 0),
     thiefSkillPoints: adndThiefDraft,
     weaponProficiencies: [...adndWeaponProficiencyDraft],
+    weaponSpecialisation: $("#adnd-specialisation")?.value || "",
     nonweaponProficiencies: [...adndNonweaponProficiencyDraft],
     customNonweapon: form.elements.customNonweapon?.value || "",
     inventory: [], ...abilities
@@ -6769,6 +6770,27 @@ function renderAdndWeaponProficiencies() {
   }).join("");
 }
 
+function renderAdndSpecialisationField() {
+  const wrap = $("#adnd-specialisation-wrap");
+  const select = $("#adnd-specialisation");
+  if (!wrap || !select) return;
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[selectedClass]) || {};
+  const show = edition === "adnd2e" && Boolean(cls.canSpecialise);
+  wrap.classList.toggle("hidden", !show);
+  if (!show) return;
+  const trained = [...adndWeaponProficiencyDraft];
+  const current = select.value;
+  select.innerHTML = `<option value="">None</option>` + trained
+    .map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  select.value = trained.includes(current) ? current : "";
+  const note = $("#adnd-specialisation-note");
+  if (note) {
+    note.textContent = trained.length
+      ? "A single-class fighter may specialise in one weapon they are already proficient with: +1 to hit, +2 damage, and a faster rate of attack."
+      : "Choose a weapon proficiency first; specialisation builds on one you already have.";
+  }
+}
+
 function applyAdndWeaponProficiency(input) {
   const name = input.dataset.adndWeaponProf;
   if (input.checked) adndWeaponProficiencyDraft.add(name);
@@ -6783,6 +6805,27 @@ function adndNonweaponSlotsSpent(character) {
   if (typeof ADND_NONWEAPON_PROFICIENCIES === "undefined") return 0;
   return (character.nonweaponProficiencies || []).reduce((total, name) =>
     total + Number((ADND_NONWEAPON_PROFICIENCIES[name] || {}).slots || 1), 0);
+}
+
+// Only a single-class fighter may specialise, and it costs proficiency slots:
+// one more in the weapon itself. The reward is +1 to hit, +2 damage, and a
+// faster rate of attack off Table 35.
+function adndSpecialisation(character) {
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[primaryClassName(character)]) || {};
+  const weapon = String(character.weaponSpecialisation || "");
+  if (!cls.canSpecialise || !weapon) return null;
+  if (typeof ADND_WEAPONS === "undefined" || !ADND_WEAPONS[weapon]) return null;
+  const rule = ADND_WEAPONS[weapon];
+  const row = typeof adndSpecialistAttackRow === "function"
+    ? adndSpecialistAttackRow(characterTotalLevel(character)) : null;
+  const rate = !row ? "" : rule.missile
+    ? (/crossbow/i.test(weapon) ? (/heavy/i.test(weapon) ? row.heavyCrossbow : row.lightCrossbow)
+      : /dart/i.test(weapon) ? row.thrownDart
+      : /dagger/i.test(weapon) ? row.thrownDagger : row.otherThrown)
+    : row.melee;
+  // A missile specialist gains the rate but not the melee bonuses to hit and
+  // damage; the book gives those to melee and thrown weapons.
+  return { weapon, hit: 1, damage: 2, rate, missile: Boolean(rule.missile) };
 }
 
 function renderAdndNonweaponProficiencies() {
@@ -6885,6 +6928,7 @@ function renderTalentChoices(savedFeats, savedSpells, savedFeatAbilities) {
   renderD35DomainChoices();
   renderAdndThiefBuilder();
   renderAdndWeaponProficiencies();
+  renderAdndSpecialisationField();
   renderAdndNonweaponProficiencies();
   renderAdndStrengthField();
   $$("select[data-asi-mode]").forEach(select => {
@@ -7334,6 +7378,7 @@ function formData() {
     data.thiefSkillPoints = { ...adndThiefDraft };
     data.weaponProficiencies = [...adndWeaponProficiencyDraft];
     data.nonweaponProficiencies = [...adndNonweaponProficiencyDraft];
+    data.weaponSpecialisation = $("#adnd-specialisation")?.value || "";
     data.strPercentile = Number(data.strPercentile || 0);
     // 2E has none of the 5e choice fields.
     data.skillProficiencies = [];
@@ -8744,12 +8789,22 @@ function adndSaves(character) {
   const bonus = Number(cls.saveBonus || 0);
   const wisdom = adndAbilityRow(ADND_WISDOM, character.WIS);
   const magicalDefence = Number((wisdom && wisdom.defense) || 0);
+  // Dwarves, gnomes and halflings resist magic in proportion to Constitution --
+  // a dwarf with an 18 saves five better against wands, staves, rods and
+  // spells. The bonus also covers poison for dwarves and halflings, but poison
+  // is only part of its category, so that is reported rather than folded in.
+  const racialBonus = typeof adndRacialSaveBonus === "function"
+    ? adndRacialSaveBonus(character.species, character.CON) : 0;
+  const racialCategories = (typeof ADND_RACIAL_SAVE_CATEGORIES !== "undefined"
+    && ADND_RACIAL_SAVE_CATEGORIES[character.species]) || {};
   return ADND_SAVE_CATEGORIES.map(category => {
     // A paladin's blanket bonus and Wisdom's magical defence both make the
     // target easier to reach, so they subtract from the number needed.
     const spellOnly = category.key === "spell" ? magicalDefence : 0;
-    return { ...category, target: Math.max(1, base[category.key] - bonus - spellOnly),
-      base: base[category.key], bonus, magicalDefence: spellOnly };
+    const racial = racialBonus && racialCategories[category.key] ? racialBonus : 0;
+    const poisonOnly = racialBonus && racialCategories.poison && category.key === "ppdm" ? racialBonus : 0;
+    return { ...category, target: Math.max(1, base[category.key] - bonus - spellOnly - racial),
+      base: base[category.key], bonus, magicalDefence: spellOnly, racial, poisonOnly };
   });
 }
 
@@ -9481,6 +9536,37 @@ function renderD35Attacks(c, sectionClassName) {
   </section>`;
 }
 
+// 3.5 turning is a Charisma check rather than a fixed number per undead type,
+// so the useful thing to show is what each result reaches and how often it can
+// be attempted.
+function renderD35Turning(c, sectionClassName) {
+  if (!isD35(c) || typeof D35_TURNING_RESULTS === "undefined") return "";
+  const turners = classBreakdown(c).filter(entry =>
+    classFeatureRows(entry.name, "d35").some(([, name]) => /turn/i.test(name)));
+  if (!turners.length) return "";
+  const entry = turners[0];
+  const eff = effectiveAbilities(c);
+  const charisma = modifier(eff.CHA);
+  const perDay = Math.max(0, 3 + charisma);
+  const label = offset => offset === 0 ? `${entry.level} HD`
+    : `${Math.max(0, entry.level + offset)} HD`;
+  const bands = [
+    { check: "0 or lower", offset: -4 }, { check: "1-3", offset: -3 }, { check: "4-6", offset: -2 },
+    { check: "7-9", offset: -1 }, { check: "10-12", offset: 0 }, { check: "13-15", offset: 1 },
+    { check: "16-18", offset: 2 }, { check: "19-21", offset: 3 }, { check: "22 or higher", offset: 4 }
+  ];
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Turning undead</h2><span>${perDay} attempt${perDay === 1 ? "" : "s"} a day \u00b7 turning check is 1d20 ${signed(charisma)}.</span></div>
+    <div class="adnd-turn-list">
+      ${bands.map(band => `<div class="adnd-turn-row">
+        <span>Check ${escapeHtml(band.check)}</span>
+        <strong>up to ${escapeHtml(label(band.offset))}</strong>
+      </div>`).join("")}
+    </div>
+    <p class="attack-hint">Damage is 2d6 plus ${entry.name} level plus Charisma modifier in Hit Dice of undead, starting with the weakest in range. Twice your level in Hit Dice is destroyed outright rather than driven off.</p>
+  </section>`;
+}
+
 function renderD35Domains(c, sectionClassName) {
   if (!isD35(c) || typeof D35_DOMAINS === "undefined") return "";
   const chosen = (c.domains || []).filter(name => D35_DOMAINS[name]);
@@ -9551,6 +9637,7 @@ function adndWeaponAttacks(character) {
   const proficient = new Set(character.weaponProficiencies || []);
   const untrainedPenalty = typeof adndNonProficiencyPenalty === "function"
     ? adndNonProficiencyPenalty(adndClassGroup(character)) : -3;
+  const specialisation = adndSpecialisation(character);
   return equippedItems(character).map(item => {
     const rule = ADND_WEAPONS[item.baseWeapon || item.name];
     if (!rule) return null;
@@ -9559,11 +9646,13 @@ function adndWeaponAttacks(character) {
     const magic = magicItemBonus(item);
     const trained = proficient.has(item.baseWeapon || item.name);
     const penalty = trained ? 0 : untrainedPenalty;
+    const specialised = specialisation && specialisation.weapon === (item.baseWeapon || item.name);
     return {
       name: item.name, group: rule.group, trained, penalty,
-      thac0: Math.max(1, d.thac0 - adj - magic - penalty),
+      specialised: Boolean(specialised), rate: specialised ? specialisation.rate : "",
+      thac0: Math.max(1, d.thac0 - adj - magic - penalty - (specialised ? 1 : 0)),
       dmgSM: rule.dmgSM, dmgL: rule.dmgL,
-      damageAdj: missile ? 0 : d.damageAdj + magic,
+      damageAdj: (missile ? 0 : d.damageAdj + magic) + (specialised && !missile ? 2 : 0),
       anatomy: monkAnatomyBonus,
       speed: rule.speed, range: rule.range || "",
       twoHanded: Boolean(rule.twoHanded)
@@ -9649,6 +9738,7 @@ function renderAdndWeapons(c, sectionClassName) {
         <span><small>vs L</small>${escapeHtml(adndDamageText(attack.dmgL, attack.damageAdj))}</span>
         <span><small>Speed</small>${attack.speed}</span>
         ${attack.anatomy ? `<span><small>vs anatomy</small>${signed(attack.anatomy)}</span>` : ""}
+        ${attack.specialised ? `<span class="adnd-specialised"><small>Specialised</small>${escapeHtml(attack.rate || "+1/+2")}</span>` : ""}
         ${attack.trained ? "" : `<span class="adnd-untrained"><small>Untrained</small>${signed(attack.penalty)}</span>`}
       </article>`).join("")}
     </div>
@@ -9704,6 +9794,44 @@ function renderAdndAttacks(c, sectionClassName) {
 // The turning table, cut down to the rows this character can actually affect.
 // A paladin turns as a cleric two levels lower, which the level already
 // accounts for.
+// A ranger hides and moves silently in natural surroundings on its own table,
+// modified by race and Dexterity the way a thief's are. Halved elsewhere, and
+// impossible in anything heavier than studded leather.
+function adndRangerStealth(character) {
+  const cls = (typeof ADND_CLASSES !== "undefined" && ADND_CLASSES[primaryClassName(character)]) || {};
+  if (!cls.rangerStealth || typeof ADND_RANGER_STEALTH === "undefined") return null;
+  const level = Math.max(1, Math.min(20, characterTotalLevel(character)));
+  const [hide, move] = ADND_RANGER_STEALTH[level - 1];
+  const race = (typeof ADND_THIEF_RACIAL !== "undefined" && ADND_THIEF_RACIAL[character.species]) || {};
+  const armorColumn = adndRogueArmorColumn(character);
+  const tooHeavy = ["chain"].includes(armorColumn);
+  const build = (base, skill) => {
+    const racial = Number(race[skill] || 0);
+    const dex = adndSkillDexAdjust(skill, character.DEX);
+    const total = Math.max(0, Math.min(99, base + racial + dex));
+    return { skill, base, racial, dex, total, halved: Math.floor(total / 2) };
+  };
+  return { tooHeavy, armorColumn,
+    rows: [build(hide, "Hide in Shadows"), build(move, "Move Silently")] };
+}
+
+function renderAdndRangerStealth(c, sectionClassName) {
+  if (!isAdnd(c)) return "";
+  const stealth = adndRangerStealth(c);
+  if (!stealth) return "";
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <div class="resource-toolbar"><h2>Woodland stealth</h2><span>${stealth.tooHeavy
+      ? "Unavailable: this armour is heavier than studded leather."
+      : "In natural surroundings. Halved in a crypt or a city street."}</span></div>
+    <div class="adnd-skill-list">
+      ${stealth.rows.map(row => `<button type="button" class="adnd-skill${stealth.tooHeavy ? " skill-untrained" : ""}" data-sheet-roll="${escapeHtml(row.skill)}" data-modifier="0" data-roll-percent="${stealth.tooHeavy ? 0 : row.total}">
+        <span>${escapeHtml(row.skill)}<small>base ${row.base}${row.racial ? ` \u00b7 race ${signed(row.racial)}` : ""}${row.dex ? ` \u00b7 dex ${signed(row.dex)}` : ""} \u00b7 ${row.halved}% elsewhere</small></span>
+        <strong>${stealth.tooHeavy ? "\u2014" : `${row.total}%`}</strong>
+      </button>`).join("")}
+    </div>
+  </section>`;
+}
+
 function renderAdndTurning(c, sectionClassName) {
   if (!isAdnd(c) || typeof ADND_TURN_UNDEAD_TARGETS === "undefined") return "";
   const className = primaryClassName(c);
@@ -10884,16 +11012,41 @@ function renderMagicItems() {
     : `<div class="empty-state"><span>*</span><h2>No items match</h2><p>Try a different search or filter.</p></div>`;
 }
 
+// The six special materials, which change what a weapon or a suit of armour
+// can do rather than being items of their own.
+function renderSpecialMaterials() {
+  const list = $("#material-list");
+  if (!list || typeof D35_SPECIAL_MATERIALS === "undefined") return;
+  const count = $("#bestiary-count");
+  if (count && compendiumTab === "materials") {
+    count.textContent = `${Object.keys(D35_SPECIAL_MATERIALS).length} special materials from the 3.5 SRD.`;
+  }
+  list.innerHTML = Object.entries(D35_SPECIAL_MATERIALS).map(([name, rule]) => `
+    <article class="material-card">
+      <h3>${escapeHtml(name)}</h3>
+      <p>${escapeHtml(rule.summary)}</p>
+      <dl>
+        <dt>Cost</dt><dd>${escapeHtml(rule.cost)}</dd>
+        <dt>Limits</dt><dd>${escapeHtml(rule.limits)}</dd>
+      </dl>
+    </article>`).join("");
+}
+
 function setCompendiumTab(tab) {
   compendiumTab = tab;
   $$(".compendium-tabs button").forEach(button =>
     button.classList.toggle("active", button.dataset.compendium === tab));
   const creatures = tab === "creatures";
+  const items = tab === "items";
+  const materials = tab === "materials";
   $("#creature-filters")?.classList.toggle("hidden", !creatures);
-  $("#item-filters")?.classList.toggle("hidden", creatures);
+  $("#item-filters")?.classList.toggle("hidden", !items);
   $("#bestiary-list")?.classList.toggle("hidden", !creatures);
-  $("#item-list")?.classList.toggle("hidden", creatures);
-  if (creatures) renderBestiary(); else renderMagicItems();
+  $("#item-list")?.classList.toggle("hidden", !items);
+  $("#material-list")?.classList.toggle("hidden", !materials);
+  if (creatures) renderBestiary();
+  else if (items) renderMagicItems();
+  else renderSpecialMaterials();
 }
 
 function renderBestiary() {
@@ -12123,6 +12276,14 @@ function renderSheet() {
         <div class="combat-detail"><small>Skill ranks spent</small><span>${Object.entries(c.skillRanks || {}).filter(([, n]) => Number(n) > 0).map(([skill, n]) => `${skill} ${n}`).join(", ") || "None spent"}</span></div>
         <div class="combat-detail"><small>Racial traits</small><span>${escapeHtml(((typeof D35_RACE_TRAITS !== "undefined" && D35_RACE_TRAITS[c.species]) || []).map(([name]) => name).join(", ") || "None")}</span></div>
         ${typeof d35ExperienceForLevel === "function" && characterTotalLevel(c) < 20 ? `<div class="combat-detail"><small>Next level at</small><span>${d35ExperienceForLevel(characterTotalLevel(c) + 1).toLocaleString()} xp</span></div>` : ""}
+        ${typeof d35CarryingCapacity === "function" ? (() => {
+          const cap = d35CarryingCapacity(effectiveAbilities(c).STR);
+          const carried = inventoryWeight(c);
+          const load = d35LoadCategory(effectiveAbilities(c).STR, carried);
+          const effect = D35_LOAD_EFFECTS[load];
+          return `<div class="combat-detail"><small>Load</small><span>${effect.label} \u00b7 carrying ${Math.round(carried * 10) / 10} lb. of ${cap.heavy} \u00b7 light to ${cap.light}, medium to ${cap.medium}${effect.check ? ` \u00b7 max Dex +${effect.maxDex}, check ${effect.check}` : ""}</span></div>
+        <div class="combat-detail"><small>Lift and drag</small><span>Over head ${cap.liftOverHead} lb. \u00b7 off the ground ${cap.liftOffGround} lb. \u00b7 push or drag ${cap.pushOrDrag} lb.</span></div>`;
+        })() : ""}
         ${typeof D35_KNOWLEDGE_SYNERGY_NOTE !== "undefined" ? `<div class="combat-detail"><small>Knowledge synergies</small><span>${escapeHtml(D35_KNOWLEDGE_SYNERGY_NOTE)}</span></div>` : ""}`
         : `<div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
         <div class="combat-detail"><small>Skill proficiencies</small><span>${[...proficientSkills(c)].sort().join(", ") || "None selected"}</span></div>
@@ -12141,10 +12302,12 @@ function renderSheet() {
     ${renderAdndWeapons(c, sectionClass("overview"))}
     ${renderAdndAttacks(c, sectionClass("overview"))}
     ${renderAdndTurning(c, sectionClass("overview"))}
+    ${renderAdndRangerStealth(c, sectionClass("overview"))}
     ${renderAdndNonweapon(c, sectionClass("overview"))}
     ${renderAdndThiefSkills(c, sectionClass("overview"))}
     ${renderAdndSpells(c, sectionClass("overview"))}
     ${renderD35Attacks(c, sectionClass("overview"))}
+    ${renderD35Turning(c, sectionClass("overview"))}
     ${renderD35Domains(c, sectionClass("features"))}
     ${renderD35Spellbook(c, sectionClass("overview"))}
     ${renderInventorySection(c, sectionClass("inventory"))}
@@ -12208,6 +12371,7 @@ function editCharacter(id) {
   adndThiefDraft = { ...(c.thiefSkillPoints || {}) };
   adndWeaponProficiencyDraft = new Set(c.weaponProficiencies || []);
   adndNonweaponProficiencyDraft = new Set(c.nonweaponProficiencies || []);
+  if ($("#adnd-specialisation")) $("#adnd-specialisation").value = c.weaponSpecialisation || "";
   selectedD35Domains = new Set(c.domains || []);
   showCreationMethod("standard");
   $("#builder-eyebrow").textContent = "DIRECT EDIT";
@@ -14229,6 +14393,7 @@ function initEvents() {
       updatePreview();
       return;
     }
+    if (event.target.id === "adnd-specialisation") { updatePreview(); return; }
     if (event.target.dataset.adndNonweapon) { applyAdndNonweaponProficiency(event.target); return; }
     if (event.target.dataset.adndWeaponProf) { applyAdndWeaponProficiency(event.target); return; }
     if (event.target.dataset.adndThief) { applyAdndThiefPoints(event.target); return; }

@@ -4083,6 +4083,14 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
   padding: 7px 11px; border: 1px dashed var(--line); border-radius: 9px; background: var(--panel);
   font: 500 12px/1.4 system-ui, sans-serif; }
 .adnd-skill-custom small { display: block; color: var(--muted); font-size: 11px; }
+.material-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.material-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.material-card h3 { margin: 0 0 6px; font: 600 15px/1.3 Cinzel, serif; }
+.material-card p { margin: 0 0 10px; color: var(--muted); font: 500 12px/1.55 system-ui, sans-serif; }
+.material-card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
+.material-card dt { color: var(--muted); font: 700 9px/1.6 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em; }
+.material-card dd { margin: 0; font: 500 12px/1.5 system-ui, sans-serif; }
+.adnd-specialised, .adnd-specialised small { color: #2f6f3e; }
 .adnd-untrained small { color: #a4552a; }
 .adnd-untrained { color: #a4552a; }
 .session-rest-note {

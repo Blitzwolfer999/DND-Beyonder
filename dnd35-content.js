@@ -126,6 +126,97 @@ function d35ExperienceForLevel(level) {
   return (n * (n - 1) / 2) * 1000;
 }
 
+
+// Turning in 3.5 is a Charisma check, not a fixed number per undead type: the
+// check decides how powerful a creature you can touch, relative to your level.
+const D35_TURNING_RESULTS = [
+  { max: 0, offset: -4 }, { max: 3, offset: -3 }, { max: 6, offset: -2 },
+  { max: 9, offset: -1 }, { max: 12, offset: 0 }, { max: 15, offset: 1 },
+  { max: 18, offset: 2 }, { max: 21, offset: 3 }, { max: Infinity, offset: 4 }
+];
+
+function d35TurningOffset(checkResult) {
+  const row = D35_TURNING_RESULTS.find(entry => Number(checkResult) <= entry.max);
+  return row ? row.offset : 4;
+}
+
+// Carrying capacity by Strength. The heavy column is the authoritative one --
+// a character's maximum load -- and the light and medium limits are thirds of
+// it, rounded down. Deriving the other way round misses by a pound or two,
+// because the printed thirds are not exact: Strength 10 carries 100 at heavy,
+// not the 99 that tripling its light load of 33 would give.
+const D35_MAX_LOAD = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 115, 130, 150, 175,
+  200, 230, 260, 300, 350, 400, 460, 520, 600, 700, 800, 920, 1040, 1200, 1400];
+
+function d35CarryingCapacity(strength) {
+  const score = Math.max(1, Number(strength) || 10);
+  let index = score;
+  let multiplier = 1;
+  // Above 29 the table repeats, four times heavier for every ten points.
+  while (index > 29) { index -= 10; multiplier *= 4; }
+  const heavy = D35_MAX_LOAD[index - 1] * multiplier;
+  return {
+    light: Math.floor(heavy / 3),
+    medium: Math.floor((heavy * 2) / 3),
+    heavy,
+    liftOverHead: heavy,
+    liftOffGround: heavy * 2,
+    pushOrDrag: heavy * 5
+  };
+}
+
+// The load a character is actually under, and what it costs them.
+const D35_LOAD_EFFECTS = {
+  light: { maxDex: Infinity, check: 0, label: "Light" },
+  medium: { maxDex: 3, check: -3, label: "Medium" },
+  heavy: { maxDex: 1, check: -6, label: "Heavy" },
+  overloaded: { maxDex: 0, check: -6, label: "Over the limit" }
+};
+
+function d35LoadCategory(strength, weight) {
+  const capacity = d35CarryingCapacity(strength);
+  const carried = Number(weight) || 0;
+  if (carried <= capacity.light) return "light";
+  if (carried <= capacity.medium) return "medium";
+  if (carried <= capacity.heavy) return "heavy";
+  return "overloaded";
+}
+
+// Special materials. Costs are the modifiers the table prints, on top of the
+// masterwork price where one applies.
+const D35_SPECIAL_MATERIALS = {
+  Adamantine: {
+    summary: "Ultrahard metal. Weapons ignore hardness below 20 when sundering or attacking objects, and armour grants damage reduction 1, 2 or 3 against everything, by weight. Always masterwork, so weapons carry a +1 enhancement to attack and armour has one less check penalty.",
+    cost: "Ammunition +60 gp, weapon +3,000 gp, shield +2,000 gp, light armour +5,000 gp, medium +10,000 gp, heavy +15,000 gp",
+    limits: "Only items normally made of metal. An arrow can be adamantine; a quarterstaff cannot."
+  },
+  Darkwood: {
+    summary: "A magic wood as hard as ordinary timber and half the weight. Anything mostly wooden made from it counts as masterwork, and a darkwood shield's check penalty is two lighter.",
+    cost: "Masterwork price plus 10 gp per pound of the original weight",
+    limits: "Only items normally made of wood. A battleaxe gains nothing from it."
+  },
+  Dragonhide: {
+    summary: "Armour and shields worked from a dragon's hide, always of masterwork quality. It is not metal, so a druid may wear it without breaking their oath.",
+    cost: "Masterwork price, doubled for the hide itself",
+    limits: "Armour and shields only, and the dragon must be large enough for the piece."
+  },
+  "Cold iron": {
+    summary: "Iron mined deep and forged cool, which bites fey creatures that shrug off ordinary steel.",
+    cost: "Twice the normal price, and magical enhancement costs 2,000 gp more",
+    limits: "Only items normally made of metal. A double weapon half-made of it costs 50% more."
+  },
+  Mithral: {
+    summary: "Light silvery metal as hard as steel. Armour counts as one category lighter for movement, spell failure drops 10%, maximum Dexterity rises by 2 and the check penalty falls by 3. Anything made of it weighs half as much.",
+    cost: "Light armour +1,000 gp, medium +4,000 gp, heavy +9,000 gp, shield +1,000 gp, anything else +500 gp per pound",
+    limits: "Heavy armour still counts as heavy for proficiency; only the movement category changes."
+  },
+  "Alchemical silver": {
+    summary: "Silver bonded to steel, which cuts through the damage reduction of lycanthropes and their kind. The wielder takes -1 on damage rolls for the softer edge.",
+    cost: "Ammunition +2 gp, light weapon +20 gp, one-handed +90 gp, two-handed +180 gp",
+    limits: "Metal items only, and it will not take on adamantine, cold iron or mithral."
+  }
+};
+
 // Skill name -> key ability. Armor check penalty applies to the flagged ones.
 const D35_SKILLS = {
   "Appraise": "INT", "Balance": "DEX", "Bluff": "CHA", "Climb": "STR", "Concentration": "CON",
@@ -366,6 +457,12 @@ if (typeof window !== "undefined") {
   window.D35_TRAINED_ONLY = D35_TRAINED_ONLY;
   window.D35_ALIGNMENTS = D35_ALIGNMENTS;
   window.D35_SKILL_SYNERGY = D35_SKILL_SYNERGY;
+  window.D35_TURNING_RESULTS = D35_TURNING_RESULTS;
+  window.D35_SPECIAL_MATERIALS = D35_SPECIAL_MATERIALS;
+  window.D35_LOAD_EFFECTS = D35_LOAD_EFFECTS;
+  window.d35TurningOffset = d35TurningOffset;
+  window.d35CarryingCapacity = d35CarryingCapacity;
+  window.d35LoadCategory = d35LoadCategory;
   window.D35_KNOWLEDGE_SYNERGY_NOTE = D35_KNOWLEDGE_SYNERGY_NOTE;
   window.d35ExperienceForLevel = d35ExperienceForLevel;
   window.d35SaveProgression = d35SaveProgression;

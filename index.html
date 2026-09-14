@@ -21,7 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=nwp-84">
+  <link rel="stylesheet" href="styles.css?v=r3-86">
 </head>
 <body>
   <div class="app-shell">
@@ -400,6 +400,10 @@
                 <label>Exceptional Strength (d100)<input name="strPercentile" type="number" min="0" max="100" value="0" inputmode="numeric"></label>
                 <p id="adnd-strength-note" class="adnd-strength-note"></p>
               </div>
+              <div class="choice-section hidden" id="adnd-specialisation-wrap">
+                <label>Weapon specialisation<select id="adnd-specialisation"></select></label>
+                <p id="adnd-specialisation-note" class="adnd-strength-note"></p>
+              </div>
               <section class="choice-section hidden" id="adnd-nonweapon-section">
                 <div class="choice-heading">
                   <div><h3>Nonweapon proficiencies</h3><p id="adnd-nonweapon-note"></p></div>
@@ -620,6 +624,7 @@
         <div class="sheet-tabs compendium-tabs">
           <button type="button" class="active" data-compendium="creatures">Creatures</button>
           <button type="button" data-compendium="items">Magic items</button>
+          <button type="button" data-compendium="materials">Special materials</button>
         </div>
         <div class="vault-toolbar bestiary-toolbar" id="creature-filters">
           <input id="bestiary-search" type="search" placeholder="Search creatures...">
@@ -646,6 +651,7 @@
         </div>
         <div class="bestiary-grid" id="bestiary-list"></div>
         <div class="bestiary-grid hidden" id="item-list"></div>
+        <div class="material-list hidden" id="material-list"></div>
       </section>
 
       <section class="view" id="campaigns-view">
@@ -835,8 +841,8 @@
   <script src="solasta-content.js?v=solasta-1"></script>
   <script src="warlock-invocations.js?v=invocations-2"></script>
   <script src="sw5e-content.js?v=sw5e-8"></script>
-  <script src="dnd35-content.js?v=d35-5"></script>
-  <script src="adnd2e-content.js?v=adnd-8"></script>
+  <script src="dnd35-content.js?v=d35-7"></script>
+  <script src="adnd2e-content.js?v=adnd-9"></script>
   <script src="adnd2e-equipment.js?v=adndeq-1"></script>
   <script src="dnd35-spells.js?v=d35s-2"></script>
   <script src="dnd35-classfeatures.js?v=d35cf-1"></script>
@@ -864,6 +870,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=nwp-144"></script>
+  <script src="app.js?v=r3-147"></script>
 </body>
 </html>
