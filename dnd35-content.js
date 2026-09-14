@@ -217,6 +217,17 @@ const D35_SPECIAL_MATERIALS = {
   }
 };
 
+
+// 3.5 names its own conditions, and most of them do not exist in 5e. Dazed is
+// not stunned, shaken is not frightened, and the fatigue track runs fatigued
+// then exhausted rather than through six levels of exhaustion.
+const D35_CONDITIONS = [
+  "Blinded", "Cowering", "Dazed", "Dazzled", "Deafened", "Entangled", "Exhausted",
+  "Fatigued", "Flat-footed", "Frightened", "Grappling", "Helpless", "Nauseated",
+  "Panicked", "Paralyzed", "Petrified", "Pinned", "Prone", "Shaken", "Sickened",
+  "Stunned", "Unconscious"
+];
+
 // Skill name -> key ability. Armor check penalty applies to the flagged ones.
 const D35_SKILLS = {
   "Appraise": "INT", "Balance": "DEX", "Bluff": "CHA", "Climb": "STR", "Concentration": "CON",
@@ -459,6 +470,7 @@ if (typeof window !== "undefined") {
   window.D35_SKILL_SYNERGY = D35_SKILL_SYNERGY;
   window.D35_TURNING_RESULTS = D35_TURNING_RESULTS;
   window.D35_SPECIAL_MATERIALS = D35_SPECIAL_MATERIALS;
+  window.D35_CONDITIONS = D35_CONDITIONS;
   window.D35_LOAD_EFFECTS = D35_LOAD_EFFECTS;
   window.d35TurningOffset = d35TurningOffset;
   window.d35CarryingCapacity = d35CarryingCapacity;

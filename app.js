@@ -237,7 +237,19 @@ const CONDITION_BADGES = {
   Frightened: { a: "FRI", c: "#b58b3a" }, Grappled: { a: "GRP", c: "#8a6d3b" }, Incapacitated: { a: "INC", c: "#8a8a8a" },
   Invisible: { a: "INV", c: "#6fa8c7" }, Paralyzed: { a: "PAR", c: "#a23b6f" }, Petrified: { a: "PET", c: "#7d7a6f" },
   Poisoned: { a: "PSN", c: "#4e9a4e" }, Prone: { a: "PRN", c: "#9a7b4e" }, Restrained: { a: "RST", c: "#b5603a" },
-  Stunned: { a: "STN", c: "#c7a13a" }, Unconscious: { a: "UNC", c: "#6b3a8a" }, Exhaustion: { a: "EXH", c: "#8a4a3a" }
+  Stunned: { a: "STN", c: "#c7a13a" }, Unconscious: { a: "UNC", c: "#6b3a8a" }, Exhaustion: { a: "EXH", c: "#8a4a3a" },
+  // 3.5 and 2E name conditions the other editions do not have. Without their
+  // own entries these all fell back to the same orange badge.
+  Cowering: { a: "CWR", c: "#9a6b3a" }, Dazed: { a: "DZD", c: "#b58b3a" },
+  Dazzled: { a: "DZL", c: "#c7b03a" }, Entangled: { a: "ENT", c: "#6b8a4e" },
+  Exhausted: { a: "EXH", c: "#8a4a3a" }, Fatigued: { a: "FAT", c: "#a6714e" },
+  "Flat-footed": { a: "FLT", c: "#7d7a6f" }, Grappling: { a: "GRA", c: "#8a6d3b" },
+  Helpless: { a: "HLP", c: "#a23b6f" }, Nauseated: { a: "NAU", c: "#5e8a4e" },
+  Panicked: { a: "PNC", c: "#b5603a" }, Pinned: { a: "PIN", c: "#8a6d3b" },
+  Shaken: { a: "SHK", c: "#b58b3a" }, Sickened: { a: "SIC", c: "#6f8a4e" },
+  Confused: { a: "CNF", c: "#a06fb5" }, Feebleminded: { a: "FBL", c: "#7d5b9a" },
+  Held: { a: "HLD", c: "#a23b6f" }, Silenced: { a: "SIL", c: "#6b7280" },
+  Slowed: { a: "SLW", c: "#7d7a6f" }
 };
 function conditionBadge(name) {
   return CONDITION_BADGES[name] || { a: String(name || "").slice(0, 3).toUpperCase() || "•", c: "#b5603a" };
@@ -11568,6 +11580,21 @@ function characterCurrency(character) {
   return { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0, ...(character.currency || {}) };
 }
 
+// 5e allows Strength times fifteen. 3.5 prints a table that tops out well
+// below that, and 2E gives a weight allowance straight off the Strength row.
+function carryingCapacityFor(character) {
+  if (isD35(character) && typeof d35CarryingCapacity === "function") {
+    const cap = d35CarryingCapacity(effectiveAbilities(character).STR);
+    const load = d35LoadCategory(effectiveAbilities(character).STR, inventoryWeight(character));
+    const effect = (typeof D35_LOAD_EFFECTS !== "undefined" && D35_LOAD_EFFECTS[load]) || { label: "Light" };
+    return { value: cap.heavy, unit: ` lb. · ${effect.label.toLowerCase()} load`, label: "Maximum load" };
+  }
+  if (isAdnd(character) && typeof adndStrength === "function") {
+    return { value: Number(adndStrength(character).weight || 0), unit: " lb.", label: "Weight allowance" };
+  }
+  return { value: Math.max(0, Number(character.STR || 10) * 15), unit: " lb.", label: "Capacity" };
+}
+
 function inventoryWeight(character) {
   return (character.inventory || []).reduce((total, item) =>
     total + (item.carried === false ? 0 : Number(item.weight || 0) * Number(item.quantity || 1)), 0
@@ -11578,7 +11605,10 @@ function renderInventorySection(character, extraClass = "") {
   const inventory = character.inventory || [];
   const currency = characterCurrency(character);
   const weight = inventoryWeight(character);
-  const capacity = Math.max(0, Number(character.STR || 10) * 15);
+  // Each edition measures this differently, and the sheet was quoting 5e's
+  // Strength times fifteen even where the combat panel showed the real figure.
+  const capacityInfo = carryingCapacityFor(character);
+  const capacity = capacityInfo.value;
   const attuned = inventory.filter(item => item.attuned).length;
   return `<section class="sheet-panel sheet-wide ${extraClass}">
     <div class="resource-toolbar">
@@ -11590,8 +11620,21 @@ function renderInventorySection(character, extraClass = "") {
     ).join("")}</div>
     <div class="inventory-summary">
       <span><strong>Carried:</strong> ${Number(weight.toFixed(2))} lb.</span>
-      <span><strong>Capacity:</strong> ${capacity} lb.</span>
-      <span class="attune-slots${attuned > 3 ? " over" : ""}"><strong>Attunement</strong><span class="attune-pips" aria-hidden="true">${[0, 1, 2].map(slot => `<i class="${slot < attuned ? "used" : ""}"></i>`).join("")}</span><small>${attuned}/3 slots${attuned > 3 ? ` · ${attuned - 3} over limit` : ""}</small></span>
+      <span><strong>${escapeHtml(capacityInfo.label)}:</strong> ${capacity}${capacityInfo.unit}</span>
+      ${(() => {
+        // Attunement is a 5e rule. 3.5 has no equivalent at all, and 2E caps
+        // how many magical items a paladin or monk may keep rather than how
+        // many can be worn at once.
+        if (isD35(character)) return "";
+        if (isAdnd(character)) {
+          const limit = (typeof ADND_MAGIC_ITEM_LIMITS !== "undefined"
+            && ADND_MAGIC_ITEM_LIMITS[primaryClassName(character)]) || null;
+          if (!limit) return "";
+          const magical = inventory.filter(item => itemRarity(item) && itemRarity(item) !== "Common").length;
+          return `<span class="attune-slots${magical > limit.total ? " over" : ""}"><strong>Magical items</strong><small>${magical}/${limit.total} · ${escapeHtml(limit.note)}</small></span>`;
+        }
+        return `<span class="attune-slots${attuned > 3 ? " over" : ""}"><strong>Attunement</strong><span class="attune-pips" aria-hidden="true">${[0, 1, 2].map(slot => `<i class="${slot < attuned ? "used" : ""}"></i>`).join("")}</span><small>${attuned}/3 slots${attuned > 3 ? ` · ${attuned - 3} over limit` : ""}</small></span>`;
+      })()}
       <span><strong>Items:</strong> ${inventory.reduce((sum, item) => sum + Number(item.quantity || 1), 0)}</span>
     </div>
     ${inventory.length ? `<div class="inventory-scroll"><table class="inventory-table">
@@ -11836,11 +11879,20 @@ function renderDeathSaves(character) {
   return `<div class="death-saves"><strong>Death saves</strong>${group("successes", saves.successes)}${group("failures", saves.failures)}</div>`;
 }
 
+// Each edition names its own conditions: 3.5 has dazed, shaken and the
+// fatigued-then-exhausted track, none of which are the 5e states of the same
+// rough shape.
+function conditionsForEdition(rulesEdition) {
+  if (rulesEdition === "d35" && typeof D35_CONDITIONS !== "undefined") return D35_CONDITIONS;
+  if (rulesEdition === "adnd2e" && typeof ADND_CONDITIONS !== "undefined") return ADND_CONDITIONS;
+  return CONDITIONS;
+}
+
 function renderConditionPicker(character) {
   const active = new Set(character.conditions || []);
   return `<details class="condition-picker">
     <summary>Conditions <span>${active.size || "None"}</span></summary>
-    <div class="condition-menu">${CONDITIONS.map(condition =>
+    <div class="condition-menu">${conditionsForEdition(character.edition).map(condition =>
       `<button type="button" class="${active.has(condition) ? "active" : ""}" data-condition="${escapeHtml(condition)}" data-character="${character.id}">${escapeHtml(condition)}</button>`
     ).join("")}</div>
   </details>`;

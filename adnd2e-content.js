@@ -446,6 +446,19 @@ const ADND_NONWEAPON_PROFICIENCIES = {
 const ADND_NONWEAPON_NOTE =
   "A check succeeds on a d20 roll at or under the ability score plus the proficiency's modifier. This list is the Player's Handbook set the source confirms; anything missing can be typed in below.";
 
+
+// 2E has no attunement. What it has is a cap on how many magical items certain
+// classes may keep at all, and a short list of conditions worth tracking.
+const ADND_MAGIC_ITEM_LIMITS = {
+  Paladin: { total: 10, note: "At most one suit of armour, one shield, four weapons and four other items." },
+  Monk: { total: 5, note: "Only items a rogue could use, and no more wealth than a modest life needs." }
+};
+
+const ADND_CONDITIONS = [
+  "Blinded", "Charmed", "Confused", "Deafened", "Feebleminded", "Held", "Paralyzed",
+  "Petrified", "Poisoned", "Prone", "Silenced", "Slowed", "Stunned", "Unconscious"
+];
+
 // Racial adjustments and the class level limits that made demihumans a
 // short-term investment.
 const ADND_RACES = {
@@ -836,6 +849,8 @@ if (typeof window !== "undefined") {
   window.ADND_CLASS_FEATURES = ADND_CLASS_FEATURES;
   window.ADND_PROFICIENCY_SLOTS = ADND_PROFICIENCY_SLOTS;
   window.ADND_NONWEAPON_PROFICIENCIES = ADND_NONWEAPON_PROFICIENCIES;
+  window.ADND_MAGIC_ITEM_LIMITS = ADND_MAGIC_ITEM_LIMITS;
+  window.ADND_CONDITIONS = ADND_CONDITIONS;
   window.ADND_NONWEAPON_NOTE = ADND_NONWEAPON_NOTE;
   window.ADND_SPECIALIST_ATTACKS = ADND_SPECIALIST_ATTACKS;
   window.adndWeaponSlots = adndWeaponSlots;
