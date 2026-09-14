@@ -459,6 +459,35 @@ const ADND_CONDITIONS = [
   "Petrified", "Poisoned", "Prone", "Silenced", "Slowed", "Stunned", "Unconscious"
 ];
 
+
+// Multi-classing is a demihuman privilege in 2E, and only in the combinations
+// each race is allowed. A multi-classed character advances in every class at
+// once on a split share of experience, and takes the best of what the classes
+// offer rather than stacking them.
+const ADND_MULTICLASS_COMBINATIONS = {
+  Dwarf: [["Fighter", "Cleric"], ["Fighter", "Thief"]],
+  Elf: [["Fighter", "Mage"], ["Fighter", "Thief"], ["Fighter", "Mage", "Thief"], ["Mage", "Thief"]],
+  Gnome: [["Fighter", "Cleric"], ["Fighter", "Illusionist"], ["Fighter", "Thief"],
+    ["Cleric", "Illusionist"], ["Cleric", "Thief"], ["Illusionist", "Thief"]],
+  "Half-Elf": [["Cleric", "Fighter"], ["Druid", "Fighter"], ["Cleric", "Fighter", "Mage"],
+    ["Druid", "Fighter", "Mage"], ["Cleric", "Ranger"], ["Druid", "Ranger"], ["Cleric", "Mage"],
+    ["Druid", "Mage"], ["Fighter", "Mage"], ["Fighter", "Thief"], ["Fighter", "Mage", "Thief"],
+    ["Mage", "Thief"]],
+  Halfling: [["Fighter", "Thief"]],
+  // Not a Player's Handbook race, so its combinations come from elsewhere and
+  // vary by table.
+  "Half-Orc": [["Fighter", "Cleric"], ["Fighter", "Thief"], ["Cleric", "Thief"]],
+  // Humans do not multi-class. They dual-class instead: stop advancing in one
+  // class and begin another from first level.
+  Human: []
+};
+
+function adndMulticlassAllowed(species, classNames) {
+  const options = ADND_MULTICLASS_COMBINATIONS[species] || [];
+  const wanted = [...classNames].sort().join("/");
+  return options.some(combo => [...combo].sort().join("/") === wanted);
+}
+
 // Racial adjustments and the class level limits that made demihumans a
 // short-term investment.
 const ADND_RACES = {
@@ -850,6 +879,8 @@ if (typeof window !== "undefined") {
   window.ADND_PROFICIENCY_SLOTS = ADND_PROFICIENCY_SLOTS;
   window.ADND_NONWEAPON_PROFICIENCIES = ADND_NONWEAPON_PROFICIENCIES;
   window.ADND_MAGIC_ITEM_LIMITS = ADND_MAGIC_ITEM_LIMITS;
+  window.ADND_MULTICLASS_COMBINATIONS = ADND_MULTICLASS_COMBINATIONS;
+  window.adndMulticlassAllowed = adndMulticlassAllowed;
   window.ADND_CONDITIONS = ADND_CONDITIONS;
   window.ADND_NONWEAPON_NOTE = ADND_NONWEAPON_NOTE;
   window.ADND_SPECIALIST_ATTACKS = ADND_SPECIALIST_ATTACKS;

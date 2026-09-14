@@ -7439,6 +7439,16 @@ function adndCompletionIssues(data, add) {
   if (limit && level > limit) {
     add(2, `A ${data.species} ${className} may not pass level ${limit}`);
   }
+  const classNames = adndClassEntries(data).map(entry => entry.name);
+  if (classNames.length > 1 && typeof adndMulticlassAllowed === "function") {
+    if (!adndMulticlassAllowed(data.species, classNames)) {
+      const allowed = (ADND_MULTICLASS_COMBINATIONS[data.species] || [])
+        .map(combo => combo.join("/"));
+      add(2, allowed.length
+        ? `A ${data.species} cannot combine ${classNames.join("/")}. Allowed: ${allowed.join(", ")}.`
+        : `A ${data.species} does not multi-class. Humans dual-class instead.`);
+    }
+  }
   const weaponSlots = typeof adndWeaponSlots === "function"
     ? adndWeaponSlots(adndClassGroup(data), characterTotalLevel(data)) : 0;
   const trained = (data.weaponProficiencies || []).length;
@@ -8735,14 +8745,33 @@ function adndClassGroup(character) {
   return (ADND_CLASSES[primaryClassName(character)] || {}).group || "rogue";
 }
 
+// A multi-classed character advances in every class at once, so most of its
+// numbers are the best each class offers at its own level rather than anything
+// read off the combined total. Single-class characters take the same path with
+// a list of one, which keeps the two cases from drifting apart.
+function adndClassEntries(character) {
+  const entries = classBreakdown(character)
+    .filter(entry => ADND_CLASSES[entry.name] && entry.level > 0)
+    .map(entry => ({ ...entry, cls: ADND_CLASSES[entry.name], group: ADND_CLASSES[entry.name].group }));
+  if (entries.length) return entries;
+  const name = primaryClassName(character);
+  return [{ name, level: Math.max(1, characterTotalLevel(character)),
+    cls: ADND_CLASSES[name] || {}, group: (ADND_CLASSES[name] || {}).group || "rogue" }];
+}
+
+function adndIsMulticlass(character) {
+  return adndClassEntries(character).length > 1;
+}
+
 // A warrior's Strength can carry a percentile. It is stored separately so a
 // score of 18 with no percentile still reads as plain 18.
 function adndStrength(character) {
   const score = Math.max(1, Math.min(19, Number(character.STR) || 10));
   const percentile = Number(character.strPercentile || 0);
-  const cls = ADND_CLASSES[primaryClassName(character)] || {};
   const race = (typeof ADND_RACES !== "undefined" && ADND_RACES[character.species]) || {};
-  if (score === 18 && percentile > 0 && cls.exceptionalStrength && !race.noExceptionalStrength) {
+  // A fighter/mage is still a fighter for this.
+  const canRoll = adndClassEntries(character).some(entry => entry.cls.exceptionalStrength);
+  if (score === 18 && percentile > 0 && canRoll && !race.noExceptionalStrength) {
     const band = ADND_EXCEPTIONAL_STRENGTH.find(entry => percentile <= entry.max)
       || ADND_EXCEPTIONAL_STRENGTH[ADND_EXCEPTIONAL_STRENGTH.length - 1];
     return { ...band, score, percentile, display: band.label };
@@ -8797,7 +8826,12 @@ function adndArmorClass(character) {
 
 function adndSaves(character) {
   const cls = ADND_CLASSES[primaryClassName(character)] || {};
-  const base = adndSaveTargets(adndClassGroup(character), characterTotalLevel(character));
+  // Each class saves at its own level and the character uses whichever comes
+  // out best in that category, which is not the same as saving at the total.
+  const entries = adndClassEntries(character);
+  const tables = entries.map(entry => adndSaveTargets(entry.group, entry.level));
+  const base = Object.fromEntries(ADND_SAVE_CATEGORIES.map(category =>
+    [category.key, Math.min(...tables.map(table => table[category.key]))]));
   const bonus = Number(cls.saveBonus || 0);
   const wisdom = adndAbilityRow(ADND_WISDOM, character.WIS);
   const magicalDefence = Number((wisdom && wisdom.defense) || 0);
@@ -8823,20 +8857,24 @@ function adndSaves(character) {
 // Hit points: a hit die per level to 9th, then a flat gain, and Constitution
 // applies per die only while the dice are still rolling.
 function adndHitPoints(character) {
-  const cls = ADND_CLASSES[primaryClassName(character)] || {};
-  const die = cls.hit || 6;
-  const level = characterTotalLevel(character);
+  const entries = adndClassEntries(character);
   const con = adndAbilityRow(ADND_CONSTITUTION, character.CON);
-  const conBonus = adndClassGroup(character) === "warrior"
-    ? Number(con.warriorHp || 0) : Math.min(2, Number(con.hp || 0));
-  // Warriors and priests roll nine hit dice; wizards and rogues roll ten.
-  const lastDie = (typeof ADND_LAST_HIT_DIE_LEVEL !== "undefined"
-    && ADND_LAST_HIT_DIE_LEVEL[adndClassGroup(character)]) || 9;
-  const rolled = Math.min(level, lastDie);
-  const average = Math.floor(die / 2) + 1;
-  let hp = rolled * (average + conBonus);
-  if (level > lastDie) hp += (level - lastDie) * Number(cls.hpAfter9 || 1);
-  return Math.max(1, hp);
+  const total = entries.reduce((sum, entry) => {
+    const die = entry.cls.hit || 6;
+    const conBonus = entry.group === "warrior"
+      ? Number(con.warriorHp || 0) : Math.min(2, Number(con.hp || 0));
+    // Warriors and priests roll nine hit dice; wizards and rogues roll ten.
+    const lastDie = (typeof ADND_LAST_HIT_DIE_LEVEL !== "undefined"
+      && ADND_LAST_HIT_DIE_LEVEL[entry.group]) || 9;
+    const rolled = Math.min(entry.level, lastDie);
+    const average = Math.floor(die / 2) + 1;
+    let hp = rolled * (average + conBonus);
+    if (entry.level > lastDie) hp += (entry.level - lastDie) * Number(entry.cls.hpAfter9 || 1);
+    return sum + hp;
+  }, 0);
+  // A multi-classed character rolls every class die at each level and takes the
+  // average, so the total is divided by how many classes it is carrying.
+  return Math.max(1, Math.floor(total / entries.length));
 }
 
 // A monk's percentile skills are a shorter list with different base scores, and
@@ -8892,7 +8930,8 @@ function adndSkillLabel(character) {
 }
 
 function adndThiefSkills(character) {
-  const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  const rogueEntry = adndClassEntries(character).find(entry => adndSkillTable(entry.cls));
+  const cls = rogueEntry ? rogueEntry.cls : (ADND_CLASSES[primaryClassName(character)] || {});
   const table = adndSkillTable(cls);
   if (!table) return [];
   const race = cls.monkSkills ? {} : (ADND_THIEF_RACIAL[character.species] || {});
@@ -8914,8 +8953,9 @@ function adndThiefSkills(character) {
 // A thief starts with 60 discretionary points and gains 30 each level after;
 // a monk starts with 35 and gains 15.
 function adndThiefPointBudget(character) {
-  const cls = ADND_CLASSES[primaryClassName(character)] || {};
-  const level = Math.max(1, characterTotalLevel(character));
+  const rogueEntry = adndClassEntries(character).find(entry => adndSkillTable(entry.cls));
+  const cls = rogueEntry ? rogueEntry.cls : (ADND_CLASSES[primaryClassName(character)] || {});
+  const level = Math.max(1, rogueEntry ? rogueEntry.level : characterTotalLevel(character));
   if (cls.monkSkills) return 35 + (level - 1) * 15;
   // A bard gets twenty at first level and fifteen after, over four skills.
   if (cls.bardSkills) return 20 + (level - 1) * 15;
@@ -8926,17 +8966,21 @@ function adndThiefPointBudget(character) {
 // No single thief skill may take more than 30 points at 1st level or 15 per
 // level after. The monk's table sets no per-skill cap, so the budget is it.
 function adndSkillPointCap(character) {
-  const cls = ADND_CLASSES[primaryClassName(character)] || {};
-  const level = Math.max(1, characterTotalLevel(character));
+  const rogueEntry = adndClassEntries(character).find(entry => adndSkillTable(entry.cls));
+  const cls = rogueEntry ? rogueEntry.cls : (ADND_CLASSES[primaryClassName(character)] || {});
+  const level = Math.max(1, rogueEntry ? rogueEntry.level : characterTotalLevel(character));
   if (cls.monkSkills || cls.bardSkills) return adndThiefPointBudget(character);
   if (cls.thiefSkills) return 30 + (level - 1) * 15;
   return 0;
 }
 
 function adndSpellSlots(character) {
-  const cls = ADND_CLASSES[primaryClassName(character)] || {};
-  if (!cls.caster) return [];
-  const level = characterTotalLevel(character);
+  // A fighter/mage casts as a mage of its mage level, and the primary class
+  // name is the fighter, so the caster has to be looked for rather than assumed.
+  const casting = adndClassEntries(character).find(entry => entry.cls.caster);
+  if (!casting) return [];
+  const cls = casting.cls;
+  const level = casting.level;
   // Paladins and rangers start casting late and count from an offset.
   const effective = cls.casterOffset ? level - cls.casterOffset : level;
   if (effective < 1) return [];
@@ -8978,8 +9022,14 @@ function adndDerived(character) {
   const ac = adndArmorClass(character);
   const dex = adndAbilityRow(ADND_DEXTERITY, character.DEX);
   const cls = ADND_CLASSES[primaryClassName(character)] || {};
+  const entries = adndClassEntries(character);
+  // The best THAC0 among the classes, each at its own level -- a fighter 4 and
+  // mage 4 attacks as the fighter, not as an eighth-level anything.
+  const bestThac0 = Math.min(...entries.map(entry => adndThac0(entry.group, entry.level)));
   return {
-    thac0: adndThac0(group, level),
+    multiclass: entries.length > 1,
+    classEntries: entries.map(entry => ({ name: entry.name, level: entry.level, group: entry.group })),
+    thac0: bestThac0,
     ac: ac.value, acSource: ac.source, acBreakdown: ac.breakdown,
     hp: Number(character.hpOverride) || adndHitPoints(character),
     saves: adndSaves(character),
@@ -8997,10 +9047,14 @@ function adndDerived(character) {
     backstab: cls.thiefSkills && !cls.bardSkills && typeof adndBackstabMultiplier === "function"
       ? adndBackstabMultiplier(level) : 0,
     turningLevel: typeof adndTurningLevel === "function"
-      ? adndTurningLevel(primaryClassName(character), level) : 0,
-    weaponSlots: typeof adndWeaponSlots === "function" ? adndWeaponSlots(group, level) : 0,
-    nonweaponSlots: typeof adndNonweaponSlots === "function" ? adndNonweaponSlots(group, level) : 0,
-    untrainedPenalty: typeof adndNonProficiencyPenalty === "function" ? adndNonProficiencyPenalty(group) : 0,
+      ? Math.max(0, ...entries.map(entry => adndTurningLevel(entry.name, entry.level))) : 0,
+    // "Multi-class characters can use the most beneficial line on Table 34."
+    weaponSlots: typeof adndWeaponSlots === "function"
+      ? Math.max(...entries.map(entry => adndWeaponSlots(entry.group, entry.level))) : 0,
+    nonweaponSlots: typeof adndNonweaponSlots === "function"
+      ? Math.max(...entries.map(entry => adndNonweaponSlots(entry.group, entry.level))) : 0,
+    untrainedPenalty: typeof adndNonProficiencyPenalty === "function"
+      ? Math.max(...entries.map(entry => adndNonProficiencyPenalty(entry.group))) : 0,
     spellSlots: adndSpellSlots(character)
   };
 }
