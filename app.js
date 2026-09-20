@@ -3745,7 +3745,13 @@ function updateOriginDescriptions() {
 
 // Sort source labels with core rulebooks first, then alphabetically.
 function sourceSort(a, b) {
-  const rank = s => /player's handbook|core 5/i.test(s) ? 0 : 1;
+  // The core rules of the edition being built come first. Without the legacy
+  // test, "Core 5e rules" sorted to the top of a 2024 list and a 2014-only
+  // background became the default choice for every new 2024 character.
+  const legacy = edition === "2024"
+    ? /core 5e rules|player's handbook \(2014\)/i
+    : /core 5\.5e rules|player's handbook \(2024\)/i;
+  const rank = s => legacy.test(s) ? 2 : /player's handbook|core 5/i.test(s) ? 0 : 1;
   return rank(a) - rank(b) || a.localeCompare(b);
 }
 // Build <optgroup>-grouped <option>s, one group per source book.
@@ -3798,10 +3804,27 @@ function classSkillsFor(className, rulesEdition) {
 }
 function populateRules(savedCharacter = null) {
   const originFallback = edition === "sw5e" ? [] : null;
-  $("#species-select").innerHTML = groupedSelectOptions(customizationEntries(
+  // Keep the current choice when the new edition still has it, and otherwise
+  // start on that edition's own first core option rather than whichever name
+  // happens to sort first.
+  const reselect = (select, previous, preferred) => {
+    const options = [...select.options].map(option => option.value);
+    select.value = options.includes(previous) ? previous
+      : options.includes(preferred) ? preferred
+      : options[0] || "";
+  };
+  const speciesSelect = $("#species-select");
+  const backgroundSelect = $("#background-select");
+  // Read the current choices before the option lists are rebuilt: replacing
+  // them resets each select to its first entry.
+  const previousSpecies = speciesSelect.value;
+  const previousBackground = backgroundSelect.value;
+  speciesSelect.innerHTML = groupedSelectOptions(customizationEntries(
     edition === "sw5e" ? [] : SPECIES_CATALOG, RULES.species[edition], originFallback ?? RULES.species[2014]));
-  $("#background-select").innerHTML = groupedSelectOptions(customizationEntries(
+  backgroundSelect.innerHTML = groupedSelectOptions(customizationEntries(
     edition === "sw5e" ? [] : BACKGROUND_CATALOG, RULES.backgrounds[edition], originFallback ?? RULES.backgrounds[2014]));
+  reselect(speciesSelect, previousSpecies, (RULES.species[edition] || [])[0]);
+  reselect(backgroundSelect, previousBackground, (RULES.backgrounds[edition] || [])[0]);
   const availableClasses = classesForEdition(edition);
   if (!availableClasses.includes(selectedClass)) selectedClass = availableClasses[0] || selectedClass;
   $("#class-grid").innerHTML = availableClasses.map(name => {
@@ -5644,6 +5667,14 @@ function raceAbilityAdjustments(rulesEdition, species) {
   return bonuses;
 }
 
+// 2024 puts the ability increases and an Origin feat on the background. A 2014
+// background has neither, so under the 2024 rules the character chooses both --
+// the builder offered those backgrounds and then silently granted nothing.
+function background2024Rule(backgroundName) {
+  return BACKGROUND_RULES_2024[backgroundName]
+    || { abilities: [...ABILITIES], featChoice: "Origin feat", legacy: true };
+}
+
 function originAbilityBonuses(raw = originFormValues()) {
   const bonuses = Object.fromEntries(ABILITIES.map(ability => [ability, 0]));
   // 3.5 puts ability adjustments on the race, and they can be negative. Without
@@ -5665,8 +5696,7 @@ function originAbilityBonuses(raw = originFormValues()) {
     });
     return bonuses;
   }
-  const background = BACKGROUND_RULES_2024[raw.background || $("#background-select").value];
-  if (!background) return bonuses;
+  const background = background2024Rule(raw.background || $("#background-select").value);
   if (raw.backgroundAbilityMode === "three") {
     background.abilities.forEach(ability => bonuses[ability] += 1);
   } else {
@@ -5681,11 +5711,14 @@ function originAbilityBonuses(raw = originFormValues()) {
 }
 
 function originFeatFromForm(raw = originFormValues()) {
+  // Only 5e grants a feat with the origin: 3.5, 2E and SW5E have none, and the
+  // 2024 background rules must not be read for them.
+  if (!["2014", "2024"].includes(edition)) return "";
   if (edition === "2014") {
     return selectedSpeciesVariant(raw).featChoice ? String(raw.originFeatChoice || "").trim() : "";
   }
-  const rule = BACKGROUND_RULES_2024[raw.background || $("#background-select").value];
-  return rule?.feat || String(raw.originFeatChoice || "").trim();
+  const rule = background2024Rule(raw.background || $("#background-select").value);
+  return rule.feat || String(raw.originFeatChoice || "").trim();
 }
 
 function validateOriginChoices(raw = originFormValues()) {
@@ -5703,8 +5736,7 @@ function validateOriginChoices(raw = originFormValues()) {
     }
     return !variant.featChoice || Boolean(String(raw.originFeatChoice || "").trim());
   }
-  const rule = BACKGROUND_RULES_2024[raw.background || $("#background-select").value];
-  if (!rule) return true;
+  const rule = background2024Rule(raw.background || $("#background-select").value);
   if (raw.backgroundAbilityMode !== "three" && raw.backgroundPrimary === raw.backgroundSecondary) return false;
   return !rule.featChoice || Boolean(String(raw.originFeatChoice || "").trim());
 }
@@ -5762,17 +5794,23 @@ function renderOriginRules(savedCharacter = null) {
       <p class="origin-summary">${fixed ? `Fixed bonuses: ${escapeHtml(fixed)}.` : "This version uses flexible ability increases."} Chosen increases must go to different abilities when required.</p>`;
   } else {
     const backgroundName = saved.background || $("#background-select").value;
-    const rule = BACKGROUND_RULES_2024[backgroundName];
-    if (!rule) { container.innerHTML = ""; setCurrentOriginFeat(""); return; }
+    const rule = background2024Rule(backgroundName);
     const mode = saved.backgroundAbilityMode || "split";
     const primary = rule.abilities.includes(saved.backgroundPrimary) ? saved.backgroundPrimary : rule.abilities[0];
     const secondary = rule.abilities.includes(saved.backgroundSecondary) && saved.backgroundSecondary !== primary
       ? saved.backgroundSecondary
       : rule.abilities.find(ability => ability !== primary);
+    const originFeats = (FEATS[edition] || []).filter(feat => feat.category === "Origin").map(feat => feat.name);
+    const chosenFeat = saved.originFeatChoice || saved.originFeat || "";
     const featField = rule.feat
       ? `<label>Granted Origin feat<input value="${escapeHtml(rule.feat)}" readonly><input type="hidden" name="originFeat" value="${escapeHtml(rule.feat)}"></label>`
-      : `<label>${escapeHtml(rule.featChoice)}<input name="originFeatChoice" value="${escapeHtml(saved.originFeatChoice || saved.originFeat || "")}" required placeholder="Enter the selected feat"></label>`;
-    container.innerHTML = `<div class="origin-heading"><div><span class="eyebrow">2024 BACKGROUND BENEFITS</span><h3>${escapeHtml(backgroundName)}</h3></div><p>2024 species do not grant ability score increases; the background does.</p></div>
+      : rule.legacy && originFeats.length
+        ? `<label>Origin feat<select name="originFeatChoice" required><option value="">Choose an Origin feat</option>${originFeats.map(name =>
+            `<option value="${escapeHtml(name)}" ${name === chosenFeat ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>`
+        : `<label>${escapeHtml(rule.featChoice)}<input name="originFeatChoice" value="${escapeHtml(chosenFeat)}" required placeholder="Enter the selected feat"></label>`;
+    container.innerHTML = `<div class="origin-heading"><div><span class="eyebrow">2024 BACKGROUND BENEFITS</span><h3>${escapeHtml(backgroundName)}</h3></div><p>${rule.legacy
+      ? "A 2014 background under the 2024 rules: choose its ability increases and an Origin feat."
+      : "2024 species do not grant ability score increases; the background does."}</p></div>
       <div class="origin-choice-grid">
         <label>Ability increase method<select name="backgroundAbilityMode">
           <option value="split" ${mode === "split" ? "selected" : ""}>+2 to one, +1 to another</option>
@@ -5782,7 +5820,9 @@ function renderOriginRules(savedCharacter = null) {
         <label>+1 ability<select name="backgroundSecondary">${abilityOptions(rule.abilities, secondary)}</select></label>`}
         ${featField}
       </div>
-      <p class="origin-summary">Eligible abilities: ${rule.abilities.join(", ")}. The granted feat is added to the character sheet automatically.</p>`;
+      <p class="origin-summary">Eligible abilities: ${rule.abilities.join(", ")}. ${rule.legacy
+        ? "The chosen feat is added to the character sheet."
+        : "The granted feat is added to the character sheet automatically."}</p>`;
   }
   const backgroundName = saved.background || $("#background-select").value;
   container.insertAdjacentHTML("beforeend", backgroundSkillBlock(savedCharacter, backgroundName, currentBackgroundSkills));
@@ -5830,6 +5870,20 @@ function classChoiceSelect(name, label, options, selected = "") {
   return `<label class="class-choice-block"><strong>${escapeHtml(label)}</strong><select name="${name}">${options.map(option =>
     `<option value="${escapeHtml(option)}" ${option === selected ? "selected" : ""}>${escapeHtml(option)}</option>`
   ).join("")}</select></label>`;
+}
+
+// A ticked box past its group's limit is refused. This has to run before the
+// branches that handle individual groups: several of them return early, and the
+// class skill picker slipped past the check that used to sit at the end, so a
+// fighter could train in all nine of them.
+function enforceChoiceLimit(target) {
+  if (target.type !== "checkbox" || !target.checked) return false;
+  const block = target.closest("[data-builder-choice-limit]");
+  const limit = Number(block?.dataset.builderChoiceLimit || 0);
+  if (!limit || $$(`input[name="${target.name}"]:checked`, block).length <= limit) return false;
+  target.checked = false;
+  toast(`Choose up to ${limit} option${limit === 1 ? "" : "s"}`);
+  return true;
 }
 
 function choiceChecks(name, options, selected, limit, label) {
@@ -8030,9 +8084,19 @@ function proficientWithWeapon(character, item) {
   }
   return true; // uncategorized weapon the character chose to wield
 }
+// The 2024 weapon table redrew three entries and added mastery properties to
+// every weapon. A character built on the 2014 rules keeps the older profile.
+const WEAPON_PROFILES_2014 = {
+  Lance: "1d12 piercing · Reach, special",
+  Trident: "1d6 piercing · Thrown, versatile (1d8)",
+  "War Pick": "1d8 piercing"
+};
+function weaponProfile2014(item, rulesEdition) {
+  return rulesEdition === "2014" && !item.baseWeapon ? WEAPON_PROFILES_2014[item.name] || "" : "";
+}
 // Extract dice/type/properties from a weapon's stat text.
-function parseWeaponProfile(item) {
-  let text = `${item.details || ""} ${item.notes || ""}`;
+function parseWeaponProfile(item, rulesEdition = "") {
+  let text = weaponProfile2014(item, rulesEdition) || `${item.details || ""} ${item.notes || ""}`;
   if (item.baseWeapon && WEAPON_BASE_PROFILES[item.baseWeapon]) text = WEAPON_BASE_PROFILES[item.baseWeapon];
   else if (!/\d+\s*d\s*\d+/i.test(text) && MAGIC_WEAPON_PROFILES[item.name]) text += ` ${MAGIC_WEAPON_PROFILES[item.name]}`;
   const dice = text.match(/(\d+)\s*d\s*(\d+)/i);
@@ -8069,7 +8133,7 @@ function weaponAttacks(character) {
   // Show every weapon the character is carrying (equipped or not) so anything
   // you add is rollable. Magic bonuses only apply when it's actually wielded.
   (character.inventory || []).filter(item => item.carried !== false).forEach(item => {
-    const profile = parseWeaponProfile(item);
+    const profile = parseWeaponProfile(item, character.edition);
     if (!profile) return;
     let ability = "STR", abilityMod = strMod;
     if (profile.ranged) { ability = "DEX"; abilityMod = dexMod; }
@@ -8605,7 +8669,7 @@ function itemVariantResistance(item) {
 function isDualWielding(data) {
   const melee = (data.inventory || []).filter(item => {
     if (!item.equipped || item.carried === false) return false;
-    const profile = parseWeaponProfile(item);
+    const profile = parseWeaponProfile(item, data.edition);
     return profile && !profile.ranged && !profile.twoHanded;
   });
   return melee.length >= 2;
@@ -10293,20 +10357,27 @@ function validateAbilityScoresQuiet() {
   return true;
 }
 
+// Built from the same requirements the save path reports, so the checklist can
+// never call a character ready while saving it says "in progress".
 function builderChecklistItems(data) {
-  const abilityOk = validateAbilityScoresQuiet();
-  const originOk = Boolean(data.species && data.background);
-  const spellIssue = spellSelectionIssue(data);
+  const issues = characterCompletionIssues(data);
   const equipmentMode = data.startingEquipmentMode || "starting";
   const equipmentOk = equipmentMode !== "starting" || selectedValues("startingEquipment", form).length > 0 || currentStep < 6;
-  return [
-    { label: "Home", detail: data.name ? `${data.name} is named` : "Add a character name", complete: Boolean(data.name) },
-    { label: "Class", detail: `${data.className || "Class"} level ${data.level || 1}`, complete: Boolean(data.className) },
-    { label: "Origin", detail: originOk ? `${data.species} / ${data.background}` : "Choose species and background", complete: originOk },
-    { label: "Abilities", detail: abilityOk ? "Ability scores are valid" : "Fix ability score method limits", complete: abilityOk },
-    { label: "Talents", detail: spellIssue || "Feats, ASI, and spells are within limits", complete: !spellIssue },
-    { label: "Equipment", detail: equipmentMode === "manual" ? "Manual inventory selected" : equipmentMode === "keep" ? "Keeping current inventory" : "Starting kit selected", complete: equipmentOk }
+  const rows = [
+    { step: 1, label: "Home", detail: `${data.name} is named` },
+    { step: 2, label: "Class", detail: `${data.className || "Class"} level ${data.level || 1}` },
+    { step: 3, label: "Origin", detail: data.species && data.background ? `${data.species} / ${data.background}` : "Choose species and background" },
+    { step: 4, label: "Abilities", detail: "Ability scores are valid" },
+    { step: 5, label: "Talents", detail: "Feats, ASI, and spells are within limits" },
+    { step: 6, label: "Equipment", detail: equipmentMode === "manual" ? "Manual inventory selected"
+      : equipmentMode === "keep" ? "Keeping current inventory" : "Starting kit selected" }
   ];
+  return rows.map(row => {
+    const outstanding = issues.filter(issue => issue.step === row.step).map(issue => issue.message);
+    if (row.step === 3 && !(data.species && data.background)) outstanding.push("Choose species and background");
+    if (row.step === 6 && !equipmentOk) outstanding.push("Choose your starting equipment");
+    return { label: row.label, complete: !outstanding.length, detail: outstanding.join(" \u00b7 ") || row.detail };
+  });
 }
 
 function renderBuilderChecklist(data = formData()) {
@@ -11993,7 +12064,7 @@ function renderInventorySection(character, extraClass = "") {
           ${itemRequiresAttunement(item) ? `<button type="button" class="item-attune-btn ${item.attuned ? "on" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${item.attuned}" title="${item.attuned ? "Attuned — click to end attunement" : "Requires attunement — click to attune"}">✦</button>` : ""}
           ${hasPactBoon(character, "Pact of the Blade") && parseWeaponProfile(item) ? `<button type="button" class="item-pact-btn ${item.pactWeapon ? "on" : ""}" data-item-action="pact" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${Boolean(item.pactWeapon)}" title="${item.pactWeapon ? "Your pact weapon — click to unset" : "Set as your pact weapon"}">P</button>` : ""}
         </div></td>
-        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const variant = itemVariantChoices(item); if (!variant) return ""; const resist = itemVariantResistance(item); return `<label class="base-weapon-pick"><span>${escapeHtml(variant.label)}</span><select data-item-variant data-character="${character.id}" data-item-id="${item.id}"><option value="">Choose...</option>${Object.keys(variant.options).map(name => `<option value="${escapeHtml(name)}"${item.variant === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select>${resist ? `<small class="variant-note">${escapeHtml(resist)} resistance</small>` : ""}</label>`; })()}${(() => { const armor = itemBaseArmorChoices(item, character.edition); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
+        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item, character.edition); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const variant = itemVariantChoices(item); if (!variant) return ""; const resist = itemVariantResistance(item); return `<label class="base-weapon-pick"><span>${escapeHtml(variant.label)}</span><select data-item-variant data-character="${character.id}" data-item-id="${item.id}"><option value="">Choose...</option>${Object.keys(variant.options).map(name => `<option value="${escapeHtml(name)}"${item.variant === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select>${resist ? `<small class="variant-note">${escapeHtml(resist)} resistance</small>` : ""}</label>`; })()}${(() => { const armor = itemBaseArmorChoices(item, character.edition); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
         <td>${Number(item.quantity || 1)}</td>
         <td>${Number((Number(item.weight || 0) * Number(item.quantity || 1)).toFixed(2))} lb.</td>
         <td>${escapeHtml(item.cost || "—")}</td>
@@ -12014,7 +12085,9 @@ function itemRarity(item) {
 }
 // Item description with the leading rarity + attunement segments removed
 // (those are shown as the rarity chip and the attunement badge instead).
-function itemEffectNote(item) {
+function itemEffectNote(item, rulesEdition = "") {
+  const older = weaponProfile2014(item, rulesEdition);
+  if (older) return older;
   // An item's description is copied into `notes` when it is added, so a later
   // catalogue correction would never reach inventories already holding it.
   // Prefer the current catalogue text whenever the item is still listed.
@@ -14780,6 +14853,7 @@ function initEvents() {
       setAbilityMethod(event.target.value);
       return;
     }
+    if (enforceChoiceLimit(event.target)) { updatePreview(); return; }
     // Keep class-option picks in module state so re-rendering the step (and
     // switching between steps) doesn't drop them.
     if (["invocations", "metamagic"].includes(event.target.name)) {
@@ -14879,15 +14953,6 @@ function initEvents() {
       renderTalentChoices();
       renderStartingClassOptions();
       updatePreview();
-    }
-    if (event.target.type === "checkbox" && event.target.checked) {
-      const block = event.target.closest("[data-builder-choice-limit]");
-      const limit = Number(block?.dataset.builderChoiceLimit || 0);
-      const checked = block ? $$(`input[name="${event.target.name}"]:checked`, block) : [];
-      if (limit && checked.length > limit) {
-        event.target.checked = false;
-        toast(`Choose up to ${limit} options`);
-      }
     }
   });
   form.elements.level.addEventListener("change", () => { populateSubclasses(); renderTalentChoices(); });
