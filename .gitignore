@@ -1,3 +1,8 @@
-
-# Temporary playtest harness, loaded into the page by hand
+# Temporary playtest harnesses, loaded into the page by hand
 _playtest.js
+_playtest5e.js
+# SRD reference tables the harnesses compare against
+_srd14.js
+_srd14spells.js
+_srd24.js
+_srd24spells.js

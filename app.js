@@ -59,6 +59,16 @@ const BACKGROUND_SKILLS = {
   Sailor: ["Athletics", "Perception"], Scribe: ["Investigation", "Perception"], Soldier: ["Athletics", "Intimidation"],
   Urchin: ["Sleight of Hand", "Stealth"], Wayfarer: ["Insight", "Stealth"]
 };
+// The 2024 Player's Handbook reprinted two backgrounds with a different skill:
+// the Criminal trades Deception for Sleight of Hand, and the Sailor trades
+// Athletics for Acrobatics.
+const BACKGROUND_SKILLS_2024 = {
+  Criminal: ["Sleight of Hand", "Stealth"], Sailor: ["Acrobatics", "Perception"]
+};
+function backgroundSkillsFor(background, rulesEdition = edition) {
+  if (rulesEdition === "2024" && BACKGROUND_SKILLS_2024[background]) return BACKGROUND_SKILLS_2024[background];
+  return BACKGROUND_SKILLS[background] || [];
+}
 const SPELLCASTING_ABILITIES = {
   Bard: "CHA", Cleric: "WIS", Druid: "WIS", Paladin: "CHA", Ranger: "WIS", Sorcerer: "CHA",
   Warlock: "CHA", Wizard: "INT", Artificer: "INT"
@@ -73,9 +83,10 @@ const ARMOR_RULES = {
   Breastplate: { base: 14, dex: 2, type: "Medium Armor" },
   "Half Plate Armor": { base: 15, dex: 2, type: "Medium Armor" },
   "Ring Mail": { base: 14, dex: 0, type: "Heavy Armor" },
-  "Chain Mail": { base: 16, dex: 0, type: "Heavy Armor" },
-  "Splint Armor": { base: 17, dex: 0, type: "Heavy Armor" },
-  "Plate Armor": { base: 18, dex: 0, type: "Heavy Armor" }
+  // strength: below this score the wearer's speed drops by 10 feet.
+  "Chain Mail": { base: 16, dex: 0, type: "Heavy Armor", strength: 13 },
+  "Splint Armor": { base: 17, dex: 0, type: "Heavy Armor", strength: 15 },
+  "Plate Armor": { base: 18, dex: 0, type: "Heavy Armor", strength: 15 }
 };
 const SUBCLASS_CHOICE_RULES = {
   "Path of the Totem Warrior": [
@@ -92,7 +103,8 @@ const SUBCLASS_CHOICE_RULES = {
     { key: "stormAura", label: "Storm Aura", level: 3, options: ["Desert", "Sea", "Tundra"] }
   ],
   "Circle of the Land": [
-    { key: "circleLand", label: "Land type", level: 2, options: ["Arctic", "Coast", "Desert", "Forest", "Grassland", "Mountain", "Swamp", "Underdark"] }
+    { key: "circleLand", label: "Land type", level: 2, editions: ["2014"], options: ["Arctic", "Coast", "Desert", "Forest", "Grassland", "Mountain", "Swamp", "Underdark"] },
+    { key: "circleLand", label: "Land type (changes after a Long Rest)", level: 3, editions: ["2024"], options: ["Arid", "Polar", "Temperate", "Tropical"] }
   ],
   "Draconic Bloodline": [
     { key: "draconicAncestry", label: "Dragon Ancestor", level: 1, options: ["Acid", "Cold", "Fire", "Lightning", "Poison"] }
@@ -3302,6 +3314,8 @@ const OPEN_FEATURE_SUMMARIES = {
   "Eldritch Invocations improvement": "Choose additional Eldritch Invocations for which the character qualifies.",
   "Deft Explorer: Expertise": "Choose a proficient skill; the character gains Expertise in that skill.",
   "Acrobatic Movement": "Unarmored Movement expands to movement across vertical surfaces and liquids during the turn.",
+  "Unarmored Movement improvement (vertical surfaces and liquids)": "While unarmoured, you can move along vertical surfaces and across liquids on your turn without falling during the move.",
+  "Tongue of the Sun and Moon": "You understand every spoken language, and any creature that understands a language can understand what you say.",
   "Self-Restoration": "The Monk can end certain debilitating conditions on themself at the end of the turn."
 };
 
@@ -3430,6 +3444,17 @@ const EDITIONS_WITHOUT_5E_CHOICES = new Set(["d35", "adnd2e"]);
 // Hit points gained on reaching a level, in that edition's own terms. 2E rolls
 // the class die with a Constitution bonus only warriors get in full, and stops
 // rolling after 9th level in favour of a flat gain.
+// derived() stops recomputing hit points once a sheet carries a rolled or
+// hand-set total, so a level gained on such a sheet has to add what changed on
+// its own: a Constitution modifier that rose (it counts for every level) and
+// per-level bonuses such as Tough or a hill dwarf's toughness.
+function hpOverrideAdjustment(before, after) {
+  if (isAdnd(after) || isD35(after)) return 0;
+  const conBefore = modifier(effectiveAbilities(before).CON);
+  const conAfter = modifier(effectiveAbilities(after).CON);
+  return (conAfter - conBefore) * characterTotalLevel(after) + (bonusMaxHp(after) - bonusMaxHp(before));
+}
+
 function levelHpGain(character, className, targetLevel) {
   const rulesEdition = character.edition || edition;
   const die = classHitDie(className, rulesEdition);
@@ -3853,7 +3878,8 @@ function quickOrigin(className, species, background, abilityOrder = null) {
 
 function quickSkillChoices(className, background, level = 1, themeSkills = []) {
   const profile = quickBuildProfileFor(className);
-  const backgroundSkills = [...new Set(BACKGROUND_SKILLS[background] || profile.skills.slice(-2))].slice(0, 2);
+  const backgroundDefaults = backgroundSkillsFor(background, edition);
+  const backgroundSkills = [...new Set(backgroundDefaults.length ? backgroundDefaults : profile.skills.slice(-2))].slice(0, 2);
   while (backgroundSkills.length < 2) {
     const fallback = skillsForEdition(edition).find(skill => !backgroundSkills.includes(skill));
     backgroundSkills.push(fallback);
@@ -4333,7 +4359,7 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
     && (typeof spell === "string" || !spell.className || spell.className === className)
   ).length;
   addFromPool((lists[0] || []).map(name => ({ name, level: 0 })), Math.max(0, cantripTarget - existingCantrips));
-  const allowed = maxSpellLevel(className, classLevelValue, character.edition, subclass);
+  const allowed = leveledSpellCeiling(className, classLevelValue, character.edition, subclass);
   const spellTarget = spellLimitFor(className, classLevelValue, character.edition, subclass, withClassContext(character, className, classLevelValue));
   const existingLeveled = (character.spells || []).filter(spell =>
     typeof spell !== "string"
@@ -4346,7 +4372,40 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
     (lists[spellLevel] || []).forEach(name => leveledPool.push({ name, level: spellLevel }));
   }
   leveledPool.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
-  addFromPool(leveledPool, Math.max(0, spellTarget - existingLeveled));
+  let spellsToAdd = Math.max(0, spellTarget - existingLeveled);
+  // Cover each unlocked spell level before topping up favourites. The profile's
+  // favourites are all 1st level, so a ranger reached 5th knowing no 2nd-level
+  // spell.
+  for (let spellLevel = allowed; spellLevel >= 1 && spellsToAdd > 0; spellLevel -= 1) {
+    const covered = [...(character.spells || []), ...additions].some(spell =>
+      typeof spell !== "string" && Number(spell.level) === spellLevel && (!spell.className || spell.className === className));
+    if (covered) continue;
+    const added = additions.length;
+    addFromPool(leveledPool.filter(spell => spell.level === spellLevel), 1);
+    spellsToAdd -= additions.length - added;
+  }
+  addFromPool(leveledPool, spellsToAdd);
+  // With no room left, trade a spell from the most crowded lower level for one
+  // at an uncovered level. A 2014 paladin with Charisma 16 prepares five spells
+  // at both 4th and 5th level, and would otherwise never take a 2nd-level one.
+  // This edits the character's own list, which the caller extends afterwards.
+  const ownSpell = spell => typeof spell !== "string" && (!spell.className || spell.className === className);
+  for (let spellLevel = allowed; spellLevel >= 2; spellLevel -= 1) {
+    const current = [...(character.spells || []), ...additions].filter(ownSpell);
+    if (current.some(spell => Number(spell.level) === spellLevel)) continue;
+    const pool = leveledPool.filter(spell => spell.level === spellLevel && !existingNames.has(spell.name));
+    if (!pool.length) continue;
+    const counts = {};
+    current.filter(spell => Number(spell.level) > 0 && Number(spell.level) < spellLevel)
+      .forEach(spell => { counts[spell.level] = (counts[spell.level] || 0) + 1; });
+    const [crowdedLevel, crowdedCount] = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0] || [];
+    if (!crowdedLevel || crowdedCount < 2) continue;
+    const dropIndex = (character.spells || []).findIndex(spell => ownSpell(spell) && Number(spell.level) === Number(crowdedLevel));
+    if (dropIndex < 0) continue;
+    const [dropped] = character.spells.splice(dropIndex, 1);
+    existingNames.delete(dropped.name);
+    addFromPool(pool, 1);
+  }
   if (className === "Warlock") {
     const arcanumLevel = ({ 11: 6, 13: 7, 15: 8, 17: 9 })[classLevelValue];
     if (arcanumLevel) {
@@ -4463,7 +4522,7 @@ function prebuildSpellChoices(className, level, subclass, characterData, rulesEd
   const profile = quickBuildProfileFor(className) || {};
   const preferences = [...themeSpells, ...(profile.spells || [])]
     .filter((name, index, names) => names.indexOf(name) === index);
-  const allowed = maxSpellLevel(className, level, rulesEdition, subclass);
+  const allowed = leveledSpellCeiling(className, level, rulesEdition, subclass);
   const cantripLimit = cantripLimitFor(className, level, rulesEdition, subclass);
   const spellLimit = spellLimitFor(className, level, rulesEdition, subclass, characterData);
   const chosen = [];
@@ -5344,7 +5403,9 @@ function generatedSpellIssue(character) {
   const records = classSpellRecords(character, className);
   const expectedCantrips = Math.min(cantripLimitFor(className, level, character.edition, subclass), (lists[0] || []).length);
   if (records.filter(spell => Number(spell.level || 0) === 0).length < expectedCantrips) return `The generated ${className} is missing cantrips.`;
-  const allowed = maxSpellLevel(className, level, character.edition, subclass);
+  // Ordinary spells are checked against 1st-5th for a warlock; the Mystic
+  // Arcanum check below covers 6th-9th.
+  const allowed = leveledSpellCeiling(className, level, character.edition, subclass);
   const expectedLeveled = spellLimitFor(className, level, character.edition, subclass, withClassContext(character, className, level));
   const regularSpells = records.filter(spell => Number(spell.level || 0) > 0 && (className !== "Warlock" || Number(spell.level) <= 5));
   if (regularSpells.length < expectedLeveled) return `The generated ${className} is missing leveled spells.`;
@@ -5654,7 +5715,7 @@ function validateOriginChoices(raw = originFormValues()) {
 let backgroundSkillSource = "";
 
 function backgroundSkillBlock(savedCharacter, backgroundName, currentSelections = []) {
-  const defaults = BACKGROUND_SKILLS[backgroundName] || [];
+  const defaults = backgroundSkillsFor(backgroundName, edition);
   const keepCurrent = currentSelections.length === 2 && backgroundSkillSource === backgroundName;
   const selected = savedCharacter?.backgroundSkills?.length
     ? savedCharacter.backgroundSkills
@@ -6036,8 +6097,31 @@ function spellListClass(className, subclass = "") {
   return className;
 }
 
+// A 2014 warlock patron adds its spells to the warlock list, and a Divine Soul
+// sorcerer may learn from the cleric list. Merged lists are built once.
+const expandedSpellListCache = new Map();
 function spellListsFor(rulesEdition, className, subclass = "") {
-  return SPELL_LISTS[rulesEdition]?.[spellListClass(className, subclass)];
+  const base = SPELL_LISTS[rulesEdition]?.[spellListClass(className, subclass)];
+  const expansion = base && typeof SUBCLASS_EXPANDED_SPELLS !== "undefined" ? SUBCLASS_EXPANDED_SPELLS[subclass] : null;
+  if (!expansion || !["2014", "2024"].includes(rulesEdition)) return base;
+  const cacheKey = `${rulesEdition}|${className}|${subclass}`;
+  if (!expandedSpellListCache.has(cacheKey)) {
+    const extra = expansion.classList ? (SPELL_LISTS[rulesEdition]?.[expansion.classList] || {}) : expansion;
+    const merged = {};
+    new Set([...Object.keys(base), ...Object.keys(extra)]).forEach(level => {
+      // Compare on the normalised name so "Hideous Laughter" and "Tasha's
+      // Hideous Laughter" do not both appear; the class list's spelling wins.
+      const seen = new Set();
+      merged[level] = [...(base[level] || []), ...(extra[level] || [])].filter(name => {
+        const key = normalizedRuleName(name);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    });
+    expandedSpellListCache.set(cacheKey, merged);
+  }
+  return expandedSpellListCache.get(cacheKey);
 }
 
 function normalizeCharacterData(character, options = {}) {
@@ -6127,6 +6211,19 @@ function maxSpellLevel(className, level, rulesEdition, subclass = "") {
     return Math.max(pact, arcanum);
   }
   return Math.min(9, Math.ceil(level / 2));
+}
+
+// A warlock's known or prepared spells stop at 5th level. Mystic Arcanum adds
+// one spell each of 6th to 9th level, chosen separately. maxSpellLevel reaches
+// 9th so those can be picked, which let the generators spend ordinary spell
+// choices on 6th-level spells and then come up short.
+function isMysticArcanumSpell(className, spellLevel) {
+  return className === "Warlock" && Number(spellLevel) >= 6;
+}
+
+function leveledSpellCeiling(className, level, rulesEdition, subclass = "") {
+  const allowed = maxSpellLevel(className, level, rulesEdition, subclass);
+  return className === "Warlock" ? Math.min(5, allowed) : allowed;
 }
 
 function baseCantripCount(className, rulesEdition) {
@@ -6234,7 +6331,8 @@ function spellLimitLabel(className, rulesEdition, subclass = "") {
   return "Spells";
 }
 
-const WIZARD_2024_PREPARED_TOTALS = [4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22];
+// A 2024 wizard prepares more than the other full casters from 14th level on.
+const WIZARD_2024_PREPARED_TOTALS = [4,5,6,7,9,10,11,12,14,15,16,16,17,18,19,21,22,23,24,25];
 
 function spellPreparationPolicy(rulesEdition, className, subclass = "") {
   if (className === "Wizard") return "spellbook";
@@ -6298,7 +6396,13 @@ function subclassGrantedSpells(character) {
   const records = [];
   classBreakdown(character).forEach(entry => {
     const subclass = classSubclassName(character, entry.name);
-    const table = SUBCLASS_SPELL_LISTS[edition]?.[subclass]
+    // A land druid's spells follow the land chosen; before a choice is saved
+    // the first land stands in, as the builder's default selection does.
+    const byChoice = typeof SUBCLASS_CHOICE_SPELLS !== "undefined" ? SUBCLASS_CHOICE_SPELLS[edition]?.[subclass] : null;
+    const chosen = byChoice
+      ? byChoice.lists[{ ...(character.subclassChoices || {}), ...(entry.subclassChoices || {}) }[byChoice.key]] || Object.values(byChoice.lists)[0]
+      : null;
+    const table = chosen || SUBCLASS_SPELL_LISTS[edition]?.[subclass]
       || (edition === "2024" ? SUBCLASS_SPELL_LISTS["2014"]?.[subclass] : null);
     if (!table) return;
     Object.entries(table).forEach(([unlock, names]) => {
@@ -6447,12 +6551,14 @@ function selectedSpellCounts() {
     names.forEach(name => levelsByName.set(name, Number(spellLevel)));
   });
   let cantrips = 0, spells = 0;
+  const arcanum = {};
   selectedSpellNames.forEach(name => {
     const spellLevel = levelsByName.get(name);
     if (spellLevel === 0) cantrips += 1;
+    else if (isMysticArcanumSpell(selectedClass, spellLevel)) arcanum[spellLevel] = (arcanum[spellLevel] || 0) + 1;
     else if (spellLevel > 0) spells += 1;
   });
-  return { cantrips, spells };
+  return { cantrips, spells, arcanum };
 }
 
 function spellSelectionIssue(data) {
@@ -6469,17 +6575,21 @@ function spellSelectionIssue(data) {
   });
   let cantrips = 0, spells = 0;
   const tooHigh = [];
+  const arcanum = {};
   (data.spells || []).forEach(spell => {
     const name = typeof spell === "string" ? spell : spell.name;
     const spellLevel = levelsByName.get(name);
     if (spellLevel === 0) cantrips += 1;
     else if (spellLevel > 0) {
-      spells += 1;
+      if (isMysticArcanumSpell(data.className, spellLevel)) arcanum[spellLevel] = (arcanum[spellLevel] || 0) + 1;
+      else spells += 1;
       if (spellLevel > allowed) tooHigh.push(name);
     }
   });
   if (cantrips > cantripLimit) return `Choose ${cantripLimit} cantrip${cantripLimit === 1 ? "" : "s"} or fewer`;
   if (spells > spellLimit) return `Choose ${spellLimit} leveled spell${spellLimit === 1 ? "" : "s"} or fewer`;
+  const doubledArcanum = Object.keys(arcanum).find(spellLevel => arcanum[spellLevel] > 1);
+  if (doubledArcanum) return `Mystic Arcanum grants one level ${doubledArcanum} spell`;
   if (tooHigh.length) return `Remove spells above your current spell level: ${tooHigh.slice(0, 3).join(", ")}`;
   return "";
 }
@@ -7041,12 +7151,15 @@ function renderSpellList() {
   const renderSpell = spell => {
     const locked = spell.level > allowed;
     const checked = selectedSpellNames.has(spell.name);
-    const capped = !checked && !locked && (spell.level === 0 ? counts.cantrips >= cantripLimit : counts.spells >= spellLimit);
+    const arcanum = isMysticArcanumSpell(selectedClass, spell.level);
+    const capped = !checked && !locked && (spell.level === 0 ? counts.cantrips >= cantripLimit
+      : arcanum ? Number(counts.arcanum[spell.level] || 0) >= 1
+      : counts.spells >= spellLimit);
     const source = EXPANDED_SPELL_SOURCES?.[edition]?.[spell.name] || "";
     const description = spellDescription(spell.name, edition, source);
     return `<article class="choice-option ${locked || capped ? "locked" : ""}"><label>
       <input type="checkbox" name="spells" value="${escapeHtml(spell.name)}" data-level="${spell.level}" ${checked ? "checked" : ""} ${locked || capped ? "disabled" : ""}>
-      <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${locked ? ` · available when this spell level is reached` : ""}</small></span>
+      <span><strong>${escapeHtml(spell.name)}</strong><small>${spell.level === 0 ? "Cantrip" : `Level ${spell.level}`}${arcanum ? " · Mystic Arcanum" : ""}${locked ? ` · available when this spell level is reached` : ""}</small></span>
     </label>${ruleDetails(description)}</article>`;
   };
   const spellGroups = {}, spellOrder = [];
@@ -7786,12 +7899,26 @@ function activeItemEffects(data) {
   return out;
 }
 // Ability scores after magic-item overrides ("your Strength becomes 19", etc.).
+// Capstones that raise two scores by 4 past the usual cap of 20. Nothing applied
+// them, so a level 20 barbarian kept the Strength and Constitution of level 19.
+const CAPSTONE_ABILITY_INCREASES = {
+  2014: { Barbarian: { abilities: ["STR", "CON"], maximum: 24 } },
+  2024: { Barbarian: { abilities: ["STR", "CON"], maximum: 25 }, Monk: { abilities: ["DEX", "WIS"], maximum: 25 } }
+};
+
 function effectiveAbilities(data) {
   const effects = activeItemEffects(data);
   const clone = { ...data };
+  Object.entries(CAPSTONE_ABILITY_INCREASES[data.edition] || {}).forEach(([className, rule]) => {
+    if (classLevel(data, className) < 20) return;
+    rule.abilities.forEach(ability => {
+      const score = Number(data[ability] || 10);
+      clone[ability] = Math.max(score, Math.min(rule.maximum, score + 4));
+    });
+  });
   ABILITIES.forEach(ability => {
     const set = effects[`set${ability}`];
-    if (set) clone[ability] = Math.max(Number(data[ability] || 10), set);
+    if (set) clone[ability] = Math.max(Number(clone[ability] || 10), set);
   });
   return clone;
 }
@@ -7980,13 +8107,7 @@ function weaponAttacks(character) {
     });
   });
   const monkLevel = classLevel(character, "Monk");
-  // Martial Arts die: 2014 goes d4/d6/d8/d10; 2024 upgrades to d6/d8/d10/d12.
-  const monkProgression = character.edition === "2024" ? [6, 8, 10, 12] : [4, 6, 8, 10];
-  const monkDie = monkLevel >= 17 ? monkProgression[3]
-    : monkLevel >= 11 ? monkProgression[2]
-    : monkLevel >= 5 ? monkProgression[1]
-    : monkLevel >= 1 ? monkProgression[0]
-    : 0;
+  const monkDie = martialArtsDie(character);
   // College of Dance's Dazzling Footwork lets a Bard punch with Dexterity and
   // roll a Bardic die for the damage, on the same "no armour, no shield" terms
   // as its unarmoured defence.
@@ -8091,6 +8212,33 @@ function sneakAttackDice(character) {
   const rogue = classLevel(character, "Rogue");
   return rogue ? Math.ceil(rogue / 2) : 0;
 }
+// Martial Arts die: 2014 goes d4/d6/d8/d10; 2024 starts a step higher.
+function martialArtsDie(character) {
+  const monk = classLevel(character, "Monk");
+  if (!monk) return 0;
+  const dice = character.edition === "2024" ? [6, 8, 10, 12] : [4, 6, 8, 10];
+  return dice[monk >= 17 ? 3 : monk >= 11 ? 2 : monk >= 5 ? 1 : 0];
+}
+// Rage damage: +2, +3 from 9th level and +4 from 16th, in both editions.
+function rageDamageBonus(character) {
+  const barbarian = classLevel(character, "Barbarian");
+  return barbarian ? valueByLevel(barbarian, [[1, 2], [9, 3], [16, 4]]) : 0;
+}
+// Bardic Inspiration die: d6, then d8 at 5th, d10 at 10th and d12 at 15th.
+function bardicInspirationDie(character) {
+  const bard = classLevel(character, "Bard");
+  return bard ? valueByLevel(bard, [[1, 6], [5, 8], [10, 10], [15, 12]]) : 0;
+}
+// The class numbers a player looks up mid-fight that no resource card shows.
+function classCombatStats(character) {
+  if (!["2014", "2024"].includes(character.edition || "2014")) return [];
+  const stats = [];
+  if (rageDamageBonus(character)) stats.push(["Rage damage", `+${rageDamageBonus(character)}`]);
+  if (bardicInspirationDie(character)) stats.push(["Bardic Inspiration", `d${bardicInspirationDie(character)}`]);
+  if (martialArtsDie(character)) stats.push(["Martial Arts", `d${martialArtsDie(character)}`]);
+  if (sneakAttackDice(character)) stats.push(["Sneak Attack", `${sneakAttackDice(character)}d6`]);
+  return stats;
+}
 function renderSpellAttackRow(spell, character) {
   const data = spellDisplayData(spell, character);
   const isAttack = /spell attack/i.test(data.saveAttack || "");
@@ -8169,6 +8317,115 @@ function fightsUnburdened(data) {
   const items = equippedItems(data);
   if (items.some(item => isShieldItem(item))) return false;
   return !items.some(item => !isShieldItem(item) && armorRuleFor(item));
+}
+
+// ---- Movement and senses ----
+// The sheet showed 30 feet for every 5e character: nothing read the species,
+// and neither a monk's Unarmored Movement nor a barbarian's Fast Movement was
+// added. 2014 gave the dwarf, gnome and halfling 25 feet; the 2024 Player's
+// Handbook moved every species to 30 except the goliath. A species missing
+// from these tables keeps 30, which is what nearly all of them have.
+const SPECIES_WALKING_SPEEDS = {
+  2014: { Dwarf: 25, Gnome: 25, Halfling: 25, Centaur: 40, Dhampir: 35, Grung: 25, Leonin: 35, Satyr: 35 },
+  2024: { Goliath: 35 }
+};
+// 2014 lineages and legacy printings that move differently from the species.
+const SPECIES_VARIANT_WALKING_SPEEDS = {
+  "Elf|Wood Elf": 35,
+  "Aarakocra|Legacy Aarakocra": 25,
+  "Deep Gnome|Legacy Deep Gnome": 25,
+  "Duergar|Legacy Duergar": 25,
+  "Genasi (Air)|Monsters of the Multiverse": 35
+};
+const SPEED_FEATS = {
+  2014: { Mobile: 10, "Squat Nimbleness": 5 },
+  2024: { Speedy: 10, "Boon of Speed": 30 }
+};
+
+function walkingSpeedDetails(character) {
+  const rulesEdition = character.edition || "2014";
+  // 3.5 stores its racial base speed on the character, and SW5E has its own
+  // species tables; only the D&D 5e editions are worked out here.
+  if (!["2014", "2024"].includes(rulesEdition)) {
+    const base = Number(character.speed) || 30;
+    return { value: base, parts: [`Base ${base} ft`] };
+  }
+  const species = character.species || "";
+  const variantKey = `${species}|${character.speciesVariant || ""}`;
+  const base = (rulesEdition === "2014" && SPECIES_VARIANT_WALKING_SPEEDS[variantKey])
+    || SPECIES_WALKING_SPEEDS[rulesEdition]?.[species] || 30;
+  const parts = [`${species || "Species"} ${base} ft`];
+  let value = base;
+  const add = (amount, label) => {
+    value += amount;
+    parts.push(`${label} ${amount > 0 ? "+" : "\u2212"}${Math.abs(amount)} ft`);
+  };
+  const worn = equippedItems(character);
+  const armor = worn.filter(item => !isShieldItem(item)).map(item => ({ item, rule: armorRuleFor(item) })).filter(entry => entry.rule);
+  const shield = worn.some(item => isShieldItem(item));
+  const monk = classLevel(character, "Monk");
+  if (monk >= 2 && !armor.length && !shield) {
+    add(valueByLevel(monk, [[2, 10], [6, 15], [10, 20], [14, 25], [18, 30]]), "Unarmored Movement");
+  }
+  if (classLevel(character, "Barbarian") >= 5 && !armor.some(entry => /heavy/i.test(entry.rule.type || ""))) {
+    add(10, "Fast Movement");
+  }
+  const feats = new Set(character.feats || []);
+  Object.entries(SPEED_FEATS[rulesEdition] || {}).forEach(([feat, amount]) => { if (feats.has(feat)) add(amount, feat); });
+  // Heavy armour without the Strength for it costs 10 feet. A 2014 dwarf is
+  // exempt, and mithral drops the requirement altogether.
+  const strength = Number(effectiveAbilities(character).STR || 10);
+  const tooHeavy = armor.find(entry => entry.rule.strength && strength < entry.rule.strength
+    && !/mithral/i.test(`${entry.item.name || ""} ${entry.item.type || ""}`));
+  const ignoresArmor = rulesEdition === "2014"
+    && (species === "Dwarf" || variantKey === "Duergar|Legacy Duergar");
+  if (tooHeavy && !ignoresArmor) add(-10, `${tooHeavy.item.name} needs Str ${tooHeavy.rule.strength}`);
+  return { value: Math.max(0, value), parts };
+}
+
+function walkingSpeed(character) {
+  return walkingSpeedDetails(character).value;
+}
+
+// Darkvision in feet. 2024 raised the dwarf and the orc to 120 feet and gave
+// the dragonborn darkvision it did not have in 2014. Species outside the table
+// fall back to reading their trait names.
+const SPECIES_DARKVISION = {
+  2014: { Human: 0, Dwarf: 60, Elf: 60, Halfling: 0, Dragonborn: 0, Gnome: 60, "Half-Elf": 60, "Half-Orc": 60,
+    Tiefling: 60, Aasimar: 60, "Astral Elf": 60, Bugbear: 60, Dhampir: 60, Hexblood: 60, Leonin: 60, Owlin: 120,
+    Plasmoid: 60, "Sea Elf": 60, "Shadar-Kai": 60, Tabaxi: 60, "Yuan-Ti": 60 },
+  2024: { Aasimar: 60, Dragonborn: 60, Dwarf: 120, Elf: 60, Gnome: 60, Goliath: 0, Halfling: 0, Human: 0,
+    Orc: 120, Tiefling: 60 }
+};
+const SPECIES_VARIANT_DARKVISION = {
+  "Elf|Drow": 120, "Gnome|Deep Gnome": 120,
+  "Genasi (Air)|Monsters of the Multiverse": 60, "Genasi (Earth)|Monsters of the Multiverse": 60,
+  "Genasi (Water)|Monsters of the Multiverse": 60, "Triton|Monsters of the Multiverse": 60
+};
+
+function darkvisionRange(character) {
+  const rulesEdition = character.edition || "2014";
+  const species = character.species || "";
+  const variant = SPECIES_VARIANT_DARKVISION[`${species}|${character.speciesVariant || ""}`];
+  if (rulesEdition === "2014" && variant !== undefined) return variant;
+  const table = SPECIES_DARKVISION[rulesEdition];
+  if (table && table[species] !== undefined) return table[species];
+  const traits = (typeof SPECIES_TRAIT_SUMMARIES !== "undefined" && SPECIES_TRAIT_SUMMARIES[species]) || [];
+  if (traits.some(trait => /superior darkvision/i.test(trait))) return 120;
+  return traits.some(trait => /darkvision/i.test(trait)) ? 60 : 0;
+}
+
+// What the sheet prints for sight. 3.5 elves and gnomes have low-light vision,
+// not the 5e darkvision the shared species table gave them.
+function visionLabel(character) {
+  if (isD35(character)) {
+    const traits = ((typeof D35_RACE_TRAITS !== "undefined" && D35_RACE_TRAITS[character.species]) || []).map(([name]) => name);
+    if (traits.some(name => /darkvision/i.test(name))) return "Darkvision 60 ft";
+    if (traits.some(name => /low-light/i.test(name))) return "Low-light vision";
+    return "Normal";
+  }
+  const range = darkvisionRange(character);
+  return range ? `${range} ft` : "None";
 }
 
 // Best unarmored AC, accounting for class, subclass, feat, and species rules.
@@ -8557,13 +8814,17 @@ function expertiseSkills(data) {
   return skills;
 }
 
-function halfProficiencyApplies(data, ability, alreadyProficient) {
-  if (alreadyProficient) return false;
-  if (hasClass(data, "Bard", 2)) return true;
-  return data.edition === "2014"
+// Half proficiency on checks the character is not trained for. Jack of All
+// Trades rounds down; the 2014 Champion's Remarkable Athlete rounds up, and only
+// on Strength, Dexterity and Constitution checks. The better one applies.
+function halfProficiencyBonus(data, ability, prof) {
+  let bonus = 0;
+  if (hasClass(data, "Bard", 2)) bonus = Math.floor(prof / 2);
+  if (data.edition === "2014"
     && classSubclassName(data, "Fighter") === "Champion"
     && classLevel(data, "Fighter") >= 7
-    && ["STR", "DEX", "CON"].includes(ability);
+    && ["STR", "DEX", "CON"].includes(ability)) bonus = Math.max(bonus, Math.ceil(prof / 2));
+  return bonus;
 }
 
 function skillModifier(data, skill) {
@@ -8573,7 +8834,7 @@ function skillModifier(data, skill) {
   const prof = proficiency(characterTotalLevel(data));
   const proficient = proficientSkills(data).has(skill);
   const expertise = expertiseSkills(data).has(skill);
-  return modifier(data[ability]) + (expertise ? prof * 2 : proficient ? prof : halfProficiencyApplies(data, ability, false) ? Math.floor(prof / 2) : 0) + fx.check;
+  return modifier(data[ability]) + (expertise ? prof * 2 : proficient ? prof : halfProficiencyBonus(data, ability, prof)) + fx.check;
 }
 
 function initiativeDetails(data) {
@@ -8590,7 +8851,7 @@ function initiativeDetails(data) {
   if (classSubclassName(data, "Fighter") === "Gunslinger" && classLevel(data, "Fighter") >= 7) addsProficiency = true;
   if (classSubclassName(data, "Paladin") === "Oath of the Watchers" && classLevel(data, "Paladin") >= 7) addsProficiency = true;
   if (addsProficiency) { value += prof; parts.push("proficiency"); }
-  else if (halfProficiencyApplies(data, "DEX", false)) { value += Math.floor(prof / 2); parts.push("half proficiency"); }
+  else if (halfProficiencyBonus(data, "DEX", prof)) { value += halfProficiencyBonus(data, "DEX", prof); parts.push("half proficiency"); }
   if (["War Magic", "Chronurgy Magic"].includes(classSubclassName(data, "Wizard")) && classLevel(data, "Wizard") >= 2) { value += modifier(data.INT); parts.push("INT"); }
   if (classSubclassName(data, "Ranger") === "Gloom Stalker" && classLevel(data, "Ranger") >= 3) { value += modifier(data.WIS); parts.push("WIS"); }
   if (classSubclassName(data, "Rogue") === "Swashbuckler" && classLevel(data, "Rogue") >= 3) { value += modifier(data.CHA); parts.push("CHA"); }
@@ -11332,14 +11593,27 @@ function singleClassSpellSlotResources(character) {
 }
 
 function multiclassSpellcastingLevel(character) {
+  // Paladin and ranger levels count half: rounded down in 2014, rounded up in
+  // 2024.
+  const halfCaster = character.edition === "2024" ? Math.ceil : Math.floor;
   return classBreakdown(character).reduce((total, entry) => {
     const subclass = classSubclassName(character, entry.name);
     if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(entry.name)) return total + entry.level;
     if (entry.name === "Artificer") return total + Math.ceil(entry.level / 2);
-    if (["Paladin", "Ranger"].includes(entry.name)) return total + Math.floor(entry.level / 2);
+    if (["Paladin", "Ranger"].includes(entry.name)) return total + halfCaster(entry.level / 2);
     if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return total + Math.floor(entry.level / 3);
     return total;
   }, 0);
+}
+
+// Whether a class has the Spellcasting feature at its current level. The 2014
+// paladin and ranger gain it at 2nd level, the Eldritch Knight and Arcane
+// Trickster at 3rd, and Pact Magic is not Spellcasting at all.
+function classHasSpellcasting(character, entry) {
+  if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard", "Artificer"].includes(entry.name)) return entry.level >= 1;
+  if (["Paladin", "Ranger"].includes(entry.name)) return entry.level >= (character.edition === "2024" ? 1 : 2);
+  const subclass = classSubclassName(character, entry.name);
+  return ["Eldritch Knight", "Arcane Trickster"].includes(subclass) && entry.level >= 3;
 }
 
 function resourcePrefix(className) {
@@ -11360,8 +11634,22 @@ function spellSlotResources(character) {
       }));
     }
   });
+  // The shared multiclass table is only for Spellcasting from two or more
+  // classes. With one, that class keeps its own table: a fighter 3 / paladin 5
+  // has the paladin's 4 and 2 slots, where a pooled caster level of 2 would
+  // have left three.
+  const casters = entries.filter(entry => classHasSpellcasting(character, entry));
+  if (casters.length === 1) {
+    const [caster] = casters;
+    singleClassSpellSlotResources(withClassContext(character, caster.name, caster.level)).forEach(resource => resources.push({
+      ...resource,
+      id: `${resourcePrefix(caster.name)}-${resource.id}`,
+      name: `${caster.name} \u00b7 ${resource.name}`
+    }));
+    return resources;
+  }
   const casterLevel = multiclassSpellcastingLevel(character);
-  if (casterLevel > 0) {
+  if (casters.length > 1 && casterLevel > 0) {
     (FULL_CASTER_SLOTS[Math.max(1, Math.min(20, casterLevel)) - 1] || []).forEach((max, index) => {
       resources.push({
         id: `multiclass-spell-slot-${index + 1}`,
@@ -11480,6 +11768,9 @@ function singleClassResourceDefinitions(character) {
   if (character.className === "Paladin") {
     add("lay-on-hands", "Lay on Hands pool", 5 * level, "long", { type: "pool" });
     if (!revised) add("divine-sense", "Divine Sense", 1 + Math.max(0, modifier(character.CHA)));
+    // The 2014 oath grants Channel Divinity at 3rd level: one use, back on a
+    // short or long rest.
+    if (!revised && level >= 3) add("channel-divinity", "Channel Divinity", 1, "short", { shortRecovery: "all" });
     if (revised && level >= 3) add("channel-divinity", "Channel Divinity", level >= 11 ? 3 : 2, "short", { shortRecovery: 1 });
     if (revised && level >= 2) add("paladins-smite", "Paladin's Smite · free casting", 1);
     if (revised && level >= 5) add("faithful-steed", "Faithful Steed · free casting", 1);
@@ -11516,7 +11807,9 @@ function singleClassResourceDefinitions(character) {
     add("arcane-recovery", "Arcane Recovery", 1);
     if (level >= 20) add("signature-spells", "Signature Spells · free castings", 2, "short", { shortRecovery: "all" });
   }
-  if (character.className === "Warlock" && level >= 20) {
+  // 2024's Eldritch Master is not a use of its own: it makes Magical Cunning
+  // restore every pact slot.
+  if (character.className === "Warlock" && level >= 20 && !revised) {
     add("eldritch-master", "Eldritch Master · regain pact slots", 1);
   }
   if (character.className === "Artificer" && level >= 7) add("flash-of-genius", "Flash of Genius", abilityUses("INT"));
@@ -12216,7 +12509,7 @@ function renderSheet() {
   // Background skills used to stick on whichever background rendered first, so
   // sheets saved before that fix can carry another background's skills. It is
   // a legitimate choice to differ, so flag it rather than silently rewriting.
-  const backgroundDefaults = BACKGROUND_SKILLS[c.background] || [];
+  const backgroundDefaults = backgroundSkillsFor(c.background, c.edition);
   const storedBackgroundSkills = c.backgroundSkills || [];
   const backgroundDrift = backgroundDefaults.length && storedBackgroundSkills.length
     && storedBackgroundSkills.slice().sort().join("|") !== backgroundDefaults.slice().sort().join("|");
@@ -12256,9 +12549,9 @@ function renderSheet() {
   classEntries.forEach(entry => { const die = classHitDie(entry.name, c.edition); hitDiceMap[die] = (hitDiceMap[die] || 0) + entry.level; });
   const hitDice = Object.entries(hitDiceMap).sort((a, b) => b[0] - a[0]).map(([die, count]) => `${count}d${die}`).join(" + ");
   const speciesTraitNames = (typeof SPECIES_TRAIT_SUMMARIES !== "undefined" && SPECIES_TRAIT_SUMMARIES[c.species]) || [];
-  const darkvision = speciesTraitNames.some(t => /superior darkvision/i.test(t)) ? "120 ft"
-    : speciesTraitNames.some(t => /darkvision/i.test(t)) ? "60 ft" : "None";
-  const walkSpeed = Number(c.speed) || 30;
+  const darkvision = visionLabel(c);
+  const speed = walkingSpeedDetails(c);
+  const walkSpeed = speed.value;
   const defenseSet = new Set();
   speciesTraitNames.forEach(trait => {
     const match = trait.match(/(\w+) Resistance/i);
@@ -12370,7 +12663,8 @@ function renderSheet() {
         : `<div class="combat-stat"><small>Passive Perception</small><strong>${d.passive}</strong></div>
         <div class="combat-stat"><small>Passive Investigation</small><strong>${passiveInvestigation}</strong></div>
         <div class="combat-stat"><small>Passive Insight</small><strong>${passiveInsight}</strong></div>`}
-        <div class="combat-stat"><small>Darkvision</small><strong>${escapeHtml(darkvision)}</strong></div>
+        ${isAdnd(c) ? "" : `<div class="combat-stat"><small>${isD35(c) ? "Vision" : "Darkvision"}</small><strong>${escapeHtml(darkvision)}</strong></div>`}
+        ${classCombatStats(c).map(([label, value]) => `<div class="combat-stat"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join("")}
       </div>
       <div class="combat-detail-grid">
         <div class="combat-detail"><small>Armor Class</small><span>${escapeHtml(d.acSource)}</span></div>
@@ -12391,7 +12685,8 @@ function renderSheet() {
         <div class="combat-detail"><small>Lift and drag</small><span>Over head ${cap.liftOverHead} lb. \u00b7 off the ground ${cap.liftOffGround} lb. \u00b7 push or drag ${cap.pushOrDrag} lb.</span></div>`;
         })() : ""}
         ${typeof D35_KNOWLEDGE_SYNERGY_NOTE !== "undefined" ? `<div class="combat-detail"><small>Knowledge synergies</small><span>${escapeHtml(D35_KNOWLEDGE_SYNERGY_NOTE)}</span></div>` : ""}`
-        : `<div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
+        : `<div class="combat-detail"><small>Speed</small><span>${escapeHtml(speed.parts.join(" \u00b7 "))}</span></div>
+        <div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
         <div class="combat-detail"><small>Skill proficiencies</small><span>${[...proficientSkills(c)].sort().join(", ") || "None selected"}</span></div>
         <div class="combat-detail"><small>Defenses &amp; resistances</small><span>${escapeHtml(defenses)}</span></div>`}
         <div class="combat-detail"><small>Active conditions</small><span>${activeConditions.length ? escapeHtml(activeConditions.join(", ")) : "None"}</span></div>
@@ -12682,7 +12977,7 @@ function progressionChoiceBlocks(character, targetLevel, features, targetClass =
 function levelSpellChoices(character, targetLevel) {
   const lists = spellListsFor(character.edition, character.className, subclassName(character));
   if (!lists) return "";
-  const newMax = maxSpellLevel(character.className, targetLevel, character.edition, subclassName(character));
+  const newMax = leveledSpellCeiling(character.className, targetLevel, character.edition, subclassName(character));
   const progression = character.edition === "2014" && character.className === "Artificer"
     ? null
     : spellProgressionFor(character.edition, character.className, subclassName(character));
@@ -13005,6 +13300,7 @@ function autoLevelCharacter(id, targetClass = "") {
   }
   reconcileEditionAfterLevel(updated);
   reconcilePreparedSpells(updated, character);
+  if (updated.hpOverride) updated.hpOverride = Number(updated.hpOverride) + hpOverrideAdjustment(character, updated);
   const gained = levelFeatures(character, targetLevel, levelClass).map(feature => `${feature.source}: ${feature.name}`);
   updated.progressionHistory = [...(updated.progressionHistory || []), {
     level: targetLevel,
@@ -13186,6 +13482,7 @@ function completeLevelUp(event) {
   }
   reconcileEditionAfterLevel(updated);
   reconcilePreparedSpells(updated, character);
+  if (updated.hpOverride) updated.hpOverride = Number(updated.hpOverride) + hpOverrideAdjustment(character, updated);
   const gained = levelFeatures(character, targetLevel, levelClass).map(feature => `${feature.source}: ${feature.name}`);
   updated.progressionHistory = [...(updated.progressionHistory || []), {
     level: targetLevel,
@@ -14538,11 +14835,16 @@ function initEvents() {
       const { cantripLimit, spellLimit } = spellLimitContext();
       const counts = selectedSpellCounts();
       const spellLevel = Number(event.target.dataset.level || 0);
-      const overLimit = event.target.checked && (spellLevel === 0 ? counts.cantrips > cantripLimit : counts.spells > spellLimit);
+      const arcanum = isMysticArcanumSpell(selectedClass, spellLevel);
+      const overLimit = event.target.checked && (spellLevel === 0 ? counts.cantrips > cantripLimit
+        : arcanum ? Number(counts.arcanum[spellLevel] || 0) > 1
+        : counts.spells > spellLimit);
       if (overLimit) {
         event.target.checked = false;
         selectedSpellNames.delete(event.target.value);
-        toast(spellLevel === 0 ? `Choose up to ${cantripLimit} cantrip${cantripLimit === 1 ? "" : "s"}` : `Choose up to ${spellLimit} leveled spell${spellLimit === 1 ? "" : "s"}`);
+        toast(spellLevel === 0 ? `Choose up to ${cantripLimit} cantrip${cantripLimit === 1 ? "" : "s"}`
+          : arcanum ? `Mystic Arcanum grants one level ${spellLevel} spell`
+          : `Choose up to ${spellLimit} leveled spell${spellLimit === 1 ? "" : "s"}`);
       }
       renderTalentChoices();
       updatePreview();

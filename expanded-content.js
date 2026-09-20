@@ -236,7 +236,7 @@ mergeClassFeatures(2014, "Cleric", [[6, "Channel Divinity improvement"], [8, "De
 mergeClassFeatures(2014, "Druid", [[4, "Wild Shape improvement"], [8, "Wild Shape improvement"]]);
 mergeClassFeatures(2014, "Fighter", [[6, "Ability Score Improvement / Feat"], [14, "Ability Score Improvement / Feat"]]);
 mergeClassFeatures(2014, "Fighter", [[13, "Indomitable improvement"], [17, "Indomitable improvement"]]);
-mergeClassFeatures(2014, "Monk", [[5, "Martial Arts improvement"], [6, "Unarmored Movement improvement"], [10, "Unarmored Movement improvement"], [11, "Martial Arts improvement"], [14, "Unarmored Movement improvement"], [17, "Martial Arts improvement"], [18, "Unarmored Movement improvement"]]);
+mergeClassFeatures(2014, "Monk", [[5, "Martial Arts improvement"], [6, "Unarmored Movement improvement"], [9, "Unarmored Movement improvement (vertical surfaces and liquids)"], [10, "Unarmored Movement improvement"], [11, "Martial Arts improvement"], [13, "Tongue of the Sun and Moon"], [14, "Unarmored Movement improvement"], [17, "Martial Arts improvement"], [18, "Unarmored Movement improvement"]]);
 mergeClassFeatures(2014, "Paladin", [[18, "Aura improvements"]]);
 mergeClassFeatures(2014, "Ranger", [[6, "Favored Enemy improvement"], [6, "Natural Explorer improvement"], [10, "Natural Explorer improvement"], [14, "Favored Enemy improvement"]]);
 mergeClassFeatures(2014, "Rogue", [[6, "Expertise"], [10, "Ability Score Improvement / Feat"]]);
@@ -244,7 +244,7 @@ mergeClassFeatures(2014, "Sorcerer", [[10, "Metamagic improvement"], [17, "Metam
 mergeClassFeatures(2014, "Warlock", [[5, "Eldritch Invocations improvement"], [7, "Eldritch Invocations improvement"], [9, "Eldritch Invocations improvement"], [12, "Eldritch Invocations improvement"], [15, "Eldritch Invocations improvement"], [18, "Eldritch Invocations improvement"]]);
 
 mergeClassFeatures(2024, "Fighter", [[6, "Ability Score Improvement / Feat"], [14, "Ability Score Improvement / Feat"]]);
-mergeClassFeatures(2024, "Rogue", [[10, "Ability Score Improvement / Feat"]]);
+mergeClassFeatures(2024, "Rogue", [[6, "Expertise"], [10, "Ability Score Improvement / Feat"]]);
 mergeClassFeatures(2024, "Blood Hunter", [[19, "Ability Score Improvement / Feat"]]);
 mergeClassFeatures(2024, "Barbarian", [[4, "Weapon Mastery improvement"], [10, "Weapon Mastery improvement"], [13, "Improved Brutal Strike"], [17, "Improved Brutal Strike"]]);
 mergeClassFeatures(2024, "Bard", [[9, "Expertise"], [10, "Bardic Inspiration improvement"], [15, "Bardic Inspiration improvement"]]);
