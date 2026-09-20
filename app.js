@@ -3949,11 +3949,21 @@ function catalogItem(name, rulesEdition = edition) {
     : rulesEdition !== "sw5e") || named[0];
 }
 
+// The 2024 bard and druid lost their martial weapons, and their starting kits
+// changed with them: handing a 2024 bard a rapier armed them with something
+// they are not trained to use.
+const QUICK_EQUIPMENT_2024 = {
+  Bard: ["Leather Armor", "Dagger", "Dagger", "Backpack"],
+  Druid: ["Leather Armor", "Shield", "Sickle", "Quarterstaff", "Backpack"]
+};
+
 function quickInventory(className, themeEquipment = null) {
   const fallbackGear = edition === "sw5e" ? ["Bedroll"] : ["Bedroll", "Rations, 1 day"];
+  const classKit = (edition === "2024" && QUICK_EQUIPMENT_2024[className])
+    || quickBuildProfileFor(className)?.equipment || [];
   const names = [...(Array.isArray(themeEquipment) && themeEquipment.length
     ? themeEquipment
-    : quickBuildProfileFor(className)?.equipment || []), ...fallbackGear];
+    : classKit), ...fallbackGear];
   const entries = new Map();
   names.forEach(name => {
     const catalog = catalogItem(name)
@@ -7977,8 +7987,6 @@ function effectiveAbilities(data) {
   return clone;
 }
 
-const MARTIAL_WEAPON_CLASSES = new Set(["Barbarian", "Fighter", "Paladin", "Ranger"]);
-const FINESSE_MARTIAL_WEAPONS = new Set(["Rapier", "Shortsword", "Longsword", "Hand Crossbow", "Scimitar", "Whip"]);
 // Base weapon dice for named magic weapons (their catalog text has no dice).
 const MAGIC_WEAPON_PROFILES = {
   "Flame Tongue": "1d8 slashing · versatile (1d10)",
@@ -8073,14 +8081,22 @@ function sw5eProficientWithWeapon(character, item) {
 }
 function proficientWithWeapon(character, item) {
   const type = String(item.type || "").toLowerCase();
-  const classes = classBreakdown(character).map(entry => entry.name);
   if ((character.weaponMastery || []).includes(item.name)) return true;
   if (character.edition === "sw5e") return sw5eProficientWithWeapon(character, item);
-  if (type.includes("simple")) return true;
+  // 3.5 and 2E track weapon training in their own panels.
+  if (!["2014", "2024"].includes(character.edition || "2014")) return true;
+  const training = characterTraining(character);
+  if (training.weapons.has(item.baseWeapon || item.name)) return true;
+  if (type.includes("simple")) return training.simple;
   if (type.includes("martial")) {
-    if (classes.some(name => MARTIAL_WEAPON_CLASSES.has(name))) return true;
-    if (classes.some(name => ["Rogue", "Bard", "Warlock", "Monk"].includes(name)) && FINESSE_MARTIAL_WEAPONS.has(item.name)) return true;
-    return false;
+    if (training.martial) return true;
+    // The 2024 monk and rogue are trained in martial weapons that carry a
+    // particular property rather than in a fixed list of them.
+    if (!training.martialWith.size) return false;
+    const profile = parseWeaponProfile(item, character.edition);
+    const text = `${item.details || ""} ${item.notes || ""}`.toLowerCase();
+    return [...training.martialWith].some(property =>
+      property === "finesse" ? Boolean(profile?.finesse) : new RegExp(`\\b${property}\\b`).test(text));
   }
   return true; // uncategorized weapon the character chose to wield
 }
@@ -8492,54 +8508,113 @@ function visionLabel(character) {
   return range ? `${range} ft` : "None";
 }
 
-// Armour a class is trained in, and the smaller set it grants when taken as a
-// second class. 2024 took medium armour off the druid and moved heavy armour on
-// to the cleric's Protector order.
-const ARMOR_TRAINING = {
-  Barbarian: { armor: ["light", "medium"], shield: true },
-  Bard: { armor: ["light"] },
-  Cleric: { armor: ["light", "medium"], shield: true },
-  Druid: { armor: ["light", "medium"], shield: true, revised: { armor: ["light"], shield: true } },
-  Fighter: { armor: ["light", "medium", "heavy"], shield: true, multiclass: { armor: ["light", "medium"], shield: true } },
-  Monk: {},
-  Paladin: { armor: ["light", "medium", "heavy"], shield: true, multiclass: { armor: ["light", "medium"], shield: true } },
-  Ranger: { armor: ["light", "medium"], shield: true },
-  Rogue: { armor: ["light"] },
-  Sorcerer: {},
-  Warlock: { armor: ["light"] },
-  Wizard: {},
-  Artificer: { armor: ["light", "medium"], shield: true },
-  "Blood Hunter": { armor: ["light", "medium"], shield: true }
+// What each class trains you in: armour kinds, shields, weapon categories and
+// named weapons. `multiclass` is the smaller set the class grants when it is
+// not your first, taken from each edition's multiclassing table. 2024 replaced
+// the 2014 lists of named weapons with "Simple", gave the monk and the rogue a
+// property test instead, took medium armour off the druid, and moved heavy
+// armour on to the cleric's Protector order.
+const CLASS_TRAINING = {
+  2014: {
+    Barbarian: { armor: ["light", "medium"], shield: true, simple: true, martial: true,
+      multiclass: { shield: true, simple: true, martial: true } },
+    Bard: { armor: ["light"], simple: true, weapons: ["Hand Crossbow", "Longsword", "Rapier", "Shortsword"],
+      multiclass: { armor: ["light"] } },
+    Cleric: { armor: ["light", "medium"], shield: true, simple: true,
+      multiclass: { armor: ["light", "medium"], shield: true } },
+    Druid: { armor: ["light", "medium"], shield: true,
+      weapons: ["Club", "Dagger", "Dart", "Javelin", "Mace", "Quarterstaff", "Scimitar", "Sickle", "Sling", "Spear"],
+      multiclass: { armor: ["light", "medium"], shield: true } },
+    Fighter: { armor: ["light", "medium", "heavy"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, simple: true, martial: true } },
+    Monk: { simple: true, weapons: ["Shortsword"], multiclass: { simple: true, weapons: ["Shortsword"] } },
+    Paladin: { armor: ["light", "medium", "heavy"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, simple: true, martial: true } },
+    Ranger: { armor: ["light", "medium"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, simple: true, martial: true } },
+    Rogue: { armor: ["light"], simple: true, weapons: ["Hand Crossbow", "Longsword", "Rapier", "Shortsword"],
+      multiclass: { armor: ["light"] } },
+    Sorcerer: { weapons: ["Dagger", "Dart", "Sling", "Quarterstaff", "Light Crossbow"], multiclass: {} },
+    Warlock: { armor: ["light"], simple: true, multiclass: { armor: ["light"], simple: true } },
+    Wizard: { weapons: ["Dagger", "Dart", "Sling", "Quarterstaff", "Light Crossbow"], multiclass: {} },
+    Artificer: { armor: ["light", "medium"], shield: true, simple: true,
+      multiclass: { armor: ["light", "medium"], shield: true, simple: true } },
+    "Blood Hunter": { armor: ["light", "medium"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, simple: true, martial: true } }
+  },
+  2024: {
+    Barbarian: { armor: ["light", "medium"], shield: true, simple: true, martial: true,
+      multiclass: { shield: true, martial: true } },
+    Bard: { armor: ["light"], simple: true, multiclass: { armor: ["light"] } },
+    Cleric: { armor: ["light", "medium"], shield: true, simple: true,
+      multiclass: { armor: ["light", "medium"], shield: true } },
+    Druid: { armor: ["light"], shield: true, simple: true, multiclass: { armor: ["light"], shield: true } },
+    Fighter: { armor: ["light", "medium", "heavy"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, martial: true } },
+    Monk: { simple: true, martialWith: ["light"], multiclass: {} },
+    Paladin: { armor: ["light", "medium", "heavy"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, martial: true } },
+    Ranger: { armor: ["light", "medium"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, martial: true } },
+    Rogue: { armor: ["light"], simple: true, martialWith: ["finesse", "light"], multiclass: { armor: ["light"] } },
+    Sorcerer: { simple: true, multiclass: {} },
+    Warlock: { armor: ["light"], simple: true, multiclass: { armor: ["light"] } },
+    Wizard: { simple: true, multiclass: {} },
+    Artificer: { armor: ["light", "medium"], shield: true, simple: true,
+      multiclass: { armor: ["light", "medium"], shield: true, simple: true } },
+    "Blood Hunter": { armor: ["light", "medium"], shield: true, simple: true, martial: true,
+      multiclass: { armor: ["light", "medium"], shield: true, simple: true, martial: true } }
+  }
 };
-const ARMOR_TRAINING_FEATS = {
+const TRAINING_FEATS = {
   "Lightly Armored": { armor: ["light"] },
   "Moderately Armored": { armor: ["medium"], shield: true },
-  "Heavily Armored": { armor: ["heavy"] }
+  "Heavily Armored": { armor: ["heavy"] },
+  "Martial Weapon Training": { martial: true }
+};
+// 2014 species that train you in particular weapons. 2024 species grant none.
+const SPECIES_WEAPON_TRAINING_2014 = {
+  Dwarf: ["Battleaxe", "Handaxe", "Light Hammer", "Warhammer"],
+  "Elf|High Elf": ["Longsword", "Shortsword", "Shortbow", "Longbow"],
+  "Elf|Wood Elf": ["Longsword", "Shortsword", "Shortbow", "Longbow"],
+  "Elf|Drow": ["Rapier", "Shortsword", "Hand Crossbow"]
 };
 
-function armorTraining(character) {
-  const trained = new Set();
-  const revised = character.edition === "2024";
+// Everything the character is trained to use: armour kinds and shields, weapon
+// categories, named weapons, and the properties that make a martial weapon
+// usable (the 2024 monk's Light, the 2024 rogue's Finesse or Light).
+function characterTraining(character) {
+  const rulesEdition = character.edition === "2024" ? 2024 : 2014;
+  const table = CLASS_TRAINING[rulesEdition];
+  const training = { armor: new Set(), simple: false, martial: false, weapons: new Set(), martialWith: new Set() };
   const grant = rule => {
-    (rule.armor || []).forEach(kind => trained.add(kind));
-    if (rule.shield) trained.add("shield");
+    (rule.armor || []).forEach(kind => training.armor.add(kind));
+    if (rule.shield) training.armor.add("shield");
+    if (rule.simple) training.simple = true;
+    if (rule.martial) training.martial = true;
+    (rule.weapons || []).forEach(name => training.weapons.add(name));
+    (rule.martialWith || []).forEach(property => training.martialWith.add(property));
   };
   classBreakdown(character).forEach((entry, index) => {
-    const rule = ARMOR_TRAINING[entry.name];
+    const rule = table[entry.name];
     if (!rule) return;
-    const base = revised && rule.revised ? rule.revised : rule;
-    grant(index > 0 && base.multiclass ? base.multiclass : base);
+    grant(index > 0 && rule.multiclass ? rule.multiclass : rule);
   });
-  if (revised && character.divineOrder === "Protector") trained.add("heavy");
-  if (revised && character.primalOrder === "Warden") trained.add("medium");
-  if (character.edition === "2014" && /Mountain Dwarf/i.test(character.speciesVariant || "")) {
-    trained.add("light");
-    trained.add("medium");
+  if (rulesEdition === 2024 && character.divineOrder === "Protector") { training.armor.add("heavy"); training.martial = true; }
+  if (rulesEdition === 2024 && character.primalOrder === "Warden") { training.armor.add("medium"); training.martial = true; }
+  if (rulesEdition === 2014) {
+    const variant = character.speciesVariant || "";
+    if (/Mountain Dwarf/i.test(variant)) { training.armor.add("light"); training.armor.add("medium"); }
+    const speciesWeapons = SPECIES_WEAPON_TRAINING_2014[`${character.species}|${variant}`]
+      || SPECIES_WEAPON_TRAINING_2014[character.species];
+    (speciesWeapons || []).forEach(name => training.weapons.add(name));
   }
-  (character.feats || []).forEach(feat => {
-    if (ARMOR_TRAINING_FEATS[feat]) grant(ARMOR_TRAINING_FEATS[feat]);
-  });
-  return trained;
+  (character.feats || []).forEach(feat => { if (TRAINING_FEATS[feat]) grant(TRAINING_FEATS[feat]); });
+  return training;
+}
+
+function armorTraining(character) {
+  return characterTraining(character).armor;
 }
 
 // Which training an item needs: "light", "medium", "heavy" or "shield".
