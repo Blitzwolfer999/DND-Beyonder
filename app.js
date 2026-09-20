@@ -8492,6 +8492,83 @@ function visionLabel(character) {
   return range ? `${range} ft` : "None";
 }
 
+// Armour a class is trained in, and the smaller set it grants when taken as a
+// second class. 2024 took medium armour off the druid and moved heavy armour on
+// to the cleric's Protector order.
+const ARMOR_TRAINING = {
+  Barbarian: { armor: ["light", "medium"], shield: true },
+  Bard: { armor: ["light"] },
+  Cleric: { armor: ["light", "medium"], shield: true },
+  Druid: { armor: ["light", "medium"], shield: true, revised: { armor: ["light"], shield: true } },
+  Fighter: { armor: ["light", "medium", "heavy"], shield: true, multiclass: { armor: ["light", "medium"], shield: true } },
+  Monk: {},
+  Paladin: { armor: ["light", "medium", "heavy"], shield: true, multiclass: { armor: ["light", "medium"], shield: true } },
+  Ranger: { armor: ["light", "medium"], shield: true },
+  Rogue: { armor: ["light"] },
+  Sorcerer: {},
+  Warlock: { armor: ["light"] },
+  Wizard: {},
+  Artificer: { armor: ["light", "medium"], shield: true },
+  "Blood Hunter": { armor: ["light", "medium"], shield: true }
+};
+const ARMOR_TRAINING_FEATS = {
+  "Lightly Armored": { armor: ["light"] },
+  "Moderately Armored": { armor: ["medium"], shield: true },
+  "Heavily Armored": { armor: ["heavy"] }
+};
+
+function armorTraining(character) {
+  const trained = new Set();
+  const revised = character.edition === "2024";
+  const grant = rule => {
+    (rule.armor || []).forEach(kind => trained.add(kind));
+    if (rule.shield) trained.add("shield");
+  };
+  classBreakdown(character).forEach((entry, index) => {
+    const rule = ARMOR_TRAINING[entry.name];
+    if (!rule) return;
+    const base = revised && rule.revised ? rule.revised : rule;
+    grant(index > 0 && base.multiclass ? base.multiclass : base);
+  });
+  if (revised && character.divineOrder === "Protector") trained.add("heavy");
+  if (revised && character.primalOrder === "Warden") trained.add("medium");
+  if (character.edition === "2014" && /Mountain Dwarf/i.test(character.speciesVariant || "")) {
+    trained.add("light");
+    trained.add("medium");
+  }
+  (character.feats || []).forEach(feat => {
+    if (ARMOR_TRAINING_FEATS[feat]) grant(ARMOR_TRAINING_FEATS[feat]);
+  });
+  return trained;
+}
+
+// Which training an item needs: "light", "medium", "heavy" or "shield".
+function armorTrainingNeeded(item) {
+  if (isShieldItem(item)) return "shield";
+  const rule = armorRuleFor(item);
+  if (!rule) return "";
+  const match = String(rule.type || "").match(/(light|medium|heavy)/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+// Armour and shields the character is wearing without the training for them.
+function untrainedArmorWorn(character) {
+  if (!["2014", "2024"].includes(character.edition || "2014")) return [];
+  const trained = armorTraining(character);
+  return equippedItems(character).filter(item => {
+    const needed = armorTrainingNeeded(item);
+    return needed && !trained.has(needed);
+  });
+}
+
+function armorTrainingLabel(character) {
+  const trained = armorTraining(character);
+  const order = ["light", "medium", "heavy"];
+  const worn = order.filter(kind => trained.has(kind)).map(kind => `${kind[0].toUpperCase()}${kind.slice(1)}`);
+  if (trained.has("shield")) worn.push("Shields");
+  return worn.join(", ") || "None";
+}
+
 // Best unarmored AC, accounting for class, subclass, feat, and species rules.
 function unarmoredAcOptions(data, hasShield = false) {
   const dex = modifier(data.DEX);
@@ -12064,7 +12141,7 @@ function renderInventorySection(character, extraClass = "") {
           ${itemRequiresAttunement(item) ? `<button type="button" class="item-attune-btn ${item.attuned ? "on" : ""}" data-item-action="attune" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${item.attuned}" title="${item.attuned ? "Attuned — click to end attunement" : "Requires attunement — click to attune"}">✦</button>` : ""}
           ${hasPactBoon(character, "Pact of the Blade") && parseWeaponProfile(item) ? `<button type="button" class="item-pact-btn ${item.pactWeapon ? "on" : ""}" data-item-action="pact" data-character="${character.id}" data-item-id="${item.id}" aria-pressed="${Boolean(item.pactWeapon)}" title="${item.pactWeapon ? "Your pact weapon — click to unset" : "Set as your pact weapon"}">P</button>` : ""}
         </div></td>
-        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item, character.edition); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const variant = itemVariantChoices(item); if (!variant) return ""; const resist = itemVariantResistance(item); return `<label class="base-weapon-pick"><span>${escapeHtml(variant.label)}</span><select data-item-variant data-character="${character.id}" data-item-id="${item.id}"><option value="">Choose...</option>${Object.keys(variant.options).map(name => `<option value="${escapeHtml(name)}"${item.variant === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select>${resist ? `<small class="variant-note">${escapeHtml(resist)} resistance</small>` : ""}</label>`; })()}${(() => { const armor = itemBaseArmorChoices(item, character.edition); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
+        <td class="item-name"><strong>${escapeHtml(item.name)}</strong>${rarityChip(itemRarity(item))}${item.equipped ? `<span class="equip-badge" title="Equipped">✓ Equipped</span>` : ""}${item.attuned ? `<span class="attune-badge on" title="Attuned">✦ Attuned</span>` : itemRequiresAttunement(item) ? `<span class="attune-badge req" title="Requires attunement">Requires Attunement</span>` : ""}${(() => { const note = itemEffectNote(item, character.edition); const needed = item.equipped ? armorTrainingNeeded(item) : ""; const untrained = needed && !armorTraining(character).has(needed) && ["2014", "2024"].includes(character.edition || "2014"); return `<small>${escapeHtml(item.type || "Item")}${note ? ` · ${escapeHtml(note)}` : ""}${untrained ? ` · not trained` : ""}</small>`; })()}${(() => { const choices = itemBaseWeaponChoices(item); return choices ? `<label class="base-weapon-pick"><span>Base weapon</span><select data-item-base data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${item.name.includes("Axe") ? "axe" : item.name.includes("Mace") || item.name.includes("Hammer") ? "mace" : "longsword"})</option>${choices.map(name => `<option value="${escapeHtml(name)}"${item.baseWeapon === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}${(() => { const variant = itemVariantChoices(item); if (!variant) return ""; const resist = itemVariantResistance(item); return `<label class="base-weapon-pick"><span>${escapeHtml(variant.label)}</span><select data-item-variant data-character="${character.id}" data-item-id="${item.id}"><option value="">Choose...</option>${Object.keys(variant.options).map(name => `<option value="${escapeHtml(name)}"${item.variant === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select>${resist ? `<small class="variant-note">${escapeHtml(resist)} resistance</small>` : ""}</label>`; })()}${(() => { const armor = itemBaseArmorChoices(item, character.edition); return armor ? `<label class="base-weapon-pick"><span>Base armour</span><select data-item-base-armor data-character="${character.id}" data-item-id="${item.id}"><option value="">Default (${escapeHtml((armorRuleFor(item) && Object.keys(ARMOR_RULES).find(k => ARMOR_RULES[k] === armorRuleFor(item))) || "chain shirt")})</option>${armor.map(name => `<option value="${escapeHtml(name)}"${item.baseArmor === name ? " selected" : ""}>${escapeHtml(name)}</option>`).join("")}</select></label>` : ""; })()}</td>
         <td>${Number(item.quantity || 1)}</td>
         <td>${Number((Number(item.weight || 0) * Number(item.quantity || 1)).toFixed(2))} lb.</td>
         <td>${escapeHtml(item.cost || "—")}</td>
@@ -12759,6 +12836,14 @@ function renderSheet() {
         })() : ""}
         ${typeof D35_KNOWLEDGE_SYNERGY_NOTE !== "undefined" ? `<div class="combat-detail"><small>Knowledge synergies</small><span>${escapeHtml(D35_KNOWLEDGE_SYNERGY_NOTE)}</span></div>` : ""}`
         : `<div class="combat-detail"><small>Speed</small><span>${escapeHtml(speed.parts.join(" \u00b7 "))}</span></div>
+        ${(() => {
+          // Armour worn without training costs disadvantage on Strength and
+          // Dexterity rolls and stops spellcasting, and nothing said so.
+          const untrained = untrainedArmorWorn(c);
+          const label = `<div class="combat-detail"><small>Armour training</small><span>${escapeHtml(armorTrainingLabel(c))}</span></div>`;
+          if (!untrained.length) return label;
+          return `${label}<div class="combat-detail warning"><small>Not trained</small><span>${escapeHtml(untrained.map(item => item.name).join(", "))} \u00b7 disadvantage on Strength and Dexterity checks, attack rolls and saving throws, and you cannot cast spells while wearing ${untrained.length > 1 ? "them" : "it"}.</span></div>`;
+        })()}
         <div class="combat-detail"><small>Saving throw proficiencies</small><span>${[...savingThrowProficiencies(c)].join(", ") || "None"}</span></div>
         <div class="combat-detail"><small>Skill proficiencies</small><span>${[...proficientSkills(c)].sort().join(", ") || "None selected"}</span></div>
         <div class="combat-detail"><small>Defenses &amp; resistances</small><span>${escapeHtml(defenses)}</span></div>`}

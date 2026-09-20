@@ -4100,3 +4100,7 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 @media (max-width: 620px) {
   .adnd-weapon { grid-template-columns: 1fr auto; gap: 6px; }
 }
+
+/* Armour worn without the training for it. */
+.combat-detail.warning { border-color: rgba(178, 74, 58, 0.55); }
+.combat-detail.warning small { color: #b24a3a; }
