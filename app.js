@@ -3092,17 +3092,21 @@ function spellRollOptions(value, spell, character) {
       if (!options.some(option => option.key === key)) options.push({ key, count, sides, modifier: rollModifier, label });
     }
   });
-  // Agonizing Blast adds your Charisma modifier to each beam of Eldritch Blast.
-  if (/^eldritch blast$/i.test(String(spell.name || ""))
-    && (character.invocations || []).includes("Agonizing Blast")) {
-    const charisma = modifier(effectiveAbilities(character).CHA);
-    if (charisma > 0) {
-      return options.map(option => ({
+  // Eldritch Blast gains a beam at levels 5, 11 and 17, and Agonizing Blast
+  // adds Charisma to each of them. Neither showed on the card, so a level 17
+  // warlock read the same single 1d10 as a level 1 one.
+  if (/^eldritch blast$/i.test(String(spell.name || ""))) {
+    const beams = eldritchBlastBeams(character);
+    const charisma = (character.invocations || []).includes("Agonizing Blast")
+      ? Math.max(0, modifier(effectiveAbilities(character).CHA)) : 0;
+    return options.map(option => {
+      const rollModifier = option.modifier + charisma;
+      return {
         ...option,
-        modifier: option.modifier + charisma,
-        label: `${option.count}d${option.sides}${signed(option.modifier + charisma)} per beam`
-      }));
-    }
+        modifier: rollModifier,
+        label: `${option.count}d${option.sides}${rollModifier ? signed(rollModifier) : ""} per beam${beams > 1 ? ` \u00d7 ${beams}` : ""}`
+      };
+    });
   }
   return options;
 }
@@ -4250,14 +4254,24 @@ function prebuildClassChoices(className, level, profile, rulesEdition = edition)
     .slice(0, masteryCount);
   const invocationCount = Object.entries(LEVEL_CHOICE_RULES[rulesEdition]?.Warlock?.invocations || {})
     .reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0);
-  const invocationPreferences = [
-    "Agonizing Blast", "Eldritch Mind", "Repelling Blast",
-    ...(rulesEdition === "2024" ? ["Pact of the Tome"] : []),
-    "Fiendish Vigor", "Devil's Sight", "Armor of Shadows", "Eldritch Sight", "Eldritch Spear", "Lifedrinker"
-  ];
-  const invocations = [...invocationPreferences, ...(PROGRESSION_OPTIONS.invocations[rulesEdition] || [])]
-    .filter((name, index, names) => names.indexOf(name) === index)
-    .slice(0, invocationCount);
+  // Favourites first, then the rest of that edition's list. Each pick is
+  // checked against its prerequisites as the list grows, so a 2024 warlock no
+  // longer walks away with a 2014-only invocation or with Thirsting Blade and
+  // no pact weapon to swing.
+  const invocationPreferences = rulesEdition === "2024"
+    ? ["Agonizing Blast", "Eldritch Mind", "Pact of the Blade", "Repelling Blast", "Devil's Sight",
+       "Armor of Shadows", "Fiendish Vigor", "Thirsting Blade", "Eldritch Smite", "Lifedrinker", "Devouring Blade"]
+    : ["Agonizing Blast", "Eldritch Mind", "Repelling Blast", "Fiendish Vigor", "Devil's Sight",
+       "Armor of Shadows", "Eldritch Sight", "Eldritch Spear", "Thirsting Blade", "Lifedrinker"];
+  const invocationPool = PROGRESSION_OPTIONS.invocations[rulesEdition] || [];
+  const invocations = [];
+  [...invocationPreferences, ...invocationPool]
+    .filter((name, index, names) => names.indexOf(name) === index && invocationPool.includes(name))
+    .forEach(name => {
+      if (invocations.length >= invocationCount) return;
+      const context = { edition: rulesEdition, invocations, pactBoon: profile?.pactBoon || "" };
+      if (invocationEligible(context, name, level, rulesEdition)) invocations.push(name);
+    });
   const metamagicCount = Object.entries(LEVEL_CHOICE_RULES[rulesEdition]?.Sorcerer?.metamagic || {})
     .reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0);
   const metamagicPreferences = ["Careful Spell", "Quickened Spell", "Twinned Spell", "Subtle Spell", "Empowered Spell", "Heightened Spell"];
@@ -6499,6 +6513,29 @@ function subclassGrantedSpells(character) {
   });
   return records;
 }
+// Spells an Eldritch Invocation hands the warlock outright. They are always
+// available and never counted against the spells the warlock prepares.
+function invocationGrantedSpells(character) {
+  if (typeof INVOCATION_SPELLS === "undefined") return [];
+  const rulesEdition = character.edition || "2014";
+  const table = INVOCATION_SPELLS[rulesEdition];
+  if (!table || !classLevel(character, "Warlock")) return [];
+  const records = [];
+  (character.invocations || []).forEach(invocation => {
+    const entry = table[invocation];
+    if (!entry) return;
+    const level = lookupSpellLevel(rulesEdition, entry.spell, "Warlock");
+    records.push({
+      name: entry.spell,
+      level: level === null ? 1 : level,
+      className: "Warlock",
+      grantedBy: `${invocation} (${entry.use === "at will" ? "at will" : "once per long rest"})`,
+      alwaysPrepared: true
+    });
+  });
+  return records;
+}
+
 function characterSpellRecords(character) {
   const chosen = (character.spells || []).map(spell => {
     if (typeof spell !== "string") return { ...spell, className: spell.className || primaryClassName(character) };
@@ -6517,7 +6554,7 @@ function characterSpellRecords(character) {
   // Subclass-granted spells append after the chosen ones, skipping any the
   // character already picked so nothing shows up twice.
   const taken = new Set(chosen.map(spell => `${spell.className}:${spell.name}`));
-  const granted = subclassGrantedSpells(character)
+  const granted = [...subclassGrantedSpells(character), ...invocationGrantedSpells(character)]
     .filter(spell => !taken.has(`${spell.className}:${spell.name}`));
   const seen = new Set();
   return [...chosen, ...granted.filter(spell => {
@@ -8095,6 +8132,8 @@ function sw5eProficientWithWeapon(character, item) {
 }
 function proficientWithWeapon(character, item) {
   const type = String(item.type || "").toLowerCase();
+  // A pact weapon carries its own proficiency, whatever the warlock is trained in.
+  if (item.pactWeapon && hasPactBoon(character, "Pact of the Blade")) return true;
   if ((character.weaponMastery || []).includes(item.name)) return true;
   if (character.edition === "sw5e") return sw5eProficientWithWeapon(character, item);
   // 3.5 and 2E track weapon training in their own panels.
@@ -8177,13 +8216,23 @@ function weaponAttacks(character) {
     // Pact weapon invocations apply to the weapon flagged as the pact weapon.
     const invocations = character.invocations || [];
     const isPactWeapon = Boolean(item.pactWeapon) && hasPactBoon(character, "Pact of the Blade");
+    // 2024's Pact of the Blade lets the weapon use Charisma for its attack and
+    // damage rolls, which is most of the point of taking it. In 2014 the
+    // Hexblade's Hex Warrior does the same for the weapon it bonds with.
+    const charismaBlade = isPactWeapon
+      && (character.edition === "2024" || classSubclassName(character, "Warlock") === "The Hexblade");
+    if (charismaBlade && modifier(abil.CHA) > abilityMod) {
+      ability = "CHA";
+      abilityMod = modifier(abil.CHA);
+    }
     if (isPactWeapon && wielding && invocations.includes("Improved Pact Weapon")) {
       weaponAtk = Math.max(weaponAtk, 1);
       weaponDmg = Math.max(weaponDmg, 1);
     }
-    if (isPactWeapon && wielding && invocations.includes("Lifedrinker")) {
-      weaponDmg += Math.max(character.edition === "2024" ? 1 : 0, modifier(abil.CHA));
-    }
+    // 2014's Lifedrinker adds flat Charisma; 2024's adds a d6 of necrotic,
+    // psychic or radiant damage instead.
+    const lifedrinker = isPactWeapon && wielding && invocations.includes("Lifedrinker");
+    if (lifedrinker && character.edition !== "2024") weaponDmg += Math.max(1, modifier(abil.CHA));
     const noteBits = [isPactWeapon ? "pact weapon" : "", profile.finesse ? "finesse" : "", profile.ranged ? "ranged" : "", profile.thrown ? "thrown" : "", profile.twoHanded ? "two-handed" : "", proficient ? "" : "not proficient"];
     if (!wielding) noteBits.push("not equipped");
     else if (itemRequiresAttunement(item) && !item.attuned) noteBits.push("attune to activate");
@@ -8197,7 +8246,10 @@ function weaponAttacks(character) {
       dmgMod: abilityMod + weaponDmg,
       versatile: profile.versatile,
       damageType: profile.damageType,
-      bonusDamage: (magicLive && own.bonusDamage) ? [own.bonusDamage] : []
+      bonusDamage: [
+        ...((magicLive && own.bonusDamage) ? [own.bonusDamage] : []),
+        ...(lifedrinker && character.edition === "2024" ? ["1d6 necrotic, psychic or radiant (Lifedrinker)"] : [])
+      ]
     });
   });
   const monkLevel = classLevel(character, "Monk");
@@ -8239,6 +8291,12 @@ function weaponAttacks(character) {
   });
   return attacks;
 }
+// Eldritch Blast fires one beam, and another at levels 5, 11 and 17.
+function eldritchBlastBeams(character) {
+  const level = characterTotalLevel(character);
+  return level >= 17 ? 4 : level >= 11 ? 3 : level >= 5 ? 2 : 1;
+}
+
 // ---- Eldritch Invocation prerequisites ----
 function invocationPrerequisite(rulesEdition, name) {
   if (typeof INVOCATION_PREREQUISITES === "undefined") return null;
@@ -13221,6 +13279,29 @@ function progressionChoiceBlocks(character, targetLevel, features, targetClass =
   return blocks.join("");
 }
 
+// Both editions let a warlock trade one invocation for another as they level,
+// which the guided level-up had no way to do.
+function levelInvocationSwap(character, targetClass, targetClassLevel) {
+  if (targetClass !== "Warlock" || targetClassLevel < 3) return "";
+  const known = character.invocations || [];
+  if (!known.length) return "";
+  const context = withClassContext(character, "Warlock", targetClassLevel);
+  const available = (PROGRESSION_OPTIONS.invocations[character.edition] || [])
+    .filter(name => !known.includes(name))
+    .filter(name => invocationEligible(context, name, targetClassLevel, character.edition));
+  if (!available.length) return "";
+  return `<section class="advancement-section">
+    <h3>Optional invocation swap</h3>
+    <p>Gaining a Warlock level lets you replace one Eldritch Invocation you know.</p>
+    <div class="progression-choice spell-replacement-row">
+      <label>Replace<select name="replaceInvocationOld"><option value="">Keep current invocations</option>${known.slice().sort().map(name =>
+        `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}</select></label>
+      <label>With<select name="replaceInvocationNew"><option value="">Choose a replacement</option>${available.map(name =>
+        `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}</select></label>
+    </div>
+  </section>`;
+}
+
 function levelSpellChoices(character, targetLevel) {
   const lists = spellListsFor(character.edition, character.className, subclassName(character));
   if (!lists) return "";
@@ -13372,6 +13453,7 @@ function openLevelUp(id, targetClass = "") {
     ${progressionChoiceBlocks(character, targetLevel, features, levelUpClassName) ? `<section class="advancement-section"><h3>Decisions at ${levelUpClassName} level ${targetClassLevel}</h3><p>Complete each choice to continue.</p>${progressionChoiceBlocks(character, targetLevel, features, levelUpClassName)}</section>` : ""}
     ${levelCantripChoices(context, targetClassLevel)}
     ${levelSpellChoices(context, targetClassLevel)}
+    ${levelInvocationSwap(character, levelUpClassName, targetClassLevel)}
     ${mysticArcanumChoices(context, targetClassLevel)}
     <div class="level-up-summary"><strong>Ready to advance?</strong><br>This updates the character to level ${targetLevel}. Direct Edit remains available afterward.</div>`;
   updateLevelFeatAbilityOptions(context);
@@ -13694,6 +13776,17 @@ function completeLevelUp(event) {
       updated.asi[nextSlot] = { mode: "feat", one: "", two: "", feat };
       choices.advancement = `Feat: ${feat}${featAbility ? ` (${featAbility} +1)` : ""}`;
     }
+  }
+  const swapInvocationOld = formValues.get("replaceInvocationOld");
+  const swapInvocationNew = formValues.get("replaceInvocationNew");
+  if (Boolean(swapInvocationOld) !== Boolean(swapInvocationNew)) {
+    toast("Choose both the invocation to replace and its replacement");
+    return;
+  }
+  if (swapInvocationOld && swapInvocationNew) {
+    updated.invocations = [...(updated.invocations || [])]
+      .map(name => (name === swapInvocationOld ? swapInvocationNew : name));
+    choices.invocationSwap = `${swapInvocationOld} -> ${swapInvocationNew}`;
   }
   const addedCantrips = formValues.getAll("levelCantrips");
   const arcanum = formValues.get("mysticArcanum");

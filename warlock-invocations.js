@@ -102,7 +102,7 @@ const INVOCATION_PREREQUISITES = {
     "Gift of the Protectors": { level: 9, pact: "Pact of the Tome" },
     "Investment of the Chain Master": { level: 5, pact: "Pact of the Chain" },
     "Lessons of the First Ones": { level: 2 },
-    "Lifedrinker": { level: 12, pact: "Pact of the Blade" },
+    "Lifedrinker": { level: 9, pact: "Pact of the Blade" },
     "Mask of Many Faces": { level: 2 },
     "Master of Myriad Forms": { level: 5 },
     "Misty Visions": { level: 2 },
@@ -113,6 +113,53 @@ const INVOCATION_PREREQUISITES = {
     "Visions of Distant Realms": { level: 9 },
     "Whispers of the Grave": { level: 7 },
     "Witch Sight": { level: 15 }
+  }
+};
+
+
+// Invocations that hand the warlock a spell. On the sheet these appear with the
+// warlock's other spells, marked as always prepared and noting how often they
+// can be cast without a slot, the way D&D Beyond lists them.
+//   use: "at will" or "long rest"
+const INVOCATION_SPELLS = {
+  "2014": {
+    "Armor of Shadows": { spell: "Mage Armor", use: "at will" },
+    "Ascendant Step": { spell: "Levitate", use: "at will" },
+    "Beast Speech": { spell: "Speak with Animals", use: "at will" },
+    "Bewitching Whispers": { spell: "Compulsion", use: "long rest" },
+    "Dreadful Word": { spell: "Confusion", use: "long rest" },
+    "Eldritch Sight": { spell: "Detect Magic", use: "at will" },
+    "Fiendish Vigor": { spell: "False Life", use: "at will" },
+    "Gift of the Depths": { spell: "Water Breathing", use: "long rest" },
+    "Mask of Many Faces": { spell: "Disguise Self", use: "at will" },
+    "Master of Myriad Forms": { spell: "Alter Self", use: "at will" },
+    "Minions of Chaos": { spell: "Conjure Elemental", use: "long rest" },
+    "Mire the Mind": { spell: "Slow", use: "long rest" },
+    "Misty Visions": { spell: "Silent Image", use: "at will" },
+    "One with Shadows": { spell: "Invisibility", use: "at will" },
+    "Otherworldly Leap": { spell: "Jump", use: "at will" },
+    "Sculptor of Flesh": { spell: "Polymorph", use: "long rest" },
+    "Shroud of Shadow": { spell: "Invisibility", use: "at will" },
+    "Sign of Ill Omen": { spell: "Bestow Curse", use: "long rest" },
+    "Thief of Five Fates": { spell: "Bane", use: "long rest" },
+    "Trickster's Escape": { spell: "Freedom of Movement", use: "long rest" },
+    "Undying Servitude": { spell: "Animate Dead", use: "long rest" },
+    "Visions of Distant Realms": { spell: "Arcane Eye", use: "at will" },
+    "Whispers of the Grave": { spell: "Speak with Dead", use: "at will" }
+  },
+  "2024": {
+    "Armor of Shadows": { spell: "Mage Armor", use: "at will" },
+    "Ascendant Step": { spell: "Levitate", use: "at will" },
+    "Fiendish Vigor": { spell: "False Life", use: "at will" },
+    "Gift of the Depths": { spell: "Water Breathing", use: "long rest" },
+    "Mask of Many Faces": { spell: "Disguise Self", use: "at will" },
+    "Master of Myriad Forms": { spell: "Alter Self", use: "at will" },
+    "Misty Visions": { spell: "Silent Image", use: "at will" },
+    "One with Shadows": { spell: "Invisibility", use: "at will" },
+    "Otherworldly Leap": { spell: "Jump", use: "at will" },
+    "Pact of the Chain": { spell: "Find Familiar", use: "at will" },
+    "Visions of Distant Realms": { spell: "Arcane Eye", use: "at will" },
+    "Whispers of the Grave": { spell: "Speak with Dead", use: "at will" }
   }
 };
 
@@ -148,5 +195,5 @@ const EXTRA_PACT_BOONS_2014 = {
 })();
 
 if (typeof module !== "undefined") {
-  module.exports = { EXTRA_INVOCATIONS_2014, EXTRA_PACT_BOONS_2014 };
+  module.exports = { EXTRA_INVOCATIONS_2014, EXTRA_PACT_BOONS_2014, INVOCATION_SPELLS };
 }
