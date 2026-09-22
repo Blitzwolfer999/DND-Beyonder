@@ -1362,13 +1362,8 @@ addSubclassFeatures({
     "Runechild": [[1, "Runechild", "A Sorcerer origin marked by glowing arcane runes etched into the body (Critical Role: Tal'Dorei Reborn). Its full per-level features come from that sourcebook."]],
     "Blood Magic": [[2, "Blood Magic", "A Wizard tradition of hemocraft that fuels spells with the caster's own vitality (Critical Role: Tal'Dorei Reborn). Its full per-level features come from that sourcebook."]]
   },
-  "2024": {
-    "College of the Moon": [[3, "College of the Moon", "A Bard college tied to moonlight, night, and revelry (Forgotten Realms: Heroes of Faerûn). Its full per-level features come from that sourcebook."]],
-    "Knowledge Domain": [[3, "Knowledge Domain", "A Cleric domain of secrets, memory, and lore in its 2024 Forgotten Realms incarnation. Its full per-level features come from that sourcebook."]],
-    "Oath of the Noble Genies": [[3, "Oath of the Noble Genies", "A Paladin oath sworn to the majesty and law of the noble genies (Forgotten Realms: Heroes of Faerûn). Its full per-level features come from that sourcebook."]],
-    "Winter Walker": [[3, "Winter Walker", "A Ranger subclass mastering cold, ice, and survival in frozen wilds (Forgotten Realms: Heroes of Faerûn). Its full per-level features come from that sourcebook."]],
-    "Scion of the Three": [[3, "Scion of the Three", "A Rogue subclass devoted to the Dead Three — Bane, Bhaal, and Myrkul (Forgotten Realms: Heroes of Faerûn). Its full per-level features come from that sourcebook."]],
-    "Spellfire Sorcery": [[3, "Spellfire Sorcery", "A Sorcerer origin wielding the rare, raw power of spellfire (Forgotten Realms: Heroes of Faerûn). Its full per-level features come from that sourcebook."]],
-    "Cartographer": [[3, "Cartographer", "An Artificer specialist who charts and manipulates space and travel (Eberron: Forge of the Artificer). Its full per-level features come from that sourcebook."]]
-  }
+  // The 2024 subclasses from Forgotten Realms: Heroes of Faerûn, Eberron: Forge
+  // of the Artificer, Ravenloft: The Horrors Within and Arcana Unleashed carry
+  // their real per-level features in books-2026.js.
+  "2024": {}
 });

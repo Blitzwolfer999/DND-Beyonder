@@ -4449,7 +4449,7 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
 }
 
 function prebuildSpellSlotCounts(className, level, rulesEdition, subclass = "") {
-  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return THIRD_CASTER_SLOTS[level - 1] || [];
+  if (thirdCasterSubclass(subclass)) return THIRD_CASTER_SLOTS[level - 1] || [];
   if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(className)) return FULL_CASTER_SLOTS[level - 1] || [];
   if (["Paladin", "Ranger"].includes(className)) return (rulesEdition === "2024" ? HALF_CASTER_SLOTS_2024 : HALF_CASTER_SLOTS_2014)[level - 1] || [];
   if (className === "Artificer") return HALF_CASTER_SLOTS_2024[level - 1] || [];
@@ -6155,8 +6155,21 @@ function selectedValues(name, root = document) {
   return $$(`input[name="${name}"]:checked`, root).map(input => input.value);
 }
 
+// Subclasses that bolt spellcasting on to a martial class, all of them on the
+// third-caster slot table. Each names the list it casts from and the ability it
+// uses, so a Warrior of the Mystic Arts casts Sorcerer spells with Wisdom while
+// an Eldritch Knight casts Wizard spells with Intelligence.
+const THIRD_CASTER_SUBCLASSES = {
+  "Eldritch Knight": { list: "Wizard", ability: "INT" },
+  "Arcane Trickster": { list: "Wizard", ability: "INT" },
+  "Warrior of the Mystic Arts": { list: "Sorcerer", ability: "WIS" }
+};
+function thirdCasterSubclass(subclass) {
+  return THIRD_CASTER_SUBCLASSES[subclass] || null;
+}
+
 function spellListClass(className, subclass = "") {
-  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return "Wizard";
+  if (thirdCasterSubclass(subclass)) return thirdCasterSubclass(subclass).list;
   if (subclass === "Order of the Profane Soul") return "Warlock";
   return className;
 }
@@ -6255,7 +6268,7 @@ function maxSpellLevel(className, level, rulesEdition, subclass = "") {
   }
   // SW5E casters use their class's Max Power Level column.
   if (rulesEdition === "sw5e") return typeof sw5eMaxPowerLevel === "function" ? sw5eMaxPowerLevel(className, level) : 0;
-  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) {
+  if (thirdCasterSubclass(subclass)) {
     return (THIRD_CASTER_SLOTS[level - 1] || []).length;
   }
   if (subclass === "Order of the Profane Soul") return Math.min(4, Math.floor((level + 5) / 6));
@@ -6320,7 +6333,7 @@ function cantripLimitFor(className, level, rulesEdition, subclass = "") {
   Object.entries(CANTRIP_PROGRESSION[rulesEdition]?.[className] || {}).forEach(([unlock, count]) => {
     if (targetLevel >= Number(unlock)) total += Number(count || 0);
   });
-  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass) && targetLevel >= 3) {
+  if (thirdCasterSubclass(subclass) && targetLevel >= 3) {
     total = 2 + (targetLevel >= 10 ? 1 : 0);
   } else if (subclass === "Order of the Profane Soul" && targetLevel >= 3) {
     total = 2 + (targetLevel >= 10 ? 1 : 0);
@@ -6330,7 +6343,7 @@ function cantripLimitFor(className, level, rulesEdition, subclass = "") {
 
 function nextCantripLevelFor(className, level, rulesEdition, subclass = "") {
   const targetLevel = Number(level || 1);
-  if (["Eldritch Knight", "Arcane Trickster", "Order of the Profane Soul"].includes(subclass)) {
+  if (thirdCasterSubclass(subclass) || subclass === "Order of the Profane Soul") {
     if (targetLevel < 3) return 3;
     if (targetLevel < 10) return 10;
     return null;
@@ -6345,6 +6358,7 @@ function spellProgressionFor(rulesEdition, className, subclass = "") {
   const thirdCasterTotals = {
     "Eldritch Knight": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
     "Arcane Trickster": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
+    "Warrior of the Mystic Arts": [0,0,3,4,4,4,5,6,6,7,8,8,9,10,10,11,11,11,12,13],
     "Order of the Profane Soul": [0,0,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,11]
   };
   if (thirdCasterTotals[subclass]) return { mode: "known", totals: thirdCasterTotals[subclass] };
@@ -6400,7 +6414,7 @@ const WIZARD_2024_PREPARED_TOTALS = [4,5,6,7,9,10,11,12,14,15,16,16,17,18,19,21,
 
 function spellPreparationPolicy(rulesEdition, className, subclass = "") {
   if (className === "Wizard") return "spellbook";
-  if (["Eldritch Knight", "Arcane Trickster", "Order of the Profane Soul"].includes(subclass)) return "level";
+  if (thirdCasterSubclass(subclass) || subclass === "Order of the Profane Soul") return "level";
   if (rulesEdition === "2014") {
     if (["Bard", "Ranger", "Sorcerer", "Warlock"].includes(className)) return "level";
     if (["Cleric", "Druid", "Paladin", "Artificer"].includes(className)) return "long-rest-all";
@@ -9004,7 +9018,7 @@ function bonusMaxHp(data) {
 
 function spellcastingAbility(data) {
   const subclass = subclassName(data);
-  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return "INT";
+  if (thirdCasterSubclass(subclass)) return thirdCasterSubclass(subclass).ability;
   if (subclass === "Order of the Profane Soul") return data.hemocraftAbility || "INT";
   return SPELLCASTING_ABILITIES[data.className] || RULES.classes[data.className]?.primary || "INT";
 }
@@ -11805,7 +11819,7 @@ function singleClassSpellSlotResources(character) {
   if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(className)) table = FULL_CASTER_SLOTS;
   if (["Paladin", "Ranger"].includes(className)) table = character.edition === "2024" ? HALF_CASTER_SLOTS_2024 : HALF_CASTER_SLOTS_2014;
   if (className === "Artificer") table = HALF_CASTER_SLOTS_2024;
-  if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) table = THIRD_CASTER_SLOTS;
+  if (thirdCasterSubclass(subclass)) table = THIRD_CASTER_SLOTS;
   return (table?.[level - 1] || []).map((max, index) => ({
     id: `spell-slot-${index + 1}`,
     name: `Level ${index + 1} spell slots`,
@@ -11824,7 +11838,7 @@ function multiclassSpellcastingLevel(character) {
     if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(entry.name)) return total + entry.level;
     if (entry.name === "Artificer") return total + Math.ceil(entry.level / 2);
     if (["Paladin", "Ranger"].includes(entry.name)) return total + halfCaster(entry.level / 2);
-    if (["Eldritch Knight", "Arcane Trickster"].includes(subclass)) return total + Math.floor(entry.level / 3);
+    if (thirdCasterSubclass(subclass)) return total + Math.floor(entry.level / 3);
     return total;
   }, 0);
 }
@@ -11836,7 +11850,7 @@ function classHasSpellcasting(character, entry) {
   if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard", "Artificer"].includes(entry.name)) return entry.level >= 1;
   if (["Paladin", "Ranger"].includes(entry.name)) return entry.level >= (character.edition === "2024" ? 1 : 2);
   const subclass = classSubclassName(character, entry.name);
-  return ["Eldritch Knight", "Arcane Trickster"].includes(subclass) && entry.level >= 3;
+  return Boolean(thirdCasterSubclass(subclass)) && entry.level >= 3;
 }
 
 function resourcePrefix(className) {
@@ -13259,7 +13273,7 @@ function levelSpellChoices(character, targetLevel) {
 
 function levelCantripChoices(character, targetLevel) {
   const subclass = subclassName(character);
-  const thirdCasterCantrips = ["Eldritch Knight", "Arcane Trickster"].includes(subclass)
+  const thirdCasterCantrips = thirdCasterSubclass(subclass)
     ? ({ 3: 2, 10: 1 })[targetLevel]
     : subclass === "Order of the Profane Soul" ? ({ 3: 2, 10: 1 })[targetLevel] : 0;
   const count = Number(CANTRIP_PROGRESSION[character.edition]?.[character.className]?.[targetLevel] || thirdCasterCantrips || 0);
