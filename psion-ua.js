@@ -131,7 +131,12 @@ const PSION_NEW_SPELLS = {
     summary: "Become a psionic spirit for a minute: immune to poison, psychic damage and exhaustion, flying and hovering, able to pass through occupied spaces, and able to return a low-level spell slot by touch." }
 };
 
-const PSION_SUBCLASSES = ["Metamorph", "Psykinetic", "Telepath"];
+const PSI_WARPER_SOURCE = "Unearthed Arcana: The Psion";
+
+const PSION_SUBCLASSES = ["Metamorph", "Psi Warper", "Psykinetic", "Telepath"];
+// UA9 dropped the Psi Warper from its playtest because the subclass scored well
+// enough to stand as UA5 printed it, so it keeps that packet as its source.
+const PSION_SUBCLASS_SOURCES = { "Psi Warper": PSI_WARPER_SOURCE };
 
 const PSION_SUBCLASS_FEATURES = {
   Metamorph: [
@@ -142,6 +147,15 @@ const PSION_SUBCLASS_FEATURES = {
     [6, "Flesh Weaver", "An extra die spent on Mutable Form adds +2 AC and lets you pour energy dice into your healing spells."],
     [10, "Improved Mutable Form", "Mutable Form lasts 10 minutes and adds stony skin, a climbing and swimming stride, or a pliable body that slips through gaps."],
     [14, "Life-Bending Weapons", "Your organic weapon deals extra necrotic damage, or drains a target to heal everyone around you."]
+  ],
+  "Psi Warper": [
+    [3, "Psi Warper Spells", "Teleportation and movement spells are always prepared as you rise."],
+    [3, "Teleportation", "Cast Misty Step without a slot once per long rest, and buy the use back with an energy die."],
+    [3, "Warp Propel", "A target that fails against Telekinetic Propel can be teleported 30 feet instead of shoved."],
+    [6, "Warp Space", "Spend a die to widen Shatter to a 20-foot sphere that drags those who fail toward its centre."],
+    [6, "Teleporter Combat", "Misty Step can carry a Psion cantrip along with it."],
+    [10, "Duplicitous Target", "React to an attack by spending a die to swap places with a willing ally, who becomes the target."],
+    [14, "Mass Teleportation", "Spend four dice to teleport up to your Intelligence modifier in creatures 150 feet, unwilling ones getting a save."]
   ],
   Psykinetic: [
     [3, "Psykinetic Spells", "Force and barrier spells are always prepared as you rise."],
@@ -166,6 +180,9 @@ const PSION_SUBCLASS_FEATURES = {
 const PSION_SUBCLASS_SPELLS = {
   Metamorph: { 3: ["Alter Self", "Cure Wounds", "Inflict Wounds", "Lesser Restoration"],
     5: ["Aura of Vitality", "Haste"], 7: ["Polymorph", "Stoneskin"], 9: ["Contagion", "Mass Cure Wounds"] },
+  "Psi Warper": { 3: ["Expeditious Retreat", "Feather Fall", "Misty Step", "Shatter"],
+    5: ["Blink", "Haste"], 7: ["Banishment", "Dimension Door"],
+    9: ["Steel Wind Strike", "Teleportation Circle"] },
   Psykinetic: { 3: ["Cloud of Daggers", "Levitate", "Shield", "Thunderwave"],
     5: ["Slow", "Telekinetic Crush"], 7: ["Otiluke's Resilient Sphere", "Stone Shape"],
     9: ["Telekinesis", "Wall of Force"] },
@@ -190,7 +207,7 @@ const PSION_PREPARED_SPELLS = [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17
     SUBCLASS_CATALOG.Psion = SUBCLASS_CATALOG.Psion || [];
     PSION_SUBCLASSES.forEach(name => {
       if (!SUBCLASS_CATALOG.Psion.some(item => item.name === name && item.rules === "2024")) {
-        SUBCLASS_CATALOG.Psion.push(subclassRecord(name, PSION_SOURCE, "2024"));
+        SUBCLASS_CATALOG.Psion.push(subclassRecord(name, PSION_SUBCLASS_SOURCES[name] || PSION_SOURCE, "2024"));
       }
     });
   }
