@@ -90,6 +90,8 @@ const INVOCATION_PREREQUISITES = {
     "Witch Sight": { level: 15 }
   },
   "2024": {
+    "Elemental Overflow": { level: 5 },
+    "Elemental Transmutation": { level: 2 },
     "Agonizing Blast": { level: 2, cantrip: "a warlock cantrip that deals damage" },
     "Ascendant Step": { level: 5 },
     "Devil's Sight": { level: 2 },
@@ -163,6 +165,18 @@ const INVOCATION_SPELLS = {
   }
 };
 
+// Unearthed Arcana: Villainous Options 2 added two 2024 invocations. They are
+// playtest options, so each summary says so where the player reads it.
+const UA_INVOCATIONS_2024 = {
+  "Elemental Overflow": "Unearthed Arcana. Prerequisite: Level 5+. Pick a damage type from acid, cold, fire, lightning or thunder; casting a spell of that type wreathes you in it, and anyone who hits you in melee is burned for 1d4. Repeatable with a different type.",
+  "Elemental Transmutation": "Unearthed Arcana. Prerequisite: Level 2+. Pick a damage type from acid, cold, fire, lightning or thunder; once a turn you can change damage of any of those types into the one you chose."
+};
+
+const UA_INVOCATION_PREREQUISITES_2024 = {
+  "Elemental Overflow": { level: 5 },
+  "Elemental Transmutation": { level: 2 }
+};
+
 const EXTRA_PACT_BOONS_2014 = {
   "Pact of the Talisman": "Your patron gifts you an amulet; whoever wears it can add a bonus die to a failed ability check, a number of times per long rest equal to your proficiency bonus."
 };
@@ -176,6 +190,13 @@ const EXTRA_PACT_BOONS_2014 = {
     list.sort((a, b) => a.localeCompare(b));
     PROGRESSION_OPTIONS.invocations[2014] = list;
 
+    const list2024 = PROGRESSION_OPTIONS.invocations[2024] || [];
+    Object.keys(UA_INVOCATIONS_2024).forEach(name => {
+      if (!list2024.includes(name)) list2024.push(name);
+    });
+    list2024.sort((a, b) => a.localeCompare(b));
+    PROGRESSION_OPTIONS.invocations[2024] = list2024;
+
     const boons = PROGRESSION_OPTIONS.pactBoons2014 || [];
     Object.keys(EXTRA_PACT_BOONS_2014).forEach(name => {
       if (!boons.includes(name)) boons.push(name);
@@ -184,7 +205,7 @@ const EXTRA_PACT_BOONS_2014 = {
   }
   if (typeof CONTENT_SUMMARIES !== "undefined") {
     CONTENT_SUMMARIES.invocations = CONTENT_SUMMARIES.invocations || {};
-    Object.entries(EXTRA_INVOCATIONS_2014).forEach(([name, summary]) => {
+    Object.entries({ ...EXTRA_INVOCATIONS_2014, ...UA_INVOCATIONS_2024 }).forEach(([name, summary]) => {
       if (!CONTENT_SUMMARIES.invocations[name]) CONTENT_SUMMARIES.invocations[name] = summary;
     });
     CONTENT_SUMMARIES.pactBoons = CONTENT_SUMMARIES.pactBoons || {};
@@ -195,5 +216,5 @@ const EXTRA_PACT_BOONS_2014 = {
 })();
 
 if (typeof module !== "undefined") {
-  module.exports = { EXTRA_INVOCATIONS_2014, EXTRA_PACT_BOONS_2014, INVOCATION_SPELLS };
+  module.exports = { EXTRA_INVOCATIONS_2014, EXTRA_PACT_BOONS_2014, INVOCATION_SPELLS, UA_INVOCATIONS_2024 };
 }

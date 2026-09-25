@@ -73,6 +73,12 @@ const SPELLCASTING_ABILITIES = {
   Bard: "CHA", Cleric: "WIS", Druid: "WIS", Paladin: "CHA", Ranger: "WIS", Sorcerer: "CHA",
   Warlock: "CHA", Wizard: "INT", Artificer: "INT"
 };
+// Classes that cast on the full progression. Kept in one place so a content
+// file can register a caster instead of hunting down four hardcoded lists.
+const FULL_CASTER_CLASSES = ["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"];
+function isFullCaster(className) {
+  return FULL_CASTER_CLASSES.includes(className);
+}
 const ARMOR_RULES = {
   "Padded Armor": { base: 11, dex: Infinity, type: "Light Armor" },
   "Leather Armor": { base: 11, dex: Infinity, type: "Light Armor" },
@@ -302,6 +308,7 @@ let selectedSpellLevel = 0;
 let selectedFeatNames = new Set();
 let selectedInvocations = new Set();
 let selectedMetamagic = new Set();
+let selectedDisciplines = new Set();
 let selectedPactBoon = "";
 let lastDndEdition = "2014";
 let selectedFeatAbilities = {};
@@ -3557,7 +3564,9 @@ function progressionDescription(group, name, rulesEdition) {
   return descriptionMatch(RULE_DESCRIPTIONS.progression?.[group]?.[rulesEdition], name)
     || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.progression?.[group]?.[2014], name) : "")
     || contentSummary(group, name)
-    || catalogRulesSummary(group === "pactBoons" ? "pact boon" : group === "metamagic" ? "Metamagic option" : "Eldritch Invocation", name);
+    || catalogRulesSummary(group === "pactBoons" ? "pact boon"
+      : group === "metamagic" ? "Metamagic option"
+      : group === "disciplines" ? "Psionic Discipline" : "Eldritch Invocation", name);
 }
 
 function resetPortrait() {
@@ -4143,6 +4152,7 @@ function setGameSetting(setting, options = {}) {
   selectedAsi = {};
   selectedInvocations.clear();
   selectedMetamagic.clear();
+  selectedDisciplines.clear();
   selectedPactBoon = "";
   resetD35SkillDraft();
   const fields = $("#class-choice-fields");
@@ -4283,6 +4293,8 @@ function prebuildClassChoices(className, level, profile, rulesEdition = edition)
     });
   const metamagicCount = Object.entries(LEVEL_CHOICE_RULES[rulesEdition]?.Sorcerer?.metamagic || {})
     .reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0);
+  const disciplineCount = levelChoiceTotal(rulesEdition, "Psion", "disciplines", level);
+  const disciplines = (PROGRESSION_OPTIONS.disciplines?.[rulesEdition] || []).slice(0, disciplineCount);
   const metamagicPreferences = ["Careful Spell", "Quickened Spell", "Twinned Spell", "Subtle Spell", "Empowered Spell", "Heightened Spell"];
   const metamagic = [...metamagicPreferences, ...(PROGRESSION_OPTIONS.metamagic[rulesEdition] || [])]
     .filter((name, index, names) => names.indexOf(name) === index)
@@ -4300,7 +4312,8 @@ function prebuildClassChoices(className, level, profile, rulesEdition = edition)
     blessedStrikes: rulesEdition === "2024" && className === "Cleric" && level >= 7 ? "Divine Strike" : "",
     elementalFury: rulesEdition === "2024" && className === "Druid" && level >= 7 ? "Potent Spellcasting" : "",
     invocations: className === "Warlock" ? invocations : [],
-    metamagic: className === "Sorcerer" ? metamagic : []
+    metamagic: className === "Sorcerer" ? metamagic : [],
+    disciplines: className === "Psion" ? disciplines : []
   };
 }
 
@@ -4473,7 +4486,7 @@ function autoSpellChoicesForClass(character, className, classLevelValue) {
 
 function prebuildSpellSlotCounts(className, level, rulesEdition, subclass = "") {
   if (thirdCasterSubclass(subclass)) return THIRD_CASTER_SLOTS[level - 1] || [];
-  if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(className)) return FULL_CASTER_SLOTS[level - 1] || [];
+  if (isFullCaster(className)) return FULL_CASTER_SLOTS[level - 1] || [];
   if (["Paladin", "Ranger"].includes(className)) return (rulesEdition === "2024" ? HALF_CASTER_SLOTS_2024 : HALF_CASTER_SLOTS_2014)[level - 1] || [];
   if (className === "Artificer") return HALF_CASTER_SLOTS_2024[level - 1] || [];
   return [];
@@ -4707,6 +4720,7 @@ function buildPrebuiltCharacter(preview = false) {
     pactBoon: classChoices.pactBoon,
     invocations: classChoices.invocations,
     metamagic: classChoices.metamagic,
+    disciplines: classChoices.disciplines,
     subclassChoices,
     spells: prebuildSpellChoices(className, level, subclass, spellSeed).map(spell => ({ ...spell, className })),
     customSpells: "",
@@ -5066,6 +5080,7 @@ function buildThemedCharacter(preview = false) {
     pactBoon: branch.pactBoon || classChoices.pactBoon,
     invocations: classChoices.invocations,
     metamagic: classChoices.metamagic,
+    disciplines: classChoices.disciplines,
     subclassChoices,
     spells: spells.map(spell => ({ ...spell, className })),
     customSpells: "",
@@ -5235,6 +5250,7 @@ function buildQuickCharacter(preview = false, overrides = null) {
     pactBoon: classChoices.pactBoon,
     invocations: classChoices.invocations,
     metamagic: classChoices.metamagic,
+    disciplines: classChoices.disciplines,
     subclassChoices,
     spells: spells.map(spell => ({ ...spell, className: buildClassName })),
     customSpells: "",
@@ -5502,6 +5518,8 @@ function generatedCharacterIssue(character) {
     ? Object.entries(LEVEL_CHOICE_RULES[character.edition]?.Sorcerer?.metamagic || {}).reduce((total, [unlock, amount]) => total + (level >= Number(unlock) ? Number(amount) : 0), 0)
     : 0;
   if ((character.metamagic || []).length < expectedMetamagic) return "The generated Sorcerer is missing metamagic choices.";
+  const expectedDisciplines = className === "Psion" ? levelChoiceTotal(character.edition, "Psion", "disciplines", level) : 0;
+  if ((character.disciplines || []).length < expectedDisciplines) return "The generated Psion is missing discipline choices.";
   return generatedSpellIssue(character);
 }
 
@@ -6747,10 +6765,11 @@ function renderClassOptionChoices() {
         progressionDescription("pactBoons", option, edition))
     }</div>`);
   }
-  [["invocations", "Eldritch Invocation"], ["metamagic", "Metamagic option"]].forEach(([group, label]) => {
+  [["invocations", "Eldritch Invocation"], ["metamagic", "Metamagic option"], ["disciplines", "Psionic Discipline"]].forEach(([group, label]) => {
     const total = levelChoiceTotal(edition, selectedClass, group, level);
     if (!total) return;
-    const chosen = group === "invocations" ? [...selectedInvocations] : [...selectedMetamagic];
+    const chosen = group === "invocations" ? [...selectedInvocations]
+      : group === "disciplines" ? [...selectedDisciplines] : [...selectedMetamagic];
     const options = (PROGRESSION_OPTIONS[group][edition] || []).filter(option =>
       group !== "invocations" || chosen.includes(option) || invocationEligible(context, option, level, edition)
     );
@@ -7560,6 +7579,9 @@ function formData() {
   }
   if (levelChoiceTotal(edition, selectedClass, "metamagic", characterLevel)) {
     data.metamagic = selectedValues("metamagic", form);
+  }
+  if (levelChoiceTotal(edition, selectedClass, "disciplines", characterLevel)) {
+    data.disciplines = selectedValues("disciplines", form);
   }
   data.subclassChoices = {};
   $$("[data-subclass-choice], select[name^='subclassChoice_']", form).forEach(input => {
@@ -9886,6 +9908,7 @@ function reconcileEditionAfterLevel(character) {
   character.weaponMastery = [];
   character.invocations = [];
   character.metamagic = [];
+  character.disciplines = [];
   character.pactBoon = "";
   character.expertise = [];
   ["divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "originFeat", "originFeatChoice"]
@@ -10748,6 +10771,7 @@ function startNewCharacter() {
   selectedSpellNames.clear();
   selectedInvocations.clear();
   selectedMetamagic.clear();
+  selectedDisciplines.clear();
   selectedPactBoon = "";
   abilityMethod = "standard";
   form.reset();
@@ -11883,7 +11907,7 @@ function singleClassSpellSlotResources(character) {
     return [{ id: "pact-slots", name: `Pact Magic · level ${slotLevel}`, max: slots, recovery: "short", shortRecovery: "all", group: "spell" }];
   }
   let table = null;
-  if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(className)) table = FULL_CASTER_SLOTS;
+  if (isFullCaster(className)) table = FULL_CASTER_SLOTS;
   if (["Paladin", "Ranger"].includes(className)) table = character.edition === "2024" ? HALF_CASTER_SLOTS_2024 : HALF_CASTER_SLOTS_2014;
   if (className === "Artificer") table = HALF_CASTER_SLOTS_2024;
   if (thirdCasterSubclass(subclass)) table = THIRD_CASTER_SLOTS;
@@ -11902,7 +11926,7 @@ function multiclassSpellcastingLevel(character) {
   const halfCaster = character.edition === "2024" ? Math.ceil : Math.floor;
   return classBreakdown(character).reduce((total, entry) => {
     const subclass = classSubclassName(character, entry.name);
-    if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"].includes(entry.name)) return total + entry.level;
+    if (isFullCaster(entry.name)) return total + entry.level;
     if (entry.name === "Artificer") return total + Math.ceil(entry.level / 2);
     if (["Paladin", "Ranger"].includes(entry.name)) return total + halfCaster(entry.level / 2);
     if (thirdCasterSubclass(subclass)) return total + Math.floor(entry.level / 3);
@@ -11914,7 +11938,7 @@ function multiclassSpellcastingLevel(character) {
 // paladin and ranger gain it at 2nd level, the Eldritch Knight and Arcane
 // Trickster at 3rd, and Pact Magic is not Spellcasting at all.
 function classHasSpellcasting(character, entry) {
-  if (["Bard", "Cleric", "Druid", "Sorcerer", "Wizard", "Artificer"].includes(entry.name)) return entry.level >= 1;
+  if (isFullCaster(entry.name) || entry.name === "Artificer") return entry.level >= 1;
   if (["Paladin", "Ranger"].includes(entry.name)) return entry.level >= (character.edition === "2024" ? 1 : 2);
   const subclass = classSubclassName(character, entry.name);
   return Boolean(thirdCasterSubclass(subclass)) && entry.level >= 3;
@@ -12032,6 +12056,17 @@ function traitResourceDefinitions(character) {
 function singleClassResourceDefinitions(character) {
   const level = Number(character.level);
   const revised = character.edition === "2024";
+  // A Psion regains one Psionic Energy Die on a short rest and all of them on a
+  // long one.
+  if (character.className === "Psion" && typeof psionEnergyDice === "function") {
+    const energy = psionEnergyDice(level);
+    if (energy) {
+      return [{ id: "hit-dice", name: `Hit Dice \u00b7 d${classHitDie("Psion", character.edition)}`, max: level,
+          recovery: "long", longRecovery: "all", type: level > 12 ? "pool" : "pips" },
+        { id: "psionic-energy", name: `Psionic Energy Dice \u00b7 d${energy.die}`, max: energy.count,
+          recovery: "long", longRecovery: "all", shortRecovery: 1 }];
+    }
+  }
   const abilityUses = ability => Math.max(1, modifier(character[ability]));
   const resources = [];
   const add = (id, name, max, recovery = "long", extra = {}) => {
@@ -12862,6 +12897,7 @@ function renderSheet() {
   );
   addChoice(c.pactBoon, "Pact Boon", progressionDescription("pactBoons", c.pactBoon, c.edition));
   (c.metamagic || []).forEach(name => addChoice(name, "Metamagic", progressionDescription("metamagic", name, c.edition)));
+  (c.disciplines || []).forEach(name => addChoice(name, "Psionic Discipline", progressionDescription("disciplines", name, c.edition)));
   const unmetInvocations = new Set(invalidInvocations(c));
   (c.invocations || []).forEach(name => addChoice(
     name,
@@ -13141,6 +13177,7 @@ function editCharacter(id) {
   currentOriginFeat = c.originFeat || "";
   selectedInvocations = new Set(c.invocations || []);
   selectedMetamagic = new Set(c.metamagic || []);
+  selectedDisciplines = new Set(c.disciplines || []);
   selectedPactBoon = c.pactBoon || "";
   selectedFeatAbilities = { ...(c.featAbilityChoices || {}) };
   selectedAsi = c.asi && Object.keys(c.asi).length ? JSON.parse(JSON.stringify(c.asi)) : asiStateFromBonuses(c.asiBonuses);
@@ -13268,6 +13305,15 @@ function progressionChoiceBlocks(character, targetLevel, features, targetClass =
     blocks.push(`<div class="progression-choice"><strong>Choose a Fighting Style</strong>${optionRadios("fightingStyle", styles, "", true, option =>
       fightingStyleDescription(option, character.edition)
     )}</div>`);
+  }
+  const disciplineCount = Number(levelRules.disciplines?.[targetClassLevel] || 0);
+  if (disciplineCount) {
+    const options = (PROGRESSION_OPTIONS.disciplines?.[character.edition] || [])
+      .filter(option => !(character.disciplines || []).includes(option));
+    blocks.push(`<div class="progression-choice" data-min-choices="${disciplineCount}" data-choice-name="disciplines"><strong>Choose ${disciplineCount} Psionic Discipline${disciplineCount === 1 ? "" : "s"}</strong>${
+      optionChecks("disciplines", options, [], disciplineCount, option =>
+        progressionDescription("disciplines", option, character.edition))
+    }</div>`);
   }
   const metamagicCount = Number(levelRules.metamagic?.[targetClassLevel] || 0);
   if (metamagicCount) {
@@ -13538,7 +13584,7 @@ function closeLevelUp() {
 }
 
 function progressionSnapshot(character) {
-  const keys = ["level", "classes", "className", "hpOverride", "subclass", "customSubclass", "subclassChoices", "feats", "spells", "preparedSpells", "preparedSpellClasses", "fightingStyle", "fightingStyles", "pactBoon", "metamagic", "invocations", "skillProficiencies", "backgroundSkills", "expertise", "weaponMastery", "divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "resourceUsage", "baseAbilities", "originBonuses", "originFeat", "featAbilityChoices", "featBonuses", "speciesVariant", "backgroundAbilityMode", "backgroundPrimary", "backgroundSecondary", "originFeatChoice", ...ABILITIES];
+  const keys = ["level", "classes", "className", "hpOverride", "subclass", "customSubclass", "subclassChoices", "feats", "spells", "preparedSpells", "preparedSpellClasses", "fightingStyle", "fightingStyles", "pactBoon", "metamagic", "disciplines", "invocations", "skillProficiencies", "backgroundSkills", "expertise", "weaponMastery", "divineOrder", "primalOrder", "blessedStrikes", "elementalFury", "resourceUsage", "baseAbilities", "originBonuses", "originFeat", "featAbilityChoices", "featBonuses", "speciesVariant", "backgroundAbilityMode", "backgroundPrimary", "backgroundSecondary", "originFeatChoice", ...ABILITIES];
   return Object.fromEntries(keys.map(name => [name, structuredClone(character[name])]));
 }
 
@@ -13665,7 +13711,7 @@ function autoLevelCharacter(id, targetClass = "") {
       choices[name] = classChoices[name];
     }
   });
-  ["invocations", "metamagic"].forEach(name => {
+  ["invocations", "metamagic", "disciplines"].forEach(name => {
     const targetValues = classChoices[name] || [];
     const current = updated[name] || [];
     const additions = targetValues.filter(value => !current.includes(value));
@@ -13781,7 +13827,7 @@ function completeLevelUp(event) {
   }
   const pactBoon = formValues.get("pactBoon");
   if (pactBoon) { choices.pactBoon = pactBoon; updated.pactBoon = pactBoon; }
-  ["metamagic", "invocations", "expertise", "skillProficiencies", "weaponMastery"].forEach(name => {
+  ["metamagic", "disciplines", "invocations", "expertise", "skillProficiencies", "weaponMastery"].forEach(name => {
     const values = formValues.getAll(name);
     if (values.length) {
       choices[name] = values;
@@ -15200,8 +15246,9 @@ function initEvents() {
     if (enforceChoiceLimit(event.target)) { updatePreview(); return; }
     // Keep class-option picks in module state so re-rendering the step (and
     // switching between steps) doesn't drop them.
-    if (["invocations", "metamagic"].includes(event.target.name)) {
-      const store = event.target.name === "invocations" ? selectedInvocations : selectedMetamagic;
+    if (["invocations", "metamagic", "disciplines"].includes(event.target.name)) {
+      const store = event.target.name === "invocations" ? selectedInvocations
+        : event.target.name === "disciplines" ? selectedDisciplines : selectedMetamagic;
       if (event.target.checked) store.add(event.target.value);
       else store.delete(event.target.value);
       renderClassOptionChoices();
@@ -16190,6 +16237,7 @@ function init() {
   // SW5E content needs RULES/SKILLS, which are defined here rather than in a
   // data file, so it registers once app.js has loaded and before first render.
   if (typeof registerSw5eRuntime === "function") registerSw5eRuntime();
+  if (typeof registerPsionRuntime === "function") registerPsionRuntime();
   if (typeof registerD35Runtime === "function") registerD35Runtime();
   if (typeof registerD35FeatureText === "function") registerD35FeatureText();
   if (typeof registerAdndRuntime === "function") registerAdndRuntime();
