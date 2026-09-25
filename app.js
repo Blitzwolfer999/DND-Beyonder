@@ -130,6 +130,15 @@ const SUBCLASS_CHOICE_RULES = {
     { key: "superiorDefense", label: "Superior Hunter's Defense", level: 15, editions: ["2014"], options: ["Evasion", "Stand Against the Tide", "Uncanny Dodge"] }
   ]
 };
+
+// Content files load before app.js, so they cannot write into the constant
+// above directly. They queue their rules instead and we drain the queue here.
+if (typeof window !== "undefined" && Array.isArray(window.PENDING_SUBCLASS_CHOICE_RULES)) {
+  window.PENDING_SUBCLASS_CHOICE_RULES.forEach(([subclass, rules]) => {
+    if (!SUBCLASS_CHOICE_RULES[subclass]) SUBCLASS_CHOICE_RULES[subclass] = rules;
+  });
+  window.PENDING_SUBCLASS_CHOICE_RULES.length = 0;
+}
 const QUICK_BUILD_PROFILES = {
   Barbarian: {
     role: "Tough front-line warrior", tagline: "Charge into danger, shrug off hits, and hit back hard.",

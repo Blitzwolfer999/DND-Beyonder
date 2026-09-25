@@ -228,18 +228,26 @@ const NEW_BOOK_SUBCLASS_SPELLS = {
       SUBCLASS_CHOICE_SPELLS["2024"]["Vestige Patron"] = { key: "vestigeDomain", lists };
     }
   }
-  if (typeof SUBCLASS_CHOICE_RULES !== "undefined") {
-    SUBCLASS_CHOICE_RULES["Vestige Patron"] = [
-      { key: "vestigeDomain", label: "Domain the vestige draws on", level: 3, editions: ["2024"], options: ["Life", "Light", "Trickery", "War"] },
-      { key: "vestigeForm", label: "Form of the vestige", level: 3, editions: ["2024"], options: ["Celestial", "Fiend", "Undead"] }
-    ];
-    SUBCLASS_CHOICE_RULES["Scion of the Three"] = [
-      { key: "deadThree", label: "Dead Three patron", level: 3, editions: ["2024"], options: ["Bane", "Bhaal", "Myrkul"] }
-    ];
-    SUBCLASS_CHOICE_RULES["Oath of the Noble Genies"] = [
-      { key: "elementalShield", label: "Aura damage type", level: 7, editions: ["2024"], options: ["Acid", "Cold", "Fire", "Lightning", "Thunder"] }
-    ];
-  }
+  // SUBCLASS_CHOICE_RULES lives in app.js, which loads after this file, so the
+  // rules are queued for app.js to pick up rather than written directly.
+  const queueChoiceRules = (subclass, rules) => {
+    if (typeof SUBCLASS_CHOICE_RULES !== "undefined") {
+      if (!SUBCLASS_CHOICE_RULES[subclass]) SUBCLASS_CHOICE_RULES[subclass] = rules;
+      return;
+    }
+    window.PENDING_SUBCLASS_CHOICE_RULES = window.PENDING_SUBCLASS_CHOICE_RULES || [];
+    window.PENDING_SUBCLASS_CHOICE_RULES.push([subclass, rules]);
+  };
+  queueChoiceRules("Vestige Patron", [
+    { key: "vestigeDomain", label: "Domain the vestige draws on", level: 3, editions: ["2024"], options: ["Life", "Light", "Trickery", "War"] },
+    { key: "vestigeForm", label: "Form of the vestige", level: 3, editions: ["2024"], options: ["Celestial", "Fiend", "Undead"] }
+  ]);
+  queueChoiceRules("Scion of the Three", [
+    { key: "deadThree", label: "Dead Three patron", level: 3, editions: ["2024"], options: ["Bane", "Bhaal", "Myrkul"] }
+  ]);
+  queueChoiceRules("Oath of the Noble Genies", [
+    { key: "elementalShield", label: "Aura damage type", level: 7, editions: ["2024"], options: ["Acid", "Cold", "Fire", "Lightning", "Thunder"] }
+  ]);
 })();
 
 if (typeof module !== "undefined") {
