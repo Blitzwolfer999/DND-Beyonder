@@ -299,7 +299,7 @@ const QUICK_BUILD_VERSION = 6;
 const ROUTE_VIEWS = new Set(["dashboard", "builder", "sheet", "dice", "vault", "campaigns", "bestiary"]);
 const BUILDER_STEP_COUNT = 7;
 
-let edition = "2014";
+let edition = "2024";
 let currentStep = 1;
 let selectedClass = "Fighter";
 let selectedDie = 20;
@@ -310,7 +310,7 @@ let selectedInvocations = new Set();
 let selectedMetamagic = new Set();
 let selectedDisciplines = new Set();
 let selectedPactBoon = "";
-let lastDndEdition = "2014";
+let lastDndEdition = "2024";
 let selectedFeatAbilities = {};
 let selectedAsi = {};
 let selectedSpellNames = new Set();
@@ -4141,7 +4141,7 @@ function resetD35SkillDraft() {
 }
 
 function setGameSetting(setting, options = {}) {
-  const target = setting === "starwars" ? "sw5e" : (lastDndEdition || "2014");
+  const target = setting === "starwars" ? "sw5e" : (lastDndEdition || "2024");
   if (edition !== "sw5e") lastDndEdition = edition;
   edition = target;
   selectedSpellLevel = 0;
@@ -10761,7 +10761,7 @@ function startCampaignLiveSync(active) {
 
 function startNewCharacter() {
   activeCharacterId = null;
-  edition = "2014";
+  edition = "2024";
   selectedClass = "Fighter";
   selectedSpellLevel = 0;
   currentOriginFeat = "";
