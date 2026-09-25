@@ -3682,6 +3682,10 @@ const SPECIES_TRAIT_SUMMARIES = {
 };
 
 function speciesTraitSummary(name, speciesName) {
+  // A content pack can register the actual trait text, keyed "Species|Trait".
+  const supplied = typeof CONTENT_SUMMARIES !== "undefined" && CONTENT_SUMMARIES.speciesTraits
+    ? CONTENT_SUMMARIES.speciesTraits[`${speciesName}|${name}`] : "";
+  if (supplied) return supplied;
   const lower = String(name || "").toLowerCase();
   if (lower.includes("darkvision")) return "You can see in dim light and darkness better than most creatures.";
   if (lower.includes("flight")) return "You have a flying speed or limited winged movement granted by your species.";
@@ -16238,6 +16242,7 @@ function init() {
   // data file, so it registers once app.js has loaded and before first render.
   if (typeof registerSw5eRuntime === "function") registerSw5eRuntime();
   if (typeof registerPsionRuntime === "function") registerPsionRuntime();
+  if (typeof registerUnderdarkRuntime === "function") registerUnderdarkRuntime();
   if (typeof registerD35Runtime === "function") registerD35Runtime();
   if (typeof registerD35FeatureText === "function") registerD35FeatureText();
   if (typeof registerAdndRuntime === "function") registerAdndRuntime();
