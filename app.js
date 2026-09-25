@@ -8365,13 +8365,26 @@ function invocationPrerequisiteText(rulesEdition, name) {
     rule.feature || ""
   ].filter(Boolean).join(", ");
 }
+// Why an invocation a character holds is wrong, or "" when it is fine. Two
+// things can be wrong with it: the edition does not have that invocation at
+// all (a 2014 warlock re-ruled to 2024 keeps the ones 2024 dropped, and those
+// have no prerequisite rule to fail), or its prerequisites are not met.
+function invocationIssue(character, name) {
+  const rulesEdition = character.edition || "2014";
+  const pool = (typeof PROGRESSION_OPTIONS !== "undefined" && PROGRESSION_OPTIONS.invocations[rulesEdition]) || [];
+  if (pool.length && !pool.includes(name)) {
+    return `Not an Eldritch Invocation in the ${editionLabel(rulesEdition)} rules`;
+  }
+  const warlockLevel = classLevel(character, "Warlock") || Number(character.level || 0);
+  if (!invocationEligible(character, name, warlockLevel, rulesEdition)) {
+    const text = invocationPrerequisiteText(rulesEdition, name);
+    return text ? `Prerequisite not met: ${text}` : "Prerequisite not met";
+  }
+  return "";
+}
 // Invocations a character holds that they no longer (or never did) qualify for.
 function invalidInvocations(character) {
-  const rulesEdition = character.edition || "2014";
-  const warlockLevel = classLevel(character, "Warlock") || Number(character.level || 0);
-  return (character.invocations || []).filter(name =>
-    !invocationEligible(character, name, warlockLevel, rulesEdition)
-  );
+  return (character.invocations || []).filter(name => invocationIssue(character, name));
 }
 // How many attacks the Attack action grants. Extra Attack never stacks across
 // classes, so take the best single source.
@@ -8590,7 +8603,44 @@ const SPECIES_VARIANT_DARKVISION = {
   "Genasi (Water)|Monsters of the Multiverse": 60, "Triton|Monsters of the Multiverse": 60
 };
 
-function darkvisionRange(character) {
+// Darkvision granted by something other than a species. `range` is what you
+// get with none of your own; `bonus` is what it adds when you already have it.
+// Kept as data so a content pack can register its own.
+const GRANTED_DARKVISION = {
+  invocations: {
+    "Devil's Sight": { range: 120, label: "Devil's Sight" }
+  },
+  subclasses: {
+    "Gloom Stalker": { level: 3, range: 60, bonus: { 2014: 30, 2024: 60 }, label: "Umbral Sight" },
+    "Faerzress Sorcery": { level: 6, range: 60, bonus: 30, label: "Faerzress Affinity" }
+  }
+};
+
+// The best non-species darkvision in effect, as { range, label }, given what
+// the species already provides.
+function grantedDarkvision(character, speciesRange) {
+  const rulesEdition = character.edition || "2014";
+  let best = { range: 0, label: "" };
+  const consider = (grant) => {
+    if (!grant) return;
+    // A grant with a bonus stacks on darkvision you already have; one without
+    // simply sets the range, so it never lowers what your species gave you.
+    const hasBonus = grant.bonus !== undefined;
+    const bonus = typeof grant.bonus === "object" ? Number(grant.bonus[rulesEdition] || 0) : Number(grant.bonus || 0);
+    const total = hasBonus && speciesRange
+      ? speciesRange + bonus
+      : Math.max(Number(grant.range || 0), speciesRange);
+    if (total > best.range) best = { range: total, label: grant.label || "" };
+  };
+  (character.invocations || []).forEach(name => consider(GRANTED_DARKVISION.invocations[name]));
+  classBreakdown(character).forEach(entry => {
+    const grant = GRANTED_DARKVISION.subclasses[classSubclassName(character, entry.name)];
+    if (grant && entry.level >= (grant.level || 1)) consider(grant);
+  });
+  return best;
+}
+
+function speciesDarkvisionRange(character) {
   const rulesEdition = character.edition || "2014";
   const species = character.species || "";
   const variant = SPECIES_VARIANT_DARKVISION[`${species}|${character.speciesVariant || ""}`];
@@ -8602,6 +8652,11 @@ function darkvisionRange(character) {
   return traits.some(trait => /darkvision/i.test(trait)) ? 60 : 0;
 }
 
+function darkvisionRange(character) {
+  const fromSpecies = speciesDarkvisionRange(character);
+  return Math.max(fromSpecies, grantedDarkvision(character, fromSpecies).range);
+}
+
 // What the sheet prints for sight. 3.5 elves and gnomes have low-light vision,
 // not the 5e darkvision the shared species table gave them.
 function visionLabel(character) {
@@ -8611,8 +8666,12 @@ function visionLabel(character) {
     if (traits.some(name => /low-light/i.test(name))) return "Low-light vision";
     return "Normal";
   }
-  const range = darkvisionRange(character);
-  return range ? `${range} ft` : "None";
+  const fromSpecies = speciesDarkvisionRange(character);
+  const granted = grantedDarkvision(character, fromSpecies);
+  const range = Math.max(fromSpecies, granted.range);
+  if (!range) return "None";
+  return granted.range >= range && granted.label && granted.range > fromSpecies
+    ? `${range} ft (${granted.label})` : `${range} ft`;
 }
 
 // What each class trains you in: armour kinds, shields, weapon categories and
@@ -12902,12 +12961,11 @@ function renderSheet() {
   addChoice(c.pactBoon, "Pact Boon", progressionDescription("pactBoons", c.pactBoon, c.edition));
   (c.metamagic || []).forEach(name => addChoice(name, "Metamagic", progressionDescription("metamagic", name, c.edition)));
   (c.disciplines || []).forEach(name => addChoice(name, "Psionic Discipline", progressionDescription("disciplines", name, c.edition)));
-  const unmetInvocations = new Set(invalidInvocations(c));
   (c.invocations || []).forEach(name => addChoice(
     name,
     "Eldritch Invocation",
     progressionDescription("invocations", name, c.edition),
-    unmetInvocations.has(name) ? `Prerequisite not met: ${invocationPrerequisiteText(c.edition, name)}` : ""
+    invocationIssue(c, name)
   ));
   // Read the validated set, not the raw list, so expertise stored against a
   // skill the character is no longer trained in is not advertised as active.
