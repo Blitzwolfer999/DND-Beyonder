@@ -4104,3 +4104,12 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 /* Armour worn without the training for it. */
 .combat-detail.warning { border-color: rgba(178, 74, 58, 0.55); }
 .combat-detail.warning small { color: #b24a3a; }
+
+/* Font of Magic conversions on a sorcerer's sheet. */
+.font-of-magic { display: grid; gap: 8px; }
+.font-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.font-row span { display: flex; flex-direction: column; min-width: 140px; }
+.font-row small { color: var(--muted); }
+.font-row button { margin-left: auto; }
+.font-row button + button { margin-left: 0; }
+.panel-note { color: var(--muted); margin: -4px 0 10px; }

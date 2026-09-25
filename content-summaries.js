@@ -956,5 +956,11 @@ const CONTENT_SUMMARIES = {
     "Witherbloom Student": "A student of Witherbloom, brewing life, death, and wild growth.",
     "Astral Drifter": "A wanderer of the Astral Sea who has touched the infinite and returned changed.",
     "Wildspacer": "A hardened traveler of Wildspace, at home among asteroids, ships, and the void."
+  },
+  // The two Metamagic options Tasha's added and 2024 reprinted; the other eight
+  // already have their text in rules-descriptions.js.
+  metamagic: {
+    "Seeking Spell": "Spend a sorcery point to reroll a missed spell attack, taking the new roll. In 2024 it costs 1 point; under the 2014 rules it costs 2.",
+    "Transmuted Spell": "Spend 1 sorcery point as you cast to swap a spell's acid, cold, fire, lightning, poison or thunder damage for another of those types."
   }
 };

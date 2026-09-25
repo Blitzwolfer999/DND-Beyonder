@@ -91,7 +91,9 @@ const PROGRESSION_OPTIONS = {
     2024: ["Archery", "Defense", "Great Weapon Fighting", "Two-Weapon Fighting"]
   },
   metamagic: {
-    2014: ["Careful Spell", "Distant Spell", "Empowered Spell", "Extended Spell", "Heightened Spell", "Quickened Spell", "Subtle Spell", "Twinned Spell"],
+    // Tasha's Cauldron of Everything added Seeking Spell and Transmuted Spell
+    // to the 2014 options; 2024 printed both in the Player's Handbook.
+    2014: ["Careful Spell", "Distant Spell", "Empowered Spell", "Extended Spell", "Heightened Spell", "Quickened Spell", "Seeking Spell", "Subtle Spell", "Transmuted Spell", "Twinned Spell"],
     2024: ["Careful Spell", "Distant Spell", "Empowered Spell", "Extended Spell", "Heightened Spell", "Quickened Spell", "Seeking Spell", "Subtle Spell", "Transmuted Spell", "Twinned Spell"]
   },
   pactBoons2014: ["Pact of the Chain", "Pact of the Blade", "Pact of the Tome"],

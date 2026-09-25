@@ -12170,6 +12170,67 @@ function singleClassResourceDefinitions(character) {
   return resources;
 }
 
+// Font of Magic. Creating a slot costs the points in this table; turning a slot
+// back into points returns the slot's level. 2024 also gates the higher slots
+// behind a minimum Sorcerer level.
+const SORCERY_POINT_SLOT_COSTS = [
+  { slot: 1, cost: 2, minLevel: 2 },
+  { slot: 2, cost: 3, minLevel: 3 },
+  { slot: 3, cost: 5, minLevel: 5 },
+  { slot: 4, cost: 6, minLevel: 7 },
+  { slot: 5, cost: 7, minLevel: 9 }
+];
+
+function fontOfMagicOptions(character) {
+  const sorcerer = classLevel(character, "Sorcerer");
+  if (sorcerer < 2 || !["2014", "2024"].includes(character.edition || "2014")) return [];
+  const revised = character.edition === "2024";
+  return SORCERY_POINT_SLOT_COSTS
+    .filter(row => (revised ? sorcerer >= row.minLevel : true))
+    .map(row => ({ ...row }));
+}
+
+// Spending points for a slot returns an expended slot of that level; spending a
+// slot for points gives back its level in sorcery points.
+function applyFontOfMagic(character, action, slotLevel) {
+  const resources = resourceDefinitions(character);
+  const points = resources.find(resource => resource.id === "sorcery-points");
+  const slot = resources.find(resource => resource.id === `spell-slot-${slotLevel}`
+    || resource.id.endsWith(`-spell-slot-${slotLevel}`) || resource.id === `multiclass-spell-slot-${slotLevel}`);
+  const row = SORCERY_POINT_SLOT_COSTS.find(entry => entry.slot === Number(slotLevel));
+  if (!points || !slot || !row) { toast("That conversion is not available"); return; }
+  const pointsUsed = resourceUsed(character, points);
+  const slotsUsed = resourceUsed(character, slot);
+  if (action === "slot") {
+    if (points.max - pointsUsed < row.cost) { toast(`You need ${row.cost} sorcery points for a level ${slotLevel} slot`); return; }
+    if (slotsUsed < 1) { toast(`No expended level ${slotLevel} slot to restore`); return; }
+    saveResourceUsage(character, points.id, pointsUsed + row.cost);
+    saveResourceUsage(character, slot.id, slotsUsed - 1);
+    toast(`Level ${slotLevel} slot restored for ${row.cost} sorcery points`);
+    return;
+  }
+  if (slot.max - slotsUsed < 1) { toast(`No level ${slotLevel} slot left to convert`); return; }
+  if (pointsUsed < 1) { toast("Your sorcery points are already full"); return; }
+  saveResourceUsage(character, slot.id, slotsUsed + 1);
+  saveResourceUsage(character, points.id, Math.max(0, pointsUsed - Number(slotLevel)));
+  toast(`Level ${slotLevel} slot spent for ${slotLevel} sorcery point${Number(slotLevel) === 1 ? "" : "s"}`);
+}
+
+function renderFontOfMagic(character, sectionClassName) {
+  const options = fontOfMagicOptions(character);
+  if (!options.length) return "";
+  const rows = options.map(row => `<div class="font-row">
+      <span><strong>Level ${row.slot} slot</strong><small>${row.cost} sorcery points</small></span>
+      <button type="button" data-font-of-magic="slot" data-slot-level="${row.slot}" data-character="${character.id}">Create slot</button>
+      <button type="button" data-font-of-magic="points" data-slot-level="${row.slot}" data-character="${character.id}">Spend slot for ${row.slot} point${row.slot === 1 ? "" : "s"}</button>
+    </div>`).join("");
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <h2>Font of Magic</h2>
+    <p class="panel-note">Creating a slot restores one you have spent. Converting a slot the other way returns its level in sorcery points.</p>
+    <div class="font-of-magic">${rows}</div>
+  </section>`;
+}
+
 function resourceDefinitions(character) {
   // 5e class resources -- Action Surge, Ki, Rage as 5e models it -- do not
   // belong on a 3.5 sheet. 3.5 tracks its per-day uses through class features
@@ -13004,6 +13065,7 @@ function renderSheet() {
       <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
+    ${renderFontOfMagic(c, sectionClass("overview"))}
     ${renderAdndMonk(c, sectionClass("overview"))}
     ${renderAdndWeapons(c, sectionClass("overview"))}
     ${renderAdndAttacks(c, sectionClass("overview"))}
@@ -14559,6 +14621,12 @@ function initEvents() {
         const remainingDelta = Number(resourceControl.dataset.resourceRemaining);
         saveResourceUsage(character, resourceId, used - remainingDelta);
       }
+      return;
+    }
+    const fontControl = event.target.closest("[data-font-of-magic]");
+    if (fontControl) {
+      const character = characters.find(item => item.id === fontControl.dataset.character);
+      if (character) applyFontOfMagic(character, fontControl.dataset.fontOfMagic, Number(fontControl.dataset.slotLevel));
       return;
     }
     const dungeonThemeButton = event.target.closest("[data-dungeon-theme]");
