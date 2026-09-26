@@ -12888,6 +12888,24 @@ function renderSpellPreparationControls(character, spellcastingClasses, canContr
   }).join("")}</div>${canControl && repairMessage ? `<div class="spell-repair-callout"><div><strong>Generated spell setup update</strong><p>${escapeHtml(repairMessage)} Rebuild it using the character's current class levels.</p></div><button type="button" class="button primary small" data-repair-generated-spells="${character.id}">Rebuild generated spells</button></div>` : ""}`;
 }
 
+// Subclasses that grant spells without their class being a spellcaster, with
+// the ability the subclass casts them from.
+const SUBCLASS_GRANTED_CASTING = {
+  "House Agent": { ability: "CHA", label: "House Insignia" }
+};
+
+function grantedCastingSources(character) {
+  const sources = [];
+  classBreakdown(character).forEach(entry => {
+    const subclass = classSubclassName(character, entry.name);
+    const grant = SUBCLASS_GRANTED_CASTING[subclass];
+    if (grant && !spellListsFor(character.edition, entry.name, subclass)) {
+      sources.push({ ...grant, subclass });
+    }
+  });
+  return sources;
+}
+
 function spellsReadyToCast(character, allSpells) {
   const wizardPrepared = new Map(classBreakdown(character)
     .filter(entry => spellPreparationPolicy(character.edition, entry.name, classSubclassName(character, entry.name)) === "spellbook")
@@ -13001,7 +13019,9 @@ function renderSheet() {
   const spellcastingClasses = classEntries.filter(entry => spellListsFor(c.edition, entry.name, classSubclassName(c, entry.name)));
   // 3.5 shows its spellbook panel and 2E its slot panel; the 5e spellcasting
   // block restated both with a 5e save DC and 5e slot levels.
-  const hasSpellcasting = Boolean(spellcastingClasses.length) && !EDITIONS_WITHOUT_5E_CHOICES.has(c.edition);
+  const grantedCasting = grantedCastingSources(c);
+  const hasSpellcasting = Boolean(spellcastingClasses.length || grantedCasting.length)
+    && !EDITIONS_WITHOUT_5E_CHOICES.has(c.edition);
   if (activeSheetSection === "spells" && !hasSpellcasting) activeSheetSection = "overview";
   const sectionClass = section => activeSheetSection === section ? "" : "hidden";
   const maximumHp = d.hp;
@@ -13221,6 +13241,10 @@ function renderSheet() {
         const attack = baseMod + spellFx.spellAttack;
         const dc = 8 + baseMod + spellFx.spellDc;
         return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${dc} · ${signed(attack)} attack</span>`;
+      }).join("")}${grantedCasting.map(source => {
+        const baseMod = d.prof + modifier(eff[source.ability]);
+        const spellFx = activeItemEffects(c);
+        return `<span><strong>${escapeHtml(source.label)}:</strong> ${source.ability} · DC ${8 + baseMod + spellFx.spellDc} · ${signed(baseMod + spellFx.spellAttack)} attack</span>`;
       }).join("")}<span><strong>Ready to cast:</strong> ${castableSpells.length}</span></div>
       ${renderSpellSlotTracker(c)}
       ${renderSpellPreparationControls(c, spellcastingClasses, canControl)}
