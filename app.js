@@ -3609,6 +3609,7 @@ function speciesDescription(name, rulesEdition = edition) {
 const SPECIES_TRAIT_SUMMARIES = {
   Aarakocra: ["Flight", "Talons", "Wind Caller"],
   Aasimar: ["Celestial Resistance", "Healing Hands", "Light Bearer"],
+  "Astral Elf": ["Astral Fire", "Starlight Step", "Astral Trance"],
   Autognome: ["Constructed Resilience", "Mechanical Nature", "Specialized Design"],
   Boggart: ["Small and Sly", "Fey Mischief", "Scavenger's Knack"],
   Bugbear: ["Long-Limbed", "Powerful Build", "Sneaky"],
@@ -12462,7 +12463,16 @@ function carryingCapacityFor(character) {
   if (isAdnd(character) && typeof adndStrength === "function") {
     return { value: Number(adndStrength(character).weight || 0), unit: " lb.", label: "Weight allowance" };
   }
-  return { value: Math.max(0, Number(character.STR || 10) * 15), unit: " lb.", label: "Capacity" };
+  // Strength after every bonus, not the score typed into the builder, and
+  // Powerful Build counts you as one size larger for carrying.
+  const strength = Number(effectiveAbilities(character).STR || 10);
+  const traits = (typeof SPECIES_TRAIT_SUMMARIES !== "undefined" && SPECIES_TRAIT_SUMMARIES[character.species]) || [];
+  const powerfulBuild = traits.some(trait => /powerful build/i.test(trait));
+  return {
+    value: Math.max(0, strength * 15 * (powerfulBuild ? 2 : 1)),
+    unit: " lb.",
+    label: powerfulBuild ? "Capacity (Powerful Build)" : "Capacity"
+  };
 }
 
 function inventoryWeight(character) {

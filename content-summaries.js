@@ -1,5 +1,13 @@
 const CONTENT_SUMMARIES = {
+  // Species trait text is keyed "Species|Trait" so a trait name shared by two
+  // species can differ; speciesTraitSummary() prefers these over its fallback.
+  speciesTraits: {
+    "Astral Elf|Astral Fire": "You know one of Dancing Lights, Light or Sacred Flame, cast with Intelligence, Wisdom or Charisma as you choose.",
+    "Astral Elf|Starlight Step": "A Bonus Action teleports you 30 feet to a space you can see, your proficiency bonus times per long rest.",
+    "Astral Elf|Astral Trance": "You do not sleep and cannot be magically put to sleep; four hours of trance finishes a long rest and leaves you proficient in a skill and a weapon or tool of your choice."
+  },
   features: {
+
     // Level 19 of every 2024 class, and the handful of features that had no
     // text of their own. Summaries are original, as the content policy asks.
     "Epic Boon": "At 19th level you take an Epic Boon feat, or any other feat you qualify for, in place of that level's ability score increase.",
