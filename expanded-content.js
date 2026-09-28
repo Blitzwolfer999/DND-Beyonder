@@ -201,8 +201,11 @@ const BLOOD_HUNTER_FEATURES = [
   [14, "Hardened Soul"], [14, "Crimson Rite improvement"], [17, "Blood Maledict improvement"],
   [20, "Sanguine Mastery"]
 ];
-CLASS_FEATURES[2014]["Blood Hunter"] = BLOOD_HUNTER_FEATURES;
-CLASS_FEATURES[2024]["Blood Hunter"] = BLOOD_HUNTER_FEATURES;
+// Each edition needs its own copy: the ASI and Epic Boon rows are merged in
+// per edition below, and a shared array let 2024's Epic Boon appear on the
+// 2014 Blood Hunter too.
+CLASS_FEATURES[2014]["Blood Hunter"] = structuredClone(BLOOD_HUNTER_FEATURES);
+CLASS_FEATURES[2024]["Blood Hunter"] = structuredClone(BLOOD_HUNTER_FEATURES);
 
 SPELL_LISTS[2014].Artificer = structuredClone(ARTIFICER_SPELLS);
 SPELL_LISTS[2024].Artificer = structuredClone(ARTIFICER_SPELLS);
@@ -245,7 +248,6 @@ mergeClassFeatures(2014, "Warlock", [[5, "Eldritch Invocations improvement"], [7
 
 mergeClassFeatures(2024, "Fighter", [[6, "Ability Score Improvement / Feat"], [14, "Ability Score Improvement / Feat"]]);
 mergeClassFeatures(2024, "Rogue", [[6, "Expertise"], [10, "Ability Score Improvement / Feat"]]);
-mergeClassFeatures(2024, "Blood Hunter", [[19, "Ability Score Improvement / Feat"]]);
 mergeClassFeatures(2024, "Barbarian", [[4, "Weapon Mastery improvement"], [10, "Weapon Mastery improvement"], [13, "Improved Brutal Strike"], [17, "Improved Brutal Strike"]]);
 mergeClassFeatures(2024, "Bard", [[9, "Expertise"], [10, "Bardic Inspiration improvement"], [15, "Bardic Inspiration improvement"]]);
 mergeClassFeatures(2024, "Cleric", [[6, "Channel Divinity improvement"], [18, "Channel Divinity improvement"]]);

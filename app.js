@@ -16325,6 +16325,7 @@ function init() {
   if (typeof registerSw5eRuntime === "function") registerSw5eRuntime();
   if (typeof registerPsionRuntime === "function") registerPsionRuntime();
   if (typeof registerUnderdarkRuntime === "function") registerUnderdarkRuntime();
+  if (typeof registerBackgroundSkillsRuntime === "function") registerBackgroundSkillsRuntime();
   if (typeof registerD35Runtime === "function") registerD35Runtime();
   if (typeof registerD35FeatureText === "function") registerD35FeatureText();
   if (typeof registerAdndRuntime === "function") registerAdndRuntime();

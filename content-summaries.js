@@ -1,5 +1,17 @@
 const CONTENT_SUMMARIES = {
   features: {
+    // Level 19 of every 2024 class, and the handful of features that had no
+    // text of their own. Summaries are original, as the content policy asks.
+    "Epic Boon": "At 19th level you take an Epic Boon feat, or any other feat you qualify for, in place of that level's ability score increase.",
+    "Acrobatic Movement": "While unarmoured and without a shield you can run along vertical surfaces and across liquids on your turn without falling.",
+    "Self-Restoration": "At the end of each of your turns you can shrug off being charmed, frightened or poisoned, and going without food or water no longer exhausts you.",
+    "Improved Brutal Strike": "Brutal Strike gains further options at 13th level, including one that spoils the target's next save and one that leaves it open to the next attack. At 17th its extra damage rises to 2d10 and you can apply two effects at once.",
+    "Deft Explorer: Expertise": "Your travels grant Expertise in a skill you are already proficient with, along with two more languages.",
+    "Tongue of the Sun and Moon": "You understand every spoken language, and anyone who understands a language understands what you say.",
+    "Unarmored Movement improvement (vertical surfaces and liquids)": "Your unarmoured movement lets you run along vertical surfaces and across liquids on your turn without falling.",
+    "Aura improvements": "Your paladin auras reach 30 feet instead of 10.",
+    "Psion Subclass": "Choose your Psion subclass; it grants additional features at the levels shown.",
+
     // --- Shared / general ---
     "Spellcasting": "You can cast spells drawn from your class's spell list using your class spellcasting ability; your spell slots, prepared or known spells, and highest spell level all follow the class table.",
     "Extra Attack": "You can attack twice, instead of once, whenever you take the Attack action on your turn.",

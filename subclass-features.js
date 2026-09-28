@@ -1249,10 +1249,10 @@ addSubclassFeatures({
     ]
   }
 });
-SUBCLASS_FEATURES["2024"]["Order of the Ghostslayer"] = SUBCLASS_FEATURES["2014"]["Order of the Ghostslayer"];
-SUBCLASS_FEATURES["2024"]["Order of the Lycan"] = SUBCLASS_FEATURES["2014"]["Order of the Lycan"];
-SUBCLASS_FEATURES["2024"]["Order of the Mutant"] = SUBCLASS_FEATURES["2014"]["Order of the Mutant"];
-SUBCLASS_FEATURES["2024"]["Order of the Profane Soul"] = SUBCLASS_FEATURES["2014"]["Order of the Profane Soul"];
+SUBCLASS_FEATURES["2024"]["Order of the Ghostslayer"] = structuredClone(SUBCLASS_FEATURES["2014"]["Order of the Ghostslayer"]);
+SUBCLASS_FEATURES["2024"]["Order of the Lycan"] = structuredClone(SUBCLASS_FEATURES["2014"]["Order of the Lycan"]);
+SUBCLASS_FEATURES["2024"]["Order of the Mutant"] = structuredClone(SUBCLASS_FEATURES["2014"]["Order of the Mutant"]);
+SUBCLASS_FEATURES["2024"]["Order of the Profane Soul"] = structuredClone(SUBCLASS_FEATURES["2014"]["Order of the Profane Soul"]);
 
 // ================= Obojima: Tales from the Tall Grass =================
 // Obojima's subclasses are D&D Beyond 2014-class builder options. The 2024 rows
