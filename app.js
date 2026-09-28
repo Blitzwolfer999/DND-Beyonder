@@ -8204,15 +8204,19 @@ function parseWeaponProfile(item, rulesEdition = "") {
   if (item.baseWeapon && WEAPON_BASE_PROFILES[item.baseWeapon]) text = WEAPON_BASE_PROFILES[item.baseWeapon];
   else if (!/\d+\s*d\s*\d+/i.test(text) && MAGIC_WEAPON_PROFILES[item.name]) text += ` ${MAGIC_WEAPON_PROFILES[item.name]}`;
   const dice = text.match(/(\d+)\s*d\s*(\d+)/i);
-  if (!dice) return null;
+  // A blowgun deals a flat 1 piercing rather than a die, so a dice-only parse
+  // gave it no attack row at all.
+  const flat = dice ? null : text.match(/(?:^|\s)(\d+)\s+(slashing|piercing|bludgeoning|energy|ion|kinetic|acid|cold|fire|lightning|necrotic|psychic|sonic|force|poison)\b/i);
+  if (!dice && !flat) return null;
   const versatile = text.match(/versatile\s*\((\d+)d(\d+)\)/i);
   // SW5E adds energy/ion/kinetic and lets weapons deal elemental types directly.
   const typeMatch = text.match(/\b(slashing|piercing|bludgeoning|energy|ion|kinetic|acid|cold|fire|lightning|necrotic|psychic|sonic|force|poison)\b/i);
   return {
-    count: Number(dice[1]),
-    sides: Number(dice[2]),
+    count: dice ? Number(dice[1]) : 0,
+    sides: dice ? Number(dice[2]) : 0,
+    flatDamage: dice ? 0 : Number(flat[1]),
     versatile: versatile ? { count: Number(versatile[1]), sides: Number(versatile[2]) } : null,
-    damageType: typeMatch ? typeMatch[1].toLowerCase() : "",
+    damageType: typeMatch ? typeMatch[1].toLowerCase() : (flat ? flat[2].toLowerCase() : ""),
     finesse: /finesse/i.test(text),
     // SW5E blasters are ranged and feed from power cells rather than ammunition.
     ranged: /ranged|blaster/i.test(item.type || "") || /ammunition|power cell/i.test(text),
@@ -8279,6 +8283,7 @@ function weaponAttacks(character) {
       count: profile.count,
       sides: profile.sides,
       dmgMod: abilityMod + weaponDmg,
+      flatBase: profile.flatDamage || 0,
       versatile: profile.versatile,
       damageType: profile.damageType,
       bonusDamage: [
@@ -11983,6 +11988,61 @@ function singleClassSpellSlotResources(character) {
   }));
 }
 
+// To take a level in a new class you need the scores for your current class
+// and the new one. Both editions use the same requirements; classes the app
+// adds beyond the Player's Handbook have no published requirement, so they
+// are left unrestricted.
+const MULTICLASS_PREREQUISITES = {
+  Barbarian: { all: ["STR"] },
+  Bard: { all: ["CHA"] },
+  Cleric: { all: ["WIS"] },
+  Druid: { all: ["WIS"] },
+  Fighter: { any: ["STR", "DEX"] },
+  Monk: { all: ["DEX", "WIS"] },
+  Paladin: { all: ["STR", "CHA"] },
+  Ranger: { all: ["DEX", "WIS"] },
+  Rogue: { all: ["DEX"] },
+  Sorcerer: { all: ["CHA"] },
+  Warlock: { all: ["CHA"] },
+  Wizard: { all: ["INT"] },
+  Artificer: { all: ["INT"] }
+};
+const MULTICLASS_MINIMUM = 13;
+
+function multiclassRequirementText(className) {
+  const rule = MULTICLASS_PREREQUISITES[className];
+  if (!rule) return "";
+  const names = rule.all || rule.any || [];
+  if (!names.length) return "";
+  return `${names.join(rule.any ? " or " : " and ")} ${MULTICLASS_MINIMUM}`;
+}
+
+// Whether a character's scores satisfy one class's requirement.
+function meetsMulticlassRequirement(character, className) {
+  const rule = MULTICLASS_PREREQUISITES[className];
+  if (!rule) return true;
+  const scores = effectiveAbilities(character);
+  if (rule.any) return rule.any.some(ability => Number(scores[ability] || 0) >= MULTICLASS_MINIMUM);
+  return (rule.all || []).every(ability => Number(scores[ability] || 0) >= MULTICLASS_MINIMUM);
+}
+
+// Why a character cannot take a level in className, or "" when they can.
+// Advancing a class they already have never re-checks the requirement.
+function multiclassBlockReason(character, className) {
+  if (!["2014", "2024"].includes(character.edition || "")) return "";
+  if (classBreakdown(character).some(entry => entry.name === className)) return "";
+  const unmet = [];
+  classBreakdown(character).forEach(entry => {
+    if (!meetsMulticlassRequirement(character, entry.name)) {
+      unmet.push(`${entry.name} needs ${multiclassRequirementText(entry.name)}`);
+    }
+  });
+  if (!meetsMulticlassRequirement(character, className)) {
+    unmet.push(`${className} needs ${multiclassRequirementText(className)}`);
+  }
+  return unmet.length ? unmet.join("; ") : "";
+}
+
 function multiclassSpellcastingLevel(character) {
   // Paladin and ranger levels count half: rounded down in 2014, rounded up in
   // 2024.
@@ -13626,7 +13686,10 @@ function openLevelUp(id, targetClass = "") {
   const fixedGain = Math.max(1, Math.ceil(classHitDie(levelUpClassName, character.edition) / 2) + 1 + modifier(character.CON));
   const classSelect = `<label class="level-class-picker">Class to advance<select name="levelClass" id="level-class-select">
     <optgroup label="Current classes">${currentClasses.map(entry => `<option value="${escapeHtml(entry.name)}" ${entry.name === levelUpClassName ? "selected" : ""}>${escapeHtml(entry.name)} ${entry.level} → ${entry.level + 1}</option>`).join("")}</optgroup>
-    <optgroup label="Add multiclass">${availableClasses.filter(name => !currentClasses.some(entry => entry.name === name)).map(name => `<option value="${escapeHtml(name)}" ${name === levelUpClassName ? "selected" : ""}>Add ${escapeHtml(name)} 1</option>`).join("")}</optgroup>
+    <optgroup label="Add multiclass">${availableClasses.filter(name => !currentClasses.some(entry => entry.name === name)).map(name => {
+      const blocked = multiclassBlockReason(character, name);
+      return `<option value="${escapeHtml(name)}" ${name === levelUpClassName ? "selected" : ""}${blocked ? " disabled" : ""}>Add ${escapeHtml(name)} 1${blocked ? ` — ${escapeHtml(blocked)}` : ""}</option>`;
+    }).join("")}</optgroup>
   </select><small>Total character level ${currentTotalLevel} → ${targetLevel}. New multiclass levels do not grant starting saving throws.</small></label>`;
   $("#level-up-title").textContent = `${character.name} reaches level ${targetLevel}`;
   $("#level-up-subtitle").textContent = `${editionLabel(character.edition)} ${levelUpClassName} progression · class level ${currentClassLevel} → ${targetClassLevel}.`;
