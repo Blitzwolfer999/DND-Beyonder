@@ -481,7 +481,7 @@ const CATALOG_SPELL_ADDITIONS = {
       0: ["Blade Ward", "Friends"],
       1: ["Armor of Agathys", "Arms of Hadar", "Hex", "Witch Bolt"],
       2: ["Cloud of Daggers", "Crown of Madness", "Flock of Familiars"],
-      3: ["Hunger Of Hadar"],
+      3: ["Hunger of Hadar"],
       4: ["Galder's Speedy Courier"],
       5: ["Mislead", "Planar Binding", "Teleportation Circle"],
       6: ["Arcane Gate"],
@@ -505,12 +505,12 @@ const CATALOG_SPELL_ADDITIONS = {
       2: ["Arcane Vigor", "Dragon's Breath", "Tortoise Shell"],
       3: ["Elemental Weapon"],
       4: ["Leomund's Secret Chest"],
-      5: ["Bigby's Hand", "Circle Of Power"]
+      5: ["Bigby's Hand", "Circle of Power"]
     },
     Bard: {
       0: ["Blade Ward", "Friends"],
       1: ["Insidious Rhythm"],
-      2: ["Cloud Of Daggers", "Crown Of Madness"],
+      2: ["Cloud of Daggers", "Crown of Madness"],
       3: ["Astral Flood", "Feign Death", "Leomund's Tiny Hut"],
       4: ["Fount of Moonlight"],
       5: ["Rary's Telepathic Bond", "Yolande's Regal Presence"],
@@ -521,7 +521,7 @@ const CATALOG_SPELL_ADDITIONS = {
       2: ["Searing Orb"],
       3: ["Astral Flood", "Aura of Vitality", "Feign Death"],
       4: ["Aura of Purity", "Sticks to Snakes"],
-      5: ["Circle Of Power"],
+      5: ["Circle of Power"],
       7: ["Power Word Fortify"]
     },
     Druid: {
@@ -535,11 +535,11 @@ const CATALOG_SPELL_ADDITIONS = {
       2: ["Searing Orb"],
       3: ["Aura of Vitality", "Elemental Weapon"],
       4: ["Aura of Purity", "Staggering Smite"],
-      5: ["Banishing Smite", "Circle Of Power", "Destructive Wave"]
+      5: ["Banishing Smite", "Circle of Power", "Destructive Wave"]
     },
     Ranger: {
       1: ["Buzzing Bee", "Hail of Thorns"],
-      2: ["Beast Sense", "Cordon Of Arrows", "Tortoise Shell"],
+      2: ["Beast Sense", "Cordon of Arrows", "Tortoise Shell"],
       3: ["Conjure Barrage", "Elemental Weapon", "Lightning Arrow"],
       4: ["Grasping Vine", "Sticks to Snakes"],
       5: ["Conjure Volley", "Swift Quiver"]
@@ -547,7 +547,7 @@ const CATALOG_SPELL_ADDITIONS = {
     Sorcerer: {
       0: ["Blade Ward", "Friends"],
       1: ["Buzzing Bee"],
-      2: ["Arcane Vigor", "Cloud Of Daggers", "Crown Of Madness"],
+      2: ["Arcane Vigor", "Cloud of Daggers", "Crown of Madness"],
       3: ["Astral Flood"],
       5: ["Bigby's Hand"],
       6: ["Arcane Gate", "Leomund's Lamentable Belaborment", "Otiluke's Freezing Sphere"]
@@ -555,7 +555,7 @@ const CATALOG_SPELL_ADDITIONS = {
     Warlock: {
       0: ["Blade Ward", "Friends"],
       1: ["Armor of Agathys", "Arms of Hadar", "Tasha's Hideous Laughter"],
-      2: ["Cloud Of Daggers", "Crown Of Madness"],
+      2: ["Cloud of Daggers", "Crown of Madness"],
       5: ["Jallarzi's Storm of Radiance"],
       6: ["Arcane Gate", "Tasha's Bubbling Cauldron"],
       7: ["Void Star"]
@@ -563,10 +563,10 @@ const CATALOG_SPELL_ADDITIONS = {
     Wizard: {
       0: ["Blade Ward", "Friends"],
       1: ["Buzzing Bee", "Tenser's Floating Disk"],
-      2: ["Arcane Vigor", "Cloud Of Daggers", "Crown Of Madness", "Melf's Acid Arrow", "Nystul's Magic Aura"],
+      2: ["Arcane Vigor", "Cloud of Daggers", "Crown of Madness", "Melf's Acid Arrow", "Nystul's Magic Aura"],
       3: ["Astral Flood", "Feign Death", "Leomund's Tiny Hut"],
       4: ["Evard's Black Tentacles", "Leomund's Secret Chest", "Mordenkainen's Faithful Hound"],
-      5: ["Bigby's Hand", "Circle Of Power", "Jallarzi's Storm of Radiance", "Rary's Telepathic Bond", "Yolande's Regal Presence"],
+      5: ["Bigby's Hand", "Circle of Power", "Jallarzi's Storm of Radiance", "Rary's Telepathic Bond", "Yolande's Regal Presence"],
       6: ["Arcane Gate", "Drawmij's Instant Summons", "Leomund's Lamentable Belaborment", "Otiluke's Freezing Sphere", "Otto's Irresistible Dance", "Tasha's Bubbling Cauldron"],
       7: ["Mordenkainen's Sword", "Void Star"],
       8: ["Telepathy"]

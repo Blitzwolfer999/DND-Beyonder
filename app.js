@@ -3533,8 +3533,13 @@ function spellDescription(name, rulesEdition, source = "") {
     const entry = D35_SPELL_INDEX[String(name).toLowerCase()];
     if (entry && entry.desc) return entry.desc;
   }
+  // 2024 renamed a few spells after their wizard; the text is filed under the
+  // System Reference Document's generic name.
+  const alias = (typeof SPELL_NAME_ALIASES !== "undefined" && SPELL_NAME_ALIASES[name]) || "";
   return descriptionMatch(RULE_DESCRIPTIONS.spells[rulesEdition], name)
+    || (alias ? descriptionMatch(RULE_DESCRIPTIONS.spells[rulesEdition], alias) : "")
     || (rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.spells[2014], name) : "")
+    || (alias && rulesEdition === "2024" ? descriptionMatch(RULE_DESCRIPTIONS.spells[2014], alias) : "")
     || contentSummary("spells", name)
     || inferredSpellSummary(name)
     || catalogRulesSummary("spell", name, source, "expanded");
