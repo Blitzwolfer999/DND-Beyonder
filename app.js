@@ -13286,6 +13286,10 @@ function renderSheet() {
     }).join("")}</div></section>`}
     ${renderAttacksPanel(c, sectionClass("overview"))}
     ${renderActionsPanel(c, sectionClass("overview"))}
+    ${resources.length ? `<section class="sheet-panel sheet-wide ${sectionClass("overview")}">
+      <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
+      <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
+    </section>` : ""}
     <section class="sheet-panel sheet-wide ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <div class="combat-stat-grid">
@@ -13346,10 +13350,6 @@ function renderSheet() {
       <h2 class="subsection-title">Background</h2><p><strong>${escapeHtml(c.background)}</strong> · ${escapeHtml(c.alignment)}</p>
       <div class="sheet-notes">${escapeHtml(c.backstory || "No backstory recorded yet.")}</div>
     </section>
-    ${resources.length ? `<section class="sheet-panel sheet-wide ${sectionClass("overview")}">
-      <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
-      <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
-    </section>` : ""}
     ${renderFontOfMagic(c, sectionClass("overview"))}
     ${renderAdndMonk(c, sectionClass("overview"))}
     ${renderAdndWeapons(c, sectionClass("overview"))}
