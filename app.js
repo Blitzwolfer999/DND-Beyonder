@@ -2944,6 +2944,15 @@ function showWelcomeIfNeeded() {
   try { dismissed = localStorage.getItem("af-welcome-dismissed") === "1"; } catch (e) {}
   if (!dismissed) tip.removeAttribute("hidden");
 }
+// A character's proficiency bonus, honouring a manual override.
+function characterProficiency(data) {
+  const forced = Number(data && data.profOverride);
+  if (data && data.profOverride !== "" && data.profOverride !== undefined && Number.isFinite(forced) && forced > 0) {
+    return forced;
+  }
+  return proficiency(characterTotalLevel(data));
+}
+
 function proficiency(level) { return 2 + Math.floor((Math.max(1, Number(level)) - 1) / 4); }
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -3148,8 +3157,8 @@ function spellCastingNumbers(character, spell) {
     ability,
     abilityMod,
     prof,
-    attack: prof + abilityMod + fx.spellAttack,
-    dc: 8 + prof + abilityMod + fx.spellDc,
+    attack: spellAttackBonusFor(character, "", prof + abilityMod + fx.spellAttack),
+    dc: spellSaveDcFor(character, "", 8 + prof + abilityMod + fx.spellDc),
     itemAttack: fx.spellAttack,
     itemDc: fx.spellDc
   };
@@ -3228,6 +3237,67 @@ function spellDisplayData(spell, character) {
   };
 }
 
+// Spell attack bonus and save DC, honouring a manual override. Beyond has
+// never allowed these to be set directly and players ask for it constantly.
+function spellAttackBonusFor(character, className, baseBonus) {
+  const forced = Number(character && character.spellAttackOverride);
+  if (character && character.spellAttackOverride !== "" && character.spellAttackOverride !== undefined
+    && Number.isFinite(forced)) return forced;
+  return baseBonus;
+}
+function spellSaveDcFor(character, className, baseDc) {
+  const forced = Number(character && character.spellDcOverride);
+  if (character && character.spellDcOverride !== "" && character.spellDcOverride !== undefined
+    && Number.isFinite(forced) && forced > 0) return forced;
+  return baseDc;
+}
+
+// Whether a spell holds concentration, read from the duration every spell
+// now records.
+function spellHoldsConcentration(spell, character) {
+  const data = spellDisplayData(spell, character);
+  return /^concentration/i.test(String(data.duration || "").trim());
+}
+
+// The spell a character is currently concentrating on, or "".
+function concentratingOn(character) {
+  return String(character && character.concentration || "");
+}
+
+// Start concentrating, dropping whatever was already running.
+function setConcentration(character, spellName) {
+  const previous = concentratingOn(character);
+  if (previous === spellName) {
+    character.concentration = "";
+    persistCharacters();
+    renderSheet();
+    toast(`Concentration on ${previous} dropped`);
+    return;
+  }
+  character.concentration = spellName;
+  persistCharacters();
+  renderSheet();
+  toast(previous
+    ? `Concentrating on ${spellName} \u2014 ${previous} ends`
+    : `Concentrating on ${spellName}`);
+}
+
+// The save a hit forces: DC 10, or half the damage taken, whichever is higher.
+function concentrationSaveDc(damage) {
+  return Math.max(10, Math.floor(Number(damage || 0) / 2));
+}
+
+function renderConcentrationBadge(character) {
+  if (EDITIONS_WITHOUT_5E_CHOICES.has(character.edition)) return "";
+  const spell = concentratingOn(character);
+  if (!spell) return "";
+  return `<div class="concentration-banner">
+    <span><strong>Concentrating</strong><small>${escapeHtml(spell)}</small></span>
+    <small class="concentration-note">Take damage? Constitution save, DC 10 or half the damage, whichever is higher.</small>
+    <button type="button" class="button small" data-concentrate="${escapeHtml(spell)}" data-character="${character.id}">Drop</button>
+  </div>`;
+}
+
 function renderSpellCard(spell, character) {
   const data = spellDisplayData(spell, character);
   const facts = [
@@ -3241,13 +3311,16 @@ function renderSpellCard(spell, character) {
     renderSpellFact("Area", data.area),
     renderSpellFact("Components", data.components)
   ].join("");
-  return `<article class="sheet-spell-card spellbook-row">
+  const holdsConcentration = spellHoldsConcentration(spell, character);
+  const isActive = holdsConcentration && concentratingOn(character) === spell.name;
+  return `<article class="sheet-spell-card spellbook-row${isActive ? " concentrating" : ""}">
     <div class="spellbook-main">
       <div class="spell-card-head">
         <div><small>${escapeHtml(spellLevelLabel(spell))}${data.school ? ` · ${escapeHtml(data.school)}` : ""}</small><strong>${escapeHtml(spell.name)}</strong>${spell.alwaysPrepared ? `<span class="granted-badge" title="Granted by ${escapeHtml(spell.grantedBy || "your subclass")} — always prepared">Always prepared</span>` : ""}</div>
         <span>${escapeHtml(data.classText)}</span>
       </div>
       <p class="spell-effect"><strong>Effect.</strong> ${escapeHtml(data.effect)}</p>
+      ${holdsConcentration ? `<button type="button" class="concentration-toggle ${isActive ? "active" : ""}" data-concentrate="${escapeHtml(spell.name)}" data-character="${character.id}" aria-pressed="${isActive}">${isActive ? "Concentrating \u2014 drop" : "Concentrate"}</button>` : ""}
     </div>
     <div class="spell-fact-grid">${facts}</div>
     ${spellRuleDetails(data.fullDescription)}
@@ -8516,12 +8589,18 @@ function characterActionEconomy(character) {
     rows.forEach(row => {
       const [level, name] = row;
       if (level > entry.level || seen.has(name)) return;
-      const cost = featureActionCost(name, rulesEdition);
-      if (!cost) return;
-      seen.add(name);
+      const assigned = (character.actionCosts || {})[name] || "";
+      const cost = assigned || featureActionCost(name, rulesEdition);
       const resource = resources.find(item => item.name === name || item.name.startsWith(`${name} \u00b7`));
+      // Show a feature when we know what it costs, or when it has uses to
+      // spend; anything else is reference text and belongs on the other tabs.
+      if (!cost && !resource) return;
+      seen.add(name);
       const remaining = resource ? `${Math.max(0, resource.max - resourceUsed(character, resource))}/${resource.max} left` : "";
-      groups[actionEconomyBucket(cost)].push({ name, detail: remaining, note: cost });
+      groups[actionEconomyBucket(cost)].push({
+        name, detail: remaining, note: cost || "cost not recorded",
+        assignable: !featureActionCost(name, rulesEdition), assigned
+      });
     });
   });
 
@@ -8541,6 +8620,10 @@ function renderActionsPanel(character, sectionClassName) {
         <strong>${escapeHtml(row.name)}</strong>
         ${row.detail ? `<small>${escapeHtml(row.detail)}</small>` : ""}
         ${row.note && row.note !== key ? `<em>${escapeHtml(row.note)}</em>` : ""}
+        ${row.assignable ? `<select class="action-cost-picker" data-action-cost="${escapeHtml(row.name)}" data-character="${character.id}" aria-label="What does ${escapeHtml(row.name)} cost?">
+          ${["", "Action", "Bonus Action", "Reaction", "No action"].map(option =>
+            `<option value="${escapeHtml(option)}"${option === row.assigned ? " selected" : ""}>${option || "Set cost\u2026"}</option>`).join("")}
+        </select>` : ""}
       </li>`).join("")}</ul>
     </section>`).join("");
   return `<section class="sheet-panel sheet-wide ${sectionClassName}">
@@ -9313,6 +9396,12 @@ function skillModifier(data, skill) {
 }
 
 function initiativeDetails(data) {
+  // An epic-tier or DM-adjusted character can set these outright, the way
+  // Armor Class and hit points already allow.
+  if (data.initiativeOverride !== "" && data.initiativeOverride !== undefined && data.initiativeOverride !== null) {
+    const forced = Number(data.initiativeOverride);
+    if (Number.isFinite(forced)) return { value: forced, source: "Manual override", advantage: false };
+  }
   data = effectiveAbilities(data);
   const level = characterTotalLevel(data);
   const prof = proficiency(level);
@@ -9403,7 +9492,7 @@ function derived(data) {
   const armor = armorClassDetails(data);
   const initiative = initiativeDetails(data);
   return {
-    prof: proficiency(level),
+    prof: characterProficiency(data),
     ac: armor.value,
     acSource: armor.source,
     hp: Number(data.hpOverride) || Math.max(1, baseHp + bonusMaxHp(data)),
@@ -12486,15 +12575,30 @@ function renderFontOfMagic(character, sectionClassName) {
   </section>`;
 }
 
+// Counters the player adds by hand. They use the same shape as a class
+// resource, so the pips, the spend/restore handlers and rest recovery all
+// work on them without special cases.
+function customResourceDefinitions(character) {
+  return (character.customResources || [])
+    .filter(entry => entry && entry.name && Number(entry.max) > 0)
+    .map(entry => ({
+      id: `custom-${entry.id}`,
+      name: String(entry.name),
+      max: Math.max(1, Math.min(99, Number(entry.max))),
+      recovery: entry.recovery === "short" ? "short" : entry.recovery === "none" ? "none" : "long",
+      custom: true
+    }));
+}
+
 function resourceDefinitions(character) {
   // 5e class resources -- Action Surge, Ki, Rage as 5e models it -- do not
   // belong on a 3.5 sheet. 3.5 tracks its per-day uses through class features
   // instead, so only the shared hit dice and spell slots carry over.
-  if (isD35(character)) return d35ResourceDefinitions(character);
+  if (isD35(character)) return [...d35ResourceDefinitions(character), ...customResourceDefinitions(character)];
   // 2E's per-day counts live in their own panels: stuns on the monk's open hand
   // card, spell slots on the spell panel. Left to the 5e path, a 2E monk
   // collected Ki Points and a bank of spendable hit dice.
-  if (isAdnd(character)) return [];
+  if (isAdnd(character)) return customResourceDefinitions(character);
   const entries = classBreakdown(character);
   if (entries.length > 1) {
     const classResources = entries.flatMap(entry => singleClassResourceDefinitions(withClassContext(character, entry.name, entry.level)).map(resource => ({
@@ -12502,10 +12606,12 @@ function resourceDefinitions(character) {
       id: `${resourcePrefix(entry.name)}-${resource.id}`,
       name: `${entry.name} · ${resource.name}`
     })));
-    const merged = [...classResources, ...traitResourceDefinitions(character), ...spellSlotResources(character)];
+    const merged = [...classResources, ...traitResourceDefinitions(character), ...spellSlotResources(character),
+      ...customResourceDefinitions(character)];
     return [...new Map(merged.map(resource => [resource.id, resource])).values()];
   }
-  const merged = [...singleClassResourceDefinitions(character), ...traitResourceDefinitions(character), ...spellSlotResources(character)];
+  const merged = [...singleClassResourceDefinitions(character), ...traitResourceDefinitions(character),
+    ...spellSlotResources(character), ...customResourceDefinitions(character)];
   return [...new Map(merged.map(resource => [resource.id, resource])).values()];
 }
 
@@ -12513,10 +12619,43 @@ function resourceUsed(character, resource) {
   return Math.min(resource.max, Math.max(0, Number(character.resourceUsage?.[resource.id] || 0)));
 }
 
+// Asks for the counter's name, size and which rest restores it.
+function openCounterDialog(character) {
+  const body = `<label>Name<input type="text" id="counter-name" maxlength="40" placeholder="Potions of healing"></label>
+    <label>Uses<input type="number" id="counter-max" min="1" max="99" value="3"></label>
+    <label>Resets on<select id="counter-recovery">
+      <option value="long">Long Rest</option>
+      <option value="short">Short or Long Rest</option>
+      <option value="none">Never — I reset it myself</option>
+    </select></label>`;
+  confirmAction({
+    title: "Add a counter",
+    message: body,
+    html: true,
+    confirmLabel: "Add counter",
+    onConfirm: () => {
+      const name = String(document.querySelector("#counter-name")?.value || "").trim();
+      const max = Number(document.querySelector("#counter-max")?.value || 0);
+      const recovery = document.querySelector("#counter-recovery")?.value || "long";
+      if (!name) { toast("Give the counter a name"); return; }
+      if (!(max > 0)) { toast("A counter needs at least one use"); return; }
+      character.customResources = [...(character.customResources || []),
+        { id: `c${Date.now().toString(36)}`, name, max: Math.min(99, max), recovery }];
+      persistCharacters();
+      renderSheet();
+      toast(`${name} added`);
+    }
+  });
+}
+
 function renderResourceCard(character, resource) {
   const used = resourceUsed(character, resource);
+  const removeButton = resource.custom
+    ? `<button type="button" class="counter-remove" data-remove-counter="${escapeHtml(resource.id)}" data-character="${character.id}" title="Remove this counter" aria-label="Remove ${escapeHtml(resource.name)}">×</button>`
+    : "";
   const remaining = resource.max - used;
-  const recoveryLabel = resource.recovery === "short" ? "Short or Long Rest" : "Long Rest";
+  const recoveryLabel = resource.custom && resource.recovery === "none" ? "Manual reset"
+    : resource.recovery === "short" ? "Short or Long Rest" : "Long Rest";
   const type = resource.type || (resource.max > 12 ? "pool" : "pips");
   const controls = type === "pool"
     ? `<div class="resource-pool">
@@ -12527,7 +12666,8 @@ function renderResourceCard(character, resource) {
     : `<div class="resource-pips">${Array.from({ length: resource.max }, (_, index) =>
         `<button type="button" class="resource-pip ${index < used ? "expended" : ""}" data-resource-pip="${index}" data-character="${character.id}" data-resource="${resource.id}" aria-label="${index < used ? "Restore" : "Expend"} ${escapeHtml(resource.name)} use ${index + 1}"></button>`
       ).join("")}</div>`;
-  return `<article class="resource-card">
+  return `<article class="resource-card${resource.custom ? " resource-card-custom" : ""}">
+    ${removeButton}
     <div class="resource-head"><strong>${escapeHtml(resource.name)}</strong><small>${remaining}/${resource.max}</small></div>
     ${controls}
     <button type="button" class="resource-reset" data-resource-reset="${resource.id}" data-character="${character.id}">Reset · ${recoveryLabel}</button>
@@ -13249,6 +13389,7 @@ function renderSheet() {
     </div>
     <button type="button" class="inspiration-toggle ${c.inspiration ? "active" : ""}" data-inspiration data-character="${c.id}" aria-pressed="${Boolean(c.inspiration)}"><span>◆</span><strong>Inspiration</strong></button>`}
     ${renderConditionPicker(c)}
+    ${renderConcentrationBadge(c)}
   </div>
   <nav class="sheet-tabs" aria-label="Character sheet sections">
     <button type="button" class="${activeSheetSection === "overview" ? "active" : ""}" data-sheet-section="overview">Overview</button>
@@ -13287,7 +13428,8 @@ function renderSheet() {
     ${renderAttacksPanel(c, sectionClass("overview"))}
     ${renderActionsPanel(c, sectionClass("overview"))}
     ${resources.length ? `<section class="sheet-panel sheet-wide ${sectionClass("overview")}">
-      <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span></div>
+      <div class="resource-toolbar"><h2>Resources & spell slots</h2><span>Tap a box when a use is spent.</span>
+        <button type="button" class="button small" data-add-counter="${c.id}">Add counter</button></div>
       <div class="resource-grid">${resources.map(resource => renderResourceCard(c, resource)).join("")}</div>
     </section>` : ""}
     <section class="sheet-panel sheet-wide ${sectionClass("overview")}">
@@ -13396,13 +13538,13 @@ function renderSheet() {
         const ability = spellcastingAbility(context);
         const spellFx = activeItemEffects(c);
         const baseMod = d.prof + modifier(eff[ability]);
-        const attack = baseMod + spellFx.spellAttack;
-        const dc = 8 + baseMod + spellFx.spellDc;
+        const attack = spellAttackBonusFor(c, entry.name, baseMod + spellFx.spellAttack);
+        const dc = spellSaveDcFor(c, entry.name, 8 + baseMod + spellFx.spellDc);
         return `<span><strong>${escapeHtml(entry.name)}:</strong> ${ability} · DC ${dc} · ${signed(attack)} attack</span>`;
       }).join("")}${grantedCasting.map(source => {
         const baseMod = d.prof + modifier(eff[source.ability]);
         const spellFx = activeItemEffects(c);
-        return `<span><strong>${escapeHtml(source.label)}:</strong> ${source.ability} · DC ${8 + baseMod + spellFx.spellDc} · ${signed(baseMod + spellFx.spellAttack)} attack</span>`;
+        return `<span><strong>${escapeHtml(source.label)}:</strong> ${source.ability} · DC ${spellSaveDcFor(c, source.label, 8 + baseMod + spellFx.spellDc)} · ${signed(spellAttackBonusFor(c, source.label, baseMod + spellFx.spellAttack))} attack</span>`;
       }).join("")}<span><strong>Ready to cast:</strong> ${castableSpells.length}</span></div>
       ${renderSpellSlotTracker(c)}
       ${renderSpellPreparationControls(c, spellcastingClasses, canControl)}
@@ -13841,7 +13983,10 @@ function confirmAction(options) {
   const modal = $("#confirm-modal");
   if (!modal) { if (opts.onConfirm) opts.onConfirm(); return; }
   $("#confirm-title").textContent = opts.title || "Are you sure?";
-  $("#confirm-message").textContent = opts.message || "";
+  // Most confirmations are plain text; a few ask for input and pass markup
+  // this file builds itself.
+  if (opts.html) $("#confirm-message").innerHTML = opts.message || "";
+  else $("#confirm-message").textContent = opts.message || "";
   const ok = $("#confirm-ok");
   ok.textContent = opts.confirmLabel || "Confirm";
   ok.classList.toggle("danger", Boolean(opts.danger));
@@ -14638,6 +14783,13 @@ function applyCharacterRest(character, restType) {
   const usage = { ...(character.resourceUsage || {}) };
   resourceDefinitions(character).forEach(resource => {
     const used = resourceUsed(character, resource);
+    if (resource.custom) {
+      // A player counter resets on the rest it was set to, and one set to
+      // never reset is left alone.
+      if (resource.recovery === "none") return;
+      if (restType === "long" || resource.recovery === "short") usage[resource.id] = 0;
+      return;
+    }
     if (restType === "long" && resource.longRecovery === "all") usage[resource.id] = 0;
     else if (restType === "long" && Number(resource.longRecovery) > 0) usage[resource.id] = Math.max(0, used - Number(resource.longRecovery));
     else if (restType === "long") usage[resource.id] = 0;
@@ -14645,6 +14797,7 @@ function applyCharacterRest(character, restType) {
     else if (Number(resource.shortRecovery) > 0) usage[resource.id] = Math.max(0, used - Number(resource.shortRecovery));
   });
   character.resourceUsage = usage;
+  character.concentration = "";
   if (restType === "long") {
     character.currentHp = derived(character).hp;
     character.temporaryHp = 0;
@@ -14922,6 +15075,39 @@ function initEvents() {
       } else {
         const remainingDelta = Number(resourceControl.dataset.resourceRemaining);
         saveResourceUsage(character, resourceId, used - remainingDelta);
+      }
+      return;
+    }
+    const concentrateButton = event.target.closest("[data-concentrate]");
+    if (concentrateButton) {
+      const owner = characters.find(item => item.id === concentrateButton.dataset.character);
+      if (owner) setConcentration(owner, concentrateButton.dataset.concentrate);
+      return;
+    }
+    const addCounter = event.target.closest("[data-add-counter]");
+    if (addCounter) {
+      const owner = characters.find(item => item.id === addCounter.dataset.addCounter);
+      if (owner) openCounterDialog(owner);
+      return;
+    }
+    const removeCounter = event.target.closest("[data-remove-counter]");
+    if (removeCounter) {
+      const owner = characters.find(item => item.id === removeCounter.dataset.character);
+      const target = (owner?.customResources || []).find(entry => `custom-${entry.id}` === removeCounter.dataset.removeCounter);
+      if (owner && target) {
+        confirmAction({
+          title: "Remove counter",
+          message: `Remove “${target.name}” from this sheet? Its tally is discarded.`,
+          confirmLabel: "Remove",
+          danger: true,
+          onConfirm: () => {
+            owner.customResources = owner.customResources.filter(entry => entry.id !== target.id);
+            if (owner.resourceUsage) delete owner.resourceUsage[`custom-${target.id}`];
+            persistCharacters();
+            renderSheet();
+            toast(`${target.name} removed`);
+          }
+        });
       }
       return;
     }
@@ -15423,6 +15609,19 @@ function initEvents() {
     else renderPrebuildSummary();
   });
   document.addEventListener("change", event => {
+    // Telling the sheet what an unrecognised feature costs on your turn.
+    const costPicker = event.target.closest("[data-action-cost]");
+    if (costPicker) {
+      const owner = characters.find(item => item.id === costPicker.dataset.character);
+      if (owner) {
+        owner.actionCosts = { ...(owner.actionCosts || {}) };
+        if (costPicker.value) owner.actionCosts[costPicker.dataset.actionCost] = costPicker.value;
+        else delete owner.actionCosts[costPicker.dataset.actionCost];
+        persistCharacters();
+        renderSheet();
+      }
+      return;
+    }
     const variantSelect = event.target.closest("[data-item-variant]");
     if (variantSelect) {
       const character = characters.find(item => item.id === variantSelect.dataset.character);

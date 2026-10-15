@@ -21,7 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=r3-89">
+  <link rel="stylesheet" href="styles.css?v=r3-93">
 </head>
 <body>
   <div class="app-shell">
@@ -366,6 +366,10 @@
               <div class="field-grid compact">
                 <label>Armor class override<input name="acOverride" type="number" min="0" max="40" placeholder="Auto"></label>
                 <label>Hit point override<input name="hpOverride" type="number" min="1" max="999" placeholder="Auto"></label>
+                <label>Initiative override<input name="initiativeOverride" type="number" min="-10" max="40" placeholder="Auto"></label>
+                <label>Proficiency bonus override<input name="profOverride" type="number" min="1" max="20" placeholder="Auto"></label>
+                <label>Spell attack override<input name="spellAttackOverride" type="number" min="-10" max="40" placeholder="Auto"></label>
+                <label>Spell save DC override<input name="spellDcOverride" type="number" min="1" max="40" placeholder="Auto"></label>
               </div>
             </div>
 
@@ -877,6 +881,6 @@
       supabasePublishableKey: "sb_publishable_w7XYEVe4DZucUjRz-xiLMg_Wgm2Q-tg"
     };
   </script>
-  <script src="app.js?v=mc-184"></script>
+  <script src="app.js?v=mc-187"></script>
 </body>
 </html>

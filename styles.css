@@ -4125,3 +4125,33 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .action-column li strong { font-size: 0.92rem; }
 .action-column li small { color: var(--muted); font-size: 0.78rem; }
 .action-column li em { color: var(--muted); font-size: 0.72rem; font-style: normal; opacity: 0.85; }
+
+.action-cost-picker { margin-top: 4px; font-size: 0.74rem; padding: 2px 4px; border-radius: 6px;
+  border: 1px solid var(--line); background: transparent; color: inherit; max-width: 100%; }
+
+.counter-remove { position: absolute; top: 6px; right: 8px; border: none; background: transparent; cursor: pointer;
+  color: var(--muted); font-size: 1rem; line-height: 1; padding: 2px 4px; border-radius: 6px; }
+.counter-remove:hover { color: var(--danger, #b4423a); background: rgba(127,127,127,0.12); }
+
+.resource-card-custom { position: relative; }
+.resource-card-custom .resource-head strong::after { content: " · yours"; color: var(--muted); font-weight: 400; font-size: 0.74rem; }
+
+/* Concentration: the spell you are holding, and the card that holds it. */
+.concentration-banner { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; border: 1px solid var(--accent, #b4823a); border-radius: 10px;
+  background: rgba(180, 130, 58, 0.10); }
+.concentration-banner span { display: flex; flex-direction: column; }
+.concentration-banner strong { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.concentration-banner span small { font-size: 0.98rem; color: inherit; }
+.concentration-note { color: var(--muted); font-size: 0.76rem; flex: 1 1 220px; }
+.concentration-banner button { margin-left: auto; }
+.concentration-toggle { margin-top: 6px; font-size: 0.76rem; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+.concentration-toggle:hover { border-color: var(--accent, #b4823a); }
+.concentration-toggle.active { background: rgba(180, 130, 58, 0.18); border-color: var(--accent, #b4823a); }
+.sheet-spell-card.concentrating { border-color: var(--accent, #b4823a); }
+
+.concentration-banner button { margin-left: auto; cursor: pointer; padding: 5px 14px; border-radius: 999px;
+  border: 1px solid var(--accent, #b4823a); background: var(--accent, #b4823a); color: #1a1208;
+  font-size: 0.8rem; font-weight: 600; }
+.concentration-banner button:hover { filter: brightness(1.08); }
