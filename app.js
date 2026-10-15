@@ -2865,6 +2865,7 @@ function signed(value) { return value >= 0 ? `+${value}` : String(value); }
 
 // Plain-language help for new players. Each entry: [term, explanation].
 const GLOSSARY = {
+  actions: ["Actions", "What you can do on your turn. Each turn you get one action, one bonus action and your move, plus one reaction you can take between turns. Anything whose cost is not recorded sits under Other."],
   ac: ["Armor Class (AC)", "How hard you are to hit. An attacker must roll this number or higher to land a hit on you. Higher is better."],
   hp: ["Hit Points (HP)", "Your health. You lose HP when you take damage and fall unconscious at 0. Resting restores it."],
   proficiency: ["Proficiency Bonus", "A bonus you add to things your character is trained in — attacks, certain skills, and saving throws. It grows as you level up."],
@@ -8467,6 +8468,87 @@ function renderSpellAttackRow(spell, character) {
     <div class="attack-damage-group">${damageButtons || `<span class="attack-flat">${escapeHtml(data.dice && data.dice !== "None" ? data.dice : "see spell")}</span>`}</div>
   </article>`;
 }
+// Everything a character can do on a turn, grouped by what it costs: weapon
+// attacks, spells filed by their casting time, and the features whose cost is
+// known. Features without a recorded cost sit under "Other" rather than being
+// guessed at.
+function characterActionEconomy(character) {
+  const groups = { "Action": [], "Bonus Action": [], "Reaction": [], "Other": [] };
+  if (EDITIONS_WITHOUT_5E_CHOICES.has(character.edition)) return groups;
+  const rulesEdition = character.edition || "2014";
+
+  const perAction = typeof attacksPerAction === "function" ? attacksPerAction(character) : 1;
+  weaponAttacks(character).forEach(attack => {
+    const damage = attack.count
+      ? `${attack.count}d${attack.sides}${attack.dmgMod ? signed(attack.dmgMod) : ""}`
+      : `${(attack.flatBase || 0) + attack.dmgMod}`;
+    groups["Action"].push({
+      name: attack.name,
+      detail: `${signed(attack.toHit)} to hit \u00b7 ${damage} ${attack.damageType || ""}`.trim(),
+      note: perAction > 1 ? `Attack action \u00b7 ${perAction} attacks` : "Attack action"
+    });
+  });
+
+  // Spells land in whichever column their casting time names.
+  const casters = classBreakdown(character)
+    .filter(entry => spellListsFor(rulesEdition, entry.name, classSubclassName(character, entry.name)));
+  if (casters.length) {
+    characterSpellRecords(character).forEach(spell => {
+      const data = spellDisplayData(spell, character);
+      const cost = data.castingTime || "";
+      groups[actionEconomyBucket(cost)].push({
+        name: spell.name,
+        detail: spellLevelLabel(spell),
+        note: cost
+      });
+    });
+  }
+
+  // Features, with whatever uses they have left.
+  const resources = resourceDefinitions(character);
+  const seen = new Set();
+  classBreakdown(character).forEach(entry => {
+    const subclass = classSubclassName(character, entry.name);
+    const rows = [
+      ...(CLASS_FEATURES[rulesEdition]?.[entry.name] || []),
+      ...resolvedSubclassFeatures(rulesEdition, entry.name, subclass)
+    ];
+    rows.forEach(row => {
+      const [level, name] = row;
+      if (level > entry.level || seen.has(name)) return;
+      const cost = featureActionCost(name, rulesEdition);
+      if (!cost) return;
+      seen.add(name);
+      const resource = resources.find(item => item.name === name || item.name.startsWith(`${name} \u00b7`));
+      const remaining = resource ? `${Math.max(0, resource.max - resourceUsed(character, resource))}/${resource.max} left` : "";
+      groups[actionEconomyBucket(cost)].push({ name, detail: remaining, note: cost });
+    });
+  });
+
+  Object.values(groups).forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)));
+  return groups;
+}
+
+function renderActionsPanel(character, sectionClassName) {
+  if (EDITIONS_WITHOUT_5E_CHOICES.has(character.edition)) return "";
+  const groups = characterActionEconomy(character);
+  const order = ["Action", "Bonus Action", "Reaction", "Other"];
+  const total = order.reduce((n, key) => n + groups[key].length, 0);
+  if (!total) return "";
+  const columns = order.filter(key => groups[key].length).map(key => `<section class="action-column">
+      <h3>${escapeHtml(key)}<span>${groups[key].length}</span></h3>
+      <ul>${groups[key].map(row => `<li>
+        <strong>${escapeHtml(row.name)}</strong>
+        ${row.detail ? `<small>${escapeHtml(row.detail)}</small>` : ""}
+        ${row.note && row.note !== key ? `<em>${escapeHtml(row.note)}</em>` : ""}
+      </li>`).join("")}</ul>
+    </section>`).join("");
+  return `<section class="sheet-panel sheet-wide ${sectionClassName}">
+    <h2>Actions${helpChip("actions")}</h2>
+    <div class="action-economy">${columns}</div>
+  </section>`;
+}
+
 function renderAttacksPanel(character, sectionClassName) {
   // 3.5 resolves attacks off Base Attack Bonus and 2E off THAC0; each has its
   // own panel, and the 5e one sat alongside quoting a to-hit bonus that means
@@ -13203,6 +13285,7 @@ function renderSheet() {
       return `<button class="skill-roll" data-sheet-roll="${skill}" data-modifier="${value}"><span class="${proficient ? "proficient" : ""}">${skill} <small>(${ability})${expertise ? " · Expertise" : ""}</small></span><strong>${signed(value)}</strong></button>`;
     }).join("")}</div></section>`}
     ${renderAttacksPanel(c, sectionClass("overview"))}
+    ${renderActionsPanel(c, sectionClass("overview"))}
     <section class="sheet-panel sheet-wide ${sectionClass("overview")}">
       <h2>Combat & senses</h2>
       <div class="combat-stat-grid">

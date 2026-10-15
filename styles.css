@@ -4113,3 +4113,15 @@ html[data-theme="dark"] .d35-skill-budget em { color: #e39a63; }
 .font-row button { margin-left: auto; }
 .font-row button + button { margin-left: 0; }
 .panel-note { color: var(--muted); margin: -4px 0 10px; }
+
+/* Actions grouped by what they cost on a turn. */
+.action-economy { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.action-column { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--panel-soft, transparent); }
+.action-column h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 8px;
+  font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.action-column h3 span { font-size: 0.72rem; color: var(--muted); }
+.action-column ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.action-column li { display: grid; gap: 1px; padding: 6px 8px; border-radius: 8px; background: var(--row, rgba(127,127,127,0.07)); }
+.action-column li strong { font-size: 0.92rem; }
+.action-column li small { color: var(--muted); font-size: 0.78rem; }
+.action-column li em { color: var(--muted); font-size: 0.72rem; font-style: normal; opacity: 0.85; }
